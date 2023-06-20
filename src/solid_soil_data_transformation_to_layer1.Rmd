@@ -1,0 +1,96 @@
+---
+title: "solid_soil_data_transformation_to_layer1"
+author: "FSCC - ICP Forests"
+date: "2023-05-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Solid soil data: transformation to "layer 1"
+
+
+## Import "layer 0"
+
+* Convert columns with time/date information to a date with the function "as.Date()" (in order to allow uniform reporting of the download_date and change_date in PIRs)
+* Add column "layer_type": factor with levels "forest_floor", "mineral" and "peat"
+* Add columns "country", "partner_short" and "partner" (with the respective country, partner_short and partner names)
+* "som" survey forms: column "repetition" becomes 1 for records where "repetition" is NA or -9999
+* Add columns with unique identifiers for plots, surveys, repetitions/profile_pit_id's, layers
+    + "plot_ID": "partner_code" + "code_plot"
+    + "unique_survey": "partner_code" + "survey_year" + "code_plot"
+    + "unique_survey_repetition": "partner_code" + "survey_year" + "code_plot" + "repetition" ("som" survey forms)
+    + "unique_survey_profile": "partner_code" + "survey_year" + "code_plot" + "profile_pit_id" ("pfh" survey forms)
+    + "unique_survey_layer": "partner_code" + "survey_year" + "code_plot" + "code_layer" ("som" survey forms); or: "partner_code" + "survey_year" + "code_plot" + "horizon_master" ("pfh" survey forms)
+    + "unique_layer_repetition": "partner_code" + "survey_year" + "code_plot" + "code_layer" + "repetition" ("som" survey forms)
+
+
+## Merge double records in "so_som"
+
+* "so_som" survey form: Merge "duplicate" records - double records (with the same "unique_layer_repetition") exist for several of the old "so_som" data (i.e. one with "origin" == "OPT" and one with "origin" == "MAN"). Data for the analytical parameters are always reported in only one of the two records, so it is no problem to merge them. This way, the "so_som" dataframe which was downloaded on 2 March 2023 was reduced from 18586 to 14580 rows, with records removed (after merging their information to their respective other records) from survey years between 1990 and 2015.
+
+
+* "s1_som" survey form: If there are non-unique primary keys due to multiple layers with the same "code_layer" within a given profile: 
+    + copy the column "code_layer" to a new column "code_layer_original"
+    + change the "code_layer" column for these ambiguous layers to [first letter, i.e. "M" or "H"] + [layer_limit_superior] + [layer_limit_inferior], e.g. "M5060", "M8590" etc 
+    + update unique identifiers that include "code_layer"
+  This happened for:
+    + 10 plots for which this issue already existed in the past (Sweden, Finland, Estonia - due to multiple "M48", "Mxx" or "Hxx" layers): "13_731", "13_1360", "13_1607", "13_1608", "13_2515", "13_2529", "13_2737", "13_3768", "15_1620", "59_43"
+* "som" survey forms: Update "layer_limit_superior" and "layer_limit_inferior":
+    + Copy the column "layer_limit_superior" to a new column "layer_limit_superior_orig" + the column "layer_limit_inferior" to a new column "layer_limit_inferior_orig"
+    + Update the columns "layer_limit_superior" and "layer_limit_inferior":
+        + Multiply records with wrong signs of above-ground or below-ground layers [see PIR for rule_ID = "FSCC_2"] with a factor *(-1)
+        + Empty layer limits which are clearly a mistake: where layer limits equal 0 for multiple depth layers within a profile [see PIR for rule_ID = "FSCC_9"]
+        + Empty layer limits which are clearly a mistake: where superior layer limit equals inferior layer limit [see PIR for rule_ID = "FSCC_11"]
+    + Gap-fill empty layer_limit_superiors and layer_limit_inferiors
+        + Retrieve the layer limits from the corresponding "pfh" survey forms if possible (based on an equal "code_layer", so only for forest floor layers)
+        + Fill these layer limits based on the theoretical layer limits ("d_depth_level_soil": add columns with theoretical superior and inferior layer limits based on the column "description" in "d_depth_level_soil")
+* "pfh" survey forms: Update "horizon_limit_up" and "horizon_limit_low":
+    + Copy the column "horizon_limit_up" to a new column "horizon_limit_up_orig" + the column "horizon_limit_low" to a new column "horizon_limit_low_orig"
+    + Update the columns "horizon_limit_up" and "horizon_limit_low":
+        + Multiply records with wrong signs of above-ground or below-ground layers [see PIR for rule_ID = "FSCC_2"] with *(-1)
+* Create a column "layer_number" (in "som" survey forms) or "horizon_number_unique" (in "pfh" survey forms) which represents the rank of a layer (from top to bottom) within a profile (unique "repetition" or "profile_pit_id"). "Redundant layers" are not included in this ranking (i.e. layers which cover the same depths like other layers from the same profile and which can therefore be "left out" without any effect on the depths which are covered by the data of the given profile). If there are multiple options when identifying these redundant layers (e.g. "M01" versus "M05" + "M51"): consider the least "detailed" layer(s) (i.e. layer(s) with largest depth range) as redundant (e.g. "M01"). In general, ranking happens based on the superior/upper and inferior/lower layer limits.
+    + "pfh" survey forms: If there are no redundant layers: "horizon_number_unique" equals "horizon_number" if the ranking of "horizon_number" equals the ranking of the layer limits (which is not always the case); else "horizon_number_unique" is based on the ranking of the layer limits.
+    + "som" survey forms: Include forest floor without layer limits in the ranking. The following table shows how the forest floor layer combinations are ranked (based on theoretical sequence of forest floor layers, e.g. "OL" on top etc + analysis of the total organic carbon content of the existing forest floor combinations):  
+
+**Two forest floor layers**  
+
+Superior (1)    | Inferior (2) 
+--------------- | --------------- 
+O2              | O 
+O               | O1 
+O1 (France)     | O2 (France) 
+O2 (Bulgaria)   | O1 (Bulgaria) 
+OF              | OH 
+OL              | OF 
+OL              | OFH 
+OL              | OH 
+OLF             | OH  
+
+**Three forest floor layers**  
+
+Superior (1) | Middle (2)  | Inferior (3)
+-------------|-------------|-------------
+OL           | OF          | OH  
+
+
+* Convert data that are reported in the wrong parameter units to the right parameter units [see PIR for rule_ID = "FSCC_22"] by multiplying with a factor * 10 (% to g kg-1 for "organic_carbon_total", "n_total", "horizon_c_organic_total", "horizon_n_total", "horizon_caco3_total", "horizon_gypsum") or with a factor * 1000 (g cm-3 to kg m-3 for "bulk_density", "horizon_bulk_dens_measure", "horizon_bulk_dens_est")
+* "som" survey forms: Add columns with the following processed data:
+    + "layer_thickness": difference between "layer_limit_superior" and "layer_limit_inferior" (where required data are available)
+    + "bulk_density_layer_weight": "organic_layer_weight" / "layer_thickness" (where required data are available)
+    + "sum_texture": "part_size_clay" + "part_size_silt" + "part_size_sand" (where required data are available). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.5).
+    + "c_to_n_ratio": "organic_carbon_total" / "n_total" (where required data are available and not lower than the LOQ, i.e. not equal to -1)
+    + "sum_base_cations": "exch_ca" + "exch_mg" + "exch_k" + "exch_na" (where required data are available and where at least two of the parameters are not below the LOQ, i.e. not equal to -1). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.015).
+    + "sum_acid_cations": "exch_al" + "exch_fe" + "exch_mn" + "free_h" (where required data are available and where at least two of the parameters are not below the LOQ, i.e. not equal to -1). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.01 for "exch_al", "exch_fe", "exch_mn" and by 0.05 for "free_h")
+* "pfh" survey forms: Add columns with the following processed data:
+    + "sum_texture": "horizon_clay" + "horizon_silt" + "horizon_sand" (where required data are available). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.5).
+    + "c_to_n_ratio": "horizon_c_organic_total" / "horizon_n_total" (where required data are available and not lower than the LOQ, i.e. not equal to -1)
+    + "sum_base_cations": "horizon_exch_ca" + "horizon_exch_mg" + "horizon_exch_k" + "horizon_exch_na" (where required data are available and where at least two of the parameters are not below the LOQ, i.e. not equal to -1). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.015).  
+
+
+* Harmonisation of "som" survey forms to uniform layers: e.g. to ("OL", "OFH",) "M01", "M12", "M24"... 
+* Summarise over different replicate profiles ("repetition" or "profile_pit_id") per survey per plot (for each layer), but this is not necessary in order to calculate stocks: stocks can be calculated for each replicate profile and averages per plot can be calculated later on.
+
+
