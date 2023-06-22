@@ -34,7 +34,7 @@ The repository is structured as follows:
 
 ```
     .  
-    └── fscc.Rproj  
+    ├── fscc.Rproj  
     ├── README.md  
     ├── .gitignore  
     ├── src
@@ -132,7 +132,9 @@ In accordance with the ICP Forests policies, data are currently not open, and **
 Whenever you create a new version of the data that you want to save (e.g. update of an intermediate breakpoint, new breakpoint, layer 1, layer 2...), you are expected to save the data on Google Drive. This ensures that all collaborators have access to the latest versions of the data. 
 Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive. The data on Google Drive serves as the central repository where all versions of the data are stored, while only the most recent versions of the data are stored locally in the R project folder. By synchronising, you ensure that you have the most up-to-date data available for your analysis or development in R.
 
-<img src="https://github.com/inbo/fscc/assets/125061803/2a999961-511f-49bb-b8eb-32ff282e6b4e" alt="fscc_workflow_github" style="width: 80%;">
+
+![](https://github.com/inbo/fscc/assets/125061803/52e47167-21dc-421e-9f42-30e51702e8b1){width=80%}
+
 
 #### Specific project coding conventions
 It is recommended to compile the code for larger manipulations and/or manipulations which are often repeated, into one function, which is placed in the `./src/functions/` folder. Such functions are sourced ad hoc in code chunks using the `source()` function. Custom-made functions should be applicable to all data forms in Level I and Level II, and clearly documented using comments and Roxygen documentation (Code > Insert Roxygen Skeleton). In the global environment of R, all objects (data frames) referring to data forms between layer 0 and layer 2 are by convention named using lower case letters without any version number attached to it.
@@ -143,8 +145,39 @@ Please follow this workflow:
 #### Getting started: first time
 * **Clone** the repository to your local computer to work on the project.
 * Review the README file for an overview of the project structure and collaboration instructions.
-* Create or paste an R script `./data/sensitive_metadata/google_drive_link.R` which contains the URL of the private Google Drive folder which contains the data.
+* Create or paste an R script `./data/sensitive_metadata/google_drive_link.R`, which contains the URL of the private Google Drive folder which contains the data, as explained below.
 * Download the data from the Google Drive folder using the `sync_local_data()` function.
+
+Follow these steps to derive and save the URL of the Google Drive root folder:
+
+* Go to the root folder on Google Drive, i.e. a folder with data which contains the following subfolders:
+
+```
+    .  
+    ├── data
+    │   ├── raw_data
+    │   ├── intermediate_data
+    │   ├── layer1_data
+    │   └── layer2_data
+    └── output
+        ├── stocks
+        └── [...]
+```
+
+* Right-click on the root folder and select "Copy link".
+* Paste the link somewhere. It should look like  "https://drive.google.com/drive/folders/1Txxxxxxxe7?usp=drive_link". Copy the part you need, i.e. everything starting from two characters before the first x until two characters after the last x (i.e. before any question mark). The two characters before and after the x string are a random example.
+* Create a new R script in the local folder "./data/sensitive_metadata/" and give it the following name: "google_drive_link.R".
+* Paste the code below in this script:
+
+```
+# This is the URL of the Google Drive root folder which contains data related to
+# the fscc project of ICP Forests. The data in this folder are sensitive and
+# are only available for collaborators with access to the Google Drive folder.
+root_drive <- "1Txxxxxxxe7"
+```
+
+* Replace the character string after `<-` with the actual code from the link as explained above.
+
 
 #### Getting started: next times
 * **Pull** changes from the repository before starting your work to ensure you have the latest code and datasets from other team members.
