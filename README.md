@@ -1,3 +1,40 @@
+<!-- badges: start -->
+![GitHub](https://img.shields.io/github/license/inbo/fscc)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/inbo/fscc/check-project)
+![GitHub repo size](https://img.shields.io/github/repo-size/inbo/fscc)
+<!-- badges: end -->
+
+# fscc
+Forest Soil Coordinating Centre (FSCC) of ICP Forests
+
+[Deroo, Heleen![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0003-4487-0262)[^aut][^cre][^RINF]
+[Cools, Nathalie![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0002-7059-2318)[^aut][^RINF]
+[De Vos, Bruno![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0001-9523-3453)[^aut]
+Research Institute for Nature and Forest (INBO)[^cph][^fnd]
+
+[^cph]: copyright holder
+[^fnd]: funder
+[^aut]: author
+[^cre]: contact person
+[^RINF]: Research Institute for Nature and Forest
+
+**keywords**: icp forests; forest soil coordinating centre; forest soils; european forests; reproducible data processing
+
+<!-- community: inbo -->
+
+<!-- description: start -->
+Forest soils play a key role in a range of ecosystem services, including climate control, biodiversity and water quality, and are a primary driver of forest productivity.
+However, insight in their response to ongoing environmental changes, such as nitrogen deposition, relies on the availability of harmonised, spatially and temporally representative data.
+Since the early 1990s, the ICP Forests Programme runs a harmonised forest soil monitoring survey across Europe, including large-scale monitoring on a systematic 16 x 16-km grid (Level I: approximately 5000 plots) and intensive monitoring with a time interval of roughly 10 years (Level II: 250 plots).
+Two surveys have been completed so far on both levels; a third survey (2020-2025) is ongoing in most countries.
+A wide range of soil chemical (carbon, nitrogen, plant-available and semi-total elements, pH) and physical soil properties (soil texture, bulk density) have been analysed by national forest soil laboratories according to standardised protocols.
+All data are centralised in the database of the Programme Coordinating Centre of ICP Forests.
+
+In this project, we aim to preprocess the raw solid soil data of ICP Forests to validated, gap-filled and harmonised versions (Layer 1) and further to aggregated versions (Layer 2), and further process these data for a range of purposes, including the calculation of carbon and macronutrient stocks (nitrogen, phosphorus, sulphur), exchangeable element pools (calcium, magnesium, potassium, sodium, aluminium, iron, manganese), and indicators for nutrient availability, heavy metal availability and acidification, in both forest floors and mineral forest soils across Europe. 
+Observed differences between the soil surveys before versus after the year 2000 are highlighted, and stratified by biogeographical region, forest and soil type, and their spatial autocorrelation with nitrogen deposition levels and link with data from other surveys (e.g. soil solution) is assessed.
+<!-- description: end -->
+
+
 # fscc
 Forest Soil Coordinating Centre (FSCC) of ICP Forests
 
@@ -41,6 +78,7 @@ The repository is structured as follows:
     │   ├── functions                            <- Git
     │   ├── transformation_to_layer1             <- Git
     │   ├── transformation_to_layer2             <- Git
+    │   ├── pir_files                            <- Git
     │   ├── stock_calculations                   <- Git
     │   ├── pathfinder                           <- Git
     │   ├── [...]                                <- Git
@@ -133,7 +171,7 @@ Whenever you create a new version of the data that you want to save (e.g. update
 Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive. The data on Google Drive serves as the central repository where all versions of the data are stored, while only the most recent versions of the data are stored locally in the R project folder. By synchronising, you ensure that you have the most up-to-date data available for your analysis or development in R.
 
 
-![](https://github.com/inbo/fscc/assets/125061803/52e47167-21dc-421e-9f42-30e51702e8b1){width=80%}
+<img src="https://github.com/inbo/fscc/assets/125061803/52e47167-21dc-421e-9f42-30e51702e8b1" width="80%">
 
 
 #### Specific project coding conventions
@@ -227,4 +265,6 @@ For any questions, suggestions, or inquiries related to this project, please con
 * Heleen Deroo: <heleen.deroo@inbo.be>  
 
 The Programme Co-ordinating Centre (PCC) (<PCC-ICPForests@thuenen.de>) of ICP Forests at Thünen Institute of Forest Ecosystems is entrusted with a broad range of tasks in the fields of programme management, data processing, evaluations, and reporting.
+
+
 

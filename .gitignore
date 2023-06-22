@@ -1,3 +1,4 @@
+
 *.dbf
 *.doc*
 *.gddoc
@@ -15,13 +16,11 @@
 .Rproj.user
 .Ruserdata
 .httr-oauth
+data
+data/sensitive_metadata
 docs
 fscc.Rproj
 libs
 output
 renv/library
 src/sandbox
-data/sensitive_metadata
-data
-output
-

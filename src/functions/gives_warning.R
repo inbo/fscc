@@ -22,8 +22,6 @@
 #' # Check if a normal calculation generates a warning
 #' gives_warning(1 + 2)  # Returns FALSE
 #'
-#' @seealso
-#' The \code{\link{warnings}} function can be used to retrieve the warnings generated during the evaluation.
 #'
 #' @keywords warning check test
 #' @export
