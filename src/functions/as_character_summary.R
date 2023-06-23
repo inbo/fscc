@@ -17,22 +17,23 @@
 #' # Returns "green"
 
 as_character_summary <- function(vector_to_convert) {
-  
+
   vec_caution <- if (length(vector_to_convert) == 1) {
     as.character(vector_to_convert)
+
   } else if (length(vector_to_convert) == 2) {
     paste(vector_to_convert, collapse = " and ")
+
   } else {
-    paste(vector_to_convert[-length(vector_to_convert)], collapse = ", ") 
-    paste(" and ", vector_to_convert[length(vector_to_convert)], 
+    paste(vector_to_convert[-length(vector_to_convert)], collapse = ", ")
+    paste(" and ", vector_to_convert[length(vector_to_convert)],
           sep = "", collapse = "")
-    paste0(paste(vector_to_convert[-length(vector_to_convert)], 
-                 collapse = ", "), 
-           paste(" and ", vector_to_convert[length(vector_to_convert)], 
+    paste0(paste(vector_to_convert[-length(vector_to_convert)],
+                 collapse = ", "),
+           paste(" and ", vector_to_convert[length(vector_to_convert)],
                  sep = ""))
   }
-  
+
   return(vec_caution)
-  
+
 }
-  

@@ -6,7 +6,8 @@
 #'
 #' @param test The expression or test to be evaluated
 #'
-#' @return A logical value indicating whether the expression/test generated a warning
+#' @return A logical value indicating whether the expression/test generated
+#' a warning
 #'
 #' @details
 #' This function clears the previous warning by assigning `NULL` to the
@@ -25,28 +26,24 @@
 #'
 #' @keywords warning check test
 #' @export
+
 gives_warning <- function(test) {
-  
-  # assign("last.warning", NULL, envir = baseenv()) # Clear the previous warning
-  # 
-  # test
-  # 
-  # if(!is.null(warnings())) {
-  #   return(TRUE)} else {
-  #     return(FALSE)}
-  
+
   assign("last.warning", NULL, envir = baseenv())  # Clear the previous warning
-  
+
   withCallingHandlers(
     expr = {
       test
     },
     warning = function(w) {
-      assign("last.warning", w, envir = baseenv())  # Assign the warning to last.warning
-      invokeRestart("muffleWarning")  # Muffle the warning to prevent it from being printed
+      # Assign the warning to last.warning
+      assign("last.warning", w, envir = baseenv())
+      # Muffle the warning to prevent it from being printed
+      invokeRestart("muffleWarning")
     }
   )
   
-  !is.null(get("last.warning", envir = baseenv()))  # Check if a warning was captured
-  
+  # Check if a warning was captured
+  !is.null(get("last.warning", envir = baseenv()))
+
 }

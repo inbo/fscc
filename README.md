@@ -8,8 +8,8 @@
 Forest Soil Coordinating Centre (FSCC) of ICP Forests
 
 [Deroo, Heleen![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0003-4487-0262)[^aut][^cre][^RINF]
-[Cools, Nathalie![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0002-7059-2318)[^aut][^RINF]
-[De Vos, Bruno![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0001-9523-3453)[^aut]
+[Cools, Nathalie![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0002-7059-2318)[^aut][^cre][^RINF]
+[De Vos, Bruno![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0001-9523-3453)[^aut][^cre][^RINF]
 Research Institute for Nature and Forest (INBO)[^cph][^fnd]
 
 [^cph]: copyright holder
@@ -30,16 +30,14 @@ Two surveys have been completed so far on both levels; a third survey (2020-2025
 A wide range of soil chemical (carbon, nitrogen, plant-available and semi-total elements, pH) and physical soil properties (soil texture, bulk density) have been analysed by national forest soil laboratories according to standardised protocols.
 All data are centralised in the database of the Programme Coordinating Centre of ICP Forests.
 
-In this project, we aim to preprocess the raw solid soil data of ICP Forests to validated, gap-filled and harmonised versions (Layer 1) and further to aggregated versions (Layer 2), and further process these data for a range of purposes, including the calculation of carbon and macronutrient stocks (nitrogen, phosphorus, sulphur), exchangeable element pools (calcium, magnesium, potassium, sodium, aluminium, iron, manganese), and indicators for nutrient availability, heavy metal availability and acidification, in both forest floors and mineral forest soils across Europe. 
+In this project, we aim to preprocess the raw solid soil data of ICP Forests to validated, gap-filled and harmonised versions (Layer 1) and further to aggregated versions (Layer 2), and process these data for a range of purposes, including the calculation of carbon and macronutrient stocks (nitrogen, phosphorus, sulphur), exchangeable element pools (calcium, magnesium, potassium, sodium, aluminium, iron, manganese), and indicators for nutrient availability, heavy metal availability and acidification, in both forest floors and mineral forest soils across Europe. 
 Observed differences between the soil surveys before versus after the year 2000 are highlighted, and stratified by biogeographical region, forest and soil type, and their spatial autocorrelation with nitrogen deposition levels and link with data from other surveys (e.g. soil solution) is assessed.
 <!-- description: end -->
 
 
-# fscc
-Forest Soil Coordinating Centre (FSCC) of ICP Forests
 
-### Project overview  
-This repository provides data-generating (i.e. preprocessing) and data-processing workflows, to support reproducible and transparent analyses on the solid soil data collected through the ICP Forests monitoring network. The aim of this R project is to convert, transform, and harmonise the raw data forms ("layer 0") into validated and gap-filled data forms ("layer 1"), and into aggregated and selected data forms ("layer 2"). These "layer 1" and "layer 2" data forms are then used for a range of other purposes, including the calculation of soil carbon stocks in European forests. The data preprocessing addresses various aspects, including error correction, incorporation of additional data, harmonisation, validation, and aggregation (e.g. across repetitions). The ultimate aim is to achieve open and reproducible data workflows, as a requirement for qualifiable science and for collaboration.
+### Repository overview  
+This repository provides data-generating (i.e. preprocessing) and data-processing workflows, to support reproducible and transparent analyses on the solid soil data collected through the ICP Forests monitoring network. The aim of this R project is to convert, transform, and harmonise the raw data forms ("layer 0") into validated and gap-filled data forms ("layer 1"), and into aggregated data forms ("layer 2"). These "layer 1" and "layer 2" data forms are then used for a range of other purposes, including the calculation of soil carbon stocks in European forests. The data preprocessing addresses various aspects, including error correction, incorporation of additional data, harmonisation, validation, and aggregation (e.g. across repetitions). The ultimate aim is to achieve open and reproducible data workflows, as a requirement for qualifiable science and for collaboration.
 
 ### Project structure  
 The repository is structured as follows:
@@ -48,9 +46,10 @@ The repository is structured as follows:
   + **functions**: Custom-made R functions
   + **transformation_to_layer1**: R scripts to transform the data from "Layer 0" to "Layer 1"
   + **transformation_to_layer2**: R scripts to transform the data from "Layer 1" to "Layer 2"
+  + **pir_generation**: R scripts used to generate Partner Inconsistency Reports
   + **stock_calculations**: R scripts to calculate and visualise different kinds of stocks
   + **pathfinder**: R scripts specific to the HorizonEU PathFinder project 
-  + Other src/ subfolders organised per output type
+  + Other `src/` subfolders organised per output type
   + **sandbox**: R scripts for individual exploration and testing (ignored by Git) 
 * **data** folder: Contains all versions of the data forms and additional data:
   + **raw_data**: Raw data forms ("layer 0") obtained from ICP Forests
@@ -65,7 +64,7 @@ The repository is structured as follows:
   + **physical_data**: Output regarding water availability and water budget modelling
   + **links_other_surveys**: Output regarding the links of the solid soil data with other surveys, such as "soil solution"
   + **links_n_deposition**: Output regarding the spatial autocorrelation with N deposition data"
-  + **pir_files**: Newly generated partner inconsistency reports  
+  + **pirs**: Newly generated partner inconsistency reports  
   + **pathfinder**: Output related to the HorizonEU PathFinder project
 
 
@@ -78,7 +77,7 @@ The repository is structured as follows:
     │   ├── functions                            <- Git
     │   ├── transformation_to_layer1             <- Git
     │   ├── transformation_to_layer2             <- Git
-    │   ├── pir_files                            <- Git
+    │   ├── pir_generation                       <- Git
     │   ├── stock_calculations                   <- Git
     │   ├── pathfinder                           <- Git
     │   ├── [...]                                <- Git
@@ -89,7 +88,7 @@ The repository is structured as follows:
     │   ├── physical_data
     │   ├── links_other_surveys
     │   ├── links_n_deposition
-    │   ├── pir_files  
+    │   ├── pirs  
     │   ├── pathfinder  
     │   └── [...]  
     └── data  
