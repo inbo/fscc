@@ -21,6 +21,9 @@
 #' @param include_threshold Logical which indicates whether the distance
 #'   threshold (in meters) should be added to the new column in sf1, provided
 #'   that no "join_column" has been given as input argument. Default is FALSE.
+#' @param save_to_global Logical which indicates whether the output sf1 can
+#' be saved to the global environment and override the existing sf1 object.
+#' Default is FALSE.
 #'
 #' @return A new sf data frame containing the joined data from `sf2` appended
 #'   to `sf1`. The join is based on the distance threshold and the specified
@@ -82,48 +85,44 @@
 #'
 #' @export
 
-distance_join <- function(sf1, sf2, dist_threshold = NULL, join_column = NULL,
-                          summary_stat = NULL, include_threshold = NULL) {
+distance_join <- function(sf1,
+                          sf2,
+                          dist_threshold = 2000, # meter
+                          join_column = NULL,
+                          summary_stat = c("most_abundant", "mean", "median"),
+                          include_threshold = FALSE,
+                          save_to_global = FALSE) {
 
-  # Install packages ----
+  # Load packages ----
 
-  # Define packages to install
-  packages_map_icpf <- c("sf",
-                         "tidyverse")
-
-  # Install all packages that are not already installed
-  install.packages(setdiff(packages_map_icpf, rownames(installed.packages())))
-
-  # Load packages
-  sapply(packages_map_icpf, library, character.only = TRUE)
+  stopifnot(require("assertthat"),
+            require("sf"),
+            require("tidyverse"))
 
 
   # Prepare sf1 and sf2 ----
 
-  # Retrieve sf survey forms from global environment
-
+  # Store names of input sf survey forms to use later on
   sf1_input <- sf1
   sf2_input <- sf2
+  
+  # Retrieve sf survey forms from global environment
   sf1 <- get(sf1_input, envir = .GlobalEnv)
   sf2 <- get(sf2_input, envir = .GlobalEnv)
 
   # Does sf1 exist and is it an sf dataframe?
-  assertthat::assert_that(!missing(sf1) &&
-                            exists("sf1", inherits = FALSE,
-                                   envir = environment()) &&
-                            identical(class(sf1), c("sf", "data.frame")),
+  assertthat::assert_that(inherits(sf1, "sf"), 
+                          # Also yields an error when sf1 is missing
                           msg = paste0("The object '",
-                                       sf1,
+                                       sf1_input,
                                        "' of class 'sf' (data frame) has not ",
                                        "been found in the global environment."))
 
   # Does sf2 exist and is it an sf dataframe?
-  assertthat::assert_that(!missing(sf2) &&
-                            exists("sf2", inherits = FALSE,
-                                   envir = environment()) &&
-                            identical(class(sf2), c("sf", "data.frame")),
+  assertthat::assert_that(inherits(sf2, "sf"), 
+                          # Also yields an error when sf1 is missing
                           msg = paste0("The object '",
-                                       sf2,
+                                       sf2_input,
                                        "' of class 'sf' (data frame) has not ",
                                        "been found in the global environment."))
 
@@ -148,22 +147,11 @@ distance_join <- function(sf1, sf2, dist_threshold = NULL, join_column = NULL,
   #   the amount of matches with a distance join based on 2000 meter in the
   #   surveys "so" versus "lf")
 
-  if (is.null(dist_threshold)) {
-    dist_threshold <- 2000} else { # meter
-
-      assertthat::assert_that(is.numeric(dist_threshold) &&
-                                (dist_threshold >= 0),
-                            msg = paste0("The object 'dist_threshold' should ",
-                                           "be a positive numeric."))
-    }
-
-
-  # Prepare include_threshold ----
-
-  # If no value is provided for the "include_threshold" argument,
-  # set it to FALSE
-  if (is.null(include_threshold)) {
-    include_threshold <- FALSE}
+  assert_that(is.number(dist_threshold),
+              dist_threshold >= 0,
+              noNA(dist_threshold),
+              msg = paste0("The object 'dist_threshold' should ",
+                           "be a positive numeric."))
 
 
   # Prepare join_column ----
@@ -199,31 +187,14 @@ distance_join <- function(sf1, sf2, dist_threshold = NULL, join_column = NULL,
 
   # Prepare summary_stat ----
 
-  # If no value is provided for the "summary_stat" argument
-  if (is.null(summary_stat)) {
-
-    # Set it to "most_abundant"
-    summary_stat <- "most_abundant"
-
-  } else {
-
-    # If "summary_stat" was given as input argument
-    # Assert that "summary_stat" is in the list of options
-    assertthat::assert_that(summary_stat %in%
-                            c("most_abundant", "mean", "median"),
-                          msg = paste0("The provided 'summary_stat' argument ",
-                                       "is not in the list of possible ",
-                                       "options for this input argument. ",
-                                       "Options are 'most_abundant', 'mean' ",
-                                       "or 'median'."))
+  summary_stat <- match.arg(summary_stat)
 
     # If "summary_stat" is "mean" or "median" and join_column is NULL
     if ((summary_stat %in% c("mean", "median")) &&
         (!is.null(join_column))) {
 
       # Assert that the column to join is numeric
-      assertthat::assert_that(is.numeric(sf2[, which(
-        names(sf2) == join_column)]),
+      assertthat::assert_that(is.numeric(sf2[, join_column]),
         msg = paste0("The provided 'join_column' of '",
                      sf2_input,
                      "', i.e. '",
@@ -232,7 +203,6 @@ distance_join <- function(sf1, sf2, dist_threshold = NULL, join_column = NULL,
                      summary_stat,
                      "' in the input arguments."))
     }
-    }
 
 
   # Search for distance matches for each of the plots (records) in sf1 ----
@@ -240,87 +210,59 @@ distance_join <- function(sf1, sf2, dist_threshold = NULL, join_column = NULL,
   # Set progress bar
   progress_bar <- txtProgressBar(min = 0, max = nrow(sf1), style = 3)
 
+
+  # Create most_abundant function
+  most_abundant <- function(x) {
+    ux <- unique(na.omit(x))
+    ux[which.max(tabulate(match(x, ux)))]
+  }
+
+
+  # Create generate_summary function
+  generate_summary <- function(sf1, sf2, dist_threshold, i, summary_stat) {
+
+    stopifnot(require("sf"))
+    st_is_within_distance(sf1[i, ],
+                          sf2,
+                          dist = dist_threshold,
+                          sparse = FALSE) |>
+      which() -> vec
+
+    # use early returns
+    if (identical(vec, integer(0))) {
+      return(sf1)
+    }
+
+    # if join_column was not provided
+    if (is.null(join_column)) {
+      # Set the new column in sf1 to TRUE
+      sf1$new_col[i] <- TRUE
+      return(sf1)
+    }
+
+    # if join_column was provided
+    # Extract the data and remove NAs
+    vec_data <- sf2[vec, join_column]
+    sf1$new_col[i] <- switch(
+      summary_stat,
+      mean = mean(vec_data, na.rm = TRUE),
+      median = median(vec_data, na.rm = TRUE),
+      "most abundant" = most_abundant(vec_data)
+    )
+    return(sf1)
+  }
+
+
+  # Apply the generate_summary function for all sf1 records
   for (i in seq_len(nrow(sf1))) {
 
-    # Look for row indices in sf2 which are within the threshold distance of
-    # row i in sf1
-
-    vec <- which(st_is_within_distance(sf1[i, ],
-                                       sf2,
-                                       dist = dist_threshold, # Units = meter
-                                       sparse = FALSE) == TRUE)
-
-    # If there is at least one matching row
-    if (!identical(vec, integer(0))) {
-
-      # if join_column was not provided
-      if (is.null(join_column)) {
-
-        # Set the new column in sf1 to TRUE
-        sf1$new_col[i] <- TRUE
-
-      } else {
-
-        # if join_column was provided
-
-        # Derive the column index of the join_column in sf2
-        col_ind <- which(names(sf2) == join_column)
-
-        # Extract the data and remove NAs
-        vec_data <- sf2[vec, col_ind]
-        vec_data <- vec_data[!is.na(vec_data)]
-
-        # If vec_data is not all NA
-        if (!identical(vec_data, logical(0))) {
-
-          # If the length of vec_data is 1
-          if (length(vec_data) == 1) {
-
-            # Set the value in the new column of sf1 to this value
-            sf1$new_col[i] <- vec_data
-
-          } else if (length(vec_data) > 1) {
-          # If the length of vec_data is > 1
-
-            # If summary_stat is "most_abundant"
-            if (summary_stat == "most_abundant") {
-
-            # Count occurrences of each unique value
-            value_counts <- table(vec_data)
-
-            # Find the most abundant value
-            most_abundant_value <- names(value_counts)[which.max(value_counts)]
-
-            # Convert the most abundant value back to the original type
-            if (typeof(vec_data) == "numeric") {
-              most_abundant_value <- as.numeric(most_abundant_value)
-            } else if (typeof(vec_data) == "character") {
-              most_abundant_value <- as.character(most_abundant_value)
-            } else if (typeof(vec_data) == "factor") {
-              most_abundant_value <- as.factor(most_abundant_value)
-            } else if (typeof(vec_data) == "double") {
-              most_abundant_value <- as.double(most_abundant_value)
-            } else if (typeof(vec_data) == "integer") {
-              most_abundant_value <- as.integer(most_abundant_value)
-            }
-
-            sf1$new_col[i] <- most_abundant_value
-            }
-
-            # If summary_stat is "mean"
-            if (summary_stat == "mean") {
-              sf1$new_col[i] <- mean(vec_data)
-              }
-
-            # If summary_stat is "median"
-            if (summary_stat == "median") {
-              sf1$new_col[i] <- median(vec_data)
-              }
-
-            }
-        }
-      }
-    }
+    sf1 <- generate_summary(
+      sf1 = sf1,
+      sf2 = sf2,
+      dist_threshold = dist_threshold,
+      i = i,
+      summary_stat = summary_stat
+    )
 
     # Update progress bar
     setTxtProgressBar(progress_bar, i)
@@ -328,9 +270,24 @@ distance_join <- function(sf1, sf2, dist_threshold = NULL, join_column = NULL,
 
   close(progress_bar)
 
+
   # Update the name of the new column in sf1
   names(sf1)[which(names(sf1) == "new_col")] <- new_col_name
 
   # Save sf dataframe to global environment
-  assign(sf1_input, sf1, envir = globalenv())
+  # Check if the user wants to save to the global environment
+  if (save_to_global) {
+    # Prompt the user for confirmation
+    confirmation <-
+      readline(prompt = paste0("Do you want to save the modified data frames",
+                               " to the global environment? (Y/N): "))
+    
+    # Check the user's response
+    if (tolower(confirmation) == "y") {
+      # Save the modified data frames to the global environment
+      assign(sf1_input, sf1, envir = globalenv())
+    }
+  }
+
+
 }
