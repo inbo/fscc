@@ -105,13 +105,13 @@ distance_join <- function(sf1,
   # Store names of input sf survey forms to use later on
   sf1_input <- sf1
   sf2_input <- sf2
-  
+
   # Retrieve sf survey forms from global environment
   sf1 <- get(sf1_input, envir = .GlobalEnv)
   sf2 <- get(sf2_input, envir = .GlobalEnv)
 
   # Does sf1 exist and is it an sf dataframe?
-  assertthat::assert_that(inherits(sf1, "sf"), 
+  assertthat::assert_that(inherits(sf1, "sf"),
                           # Also yields an error when sf1 is missing
                           msg = paste0("The object '",
                                        sf1_input,
@@ -119,7 +119,7 @@ distance_join <- function(sf1,
                                        "been found in the global environment."))
 
   # Does sf2 exist and is it an sf dataframe?
-  assertthat::assert_that(inherits(sf2, "sf"), 
+  assertthat::assert_that(inherits(sf2, "sf"),
                           # Also yields an error when sf1 is missing
                           msg = paste0("The object '",
                                        sf2_input,
@@ -222,7 +222,7 @@ distance_join <- function(sf1,
   generate_summary <- function(sf1, sf2, dist_threshold, i, summary_stat) {
 
     stopifnot(require("sf"))
-    st_is_within_distance(sf1[i, ],
+    sf::st_is_within_distance(sf1[i, ],
                           sf2,
                           dist = dist_threshold,
                           sparse = FALSE) |>
@@ -281,7 +281,7 @@ distance_join <- function(sf1,
     confirmation <-
       readline(prompt = paste0("Do you want to save the modified data frames",
                                " to the global environment? (Y/N): "))
-    
+
     # Check the user's response
     if (tolower(confirmation) == "y") {
       # Save the modified data frames to the global environment
