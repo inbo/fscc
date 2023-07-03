@@ -7,21 +7,14 @@
 # Update the CRAN mirror
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-# Define packages to install
-packages_fscc <- c("sf",
-                   "tidyverse",
-                   "openxlsx",
-                   "parsedate",
-                   "googlesheets4",
-                   "googledrive",
-                   "assertthat")
-
-# Install all packages that are not already installed
-install.packages(setdiff(packages_fscc, rownames(installed.packages())))
-
-# Load packages
-sapply(packages_fscc, library, character.only = TRUE)
-
+# Define required packages
+stopifnot(require("sf"),
+          require("tidyverse"),
+          require("openxlsx"),
+          require("parsedate"),
+          require("googlesheets4"),
+          require("googledrive"),
+          require("assertthat"))
 
 
 # Specify date on which 'layer 0' data were downloaded ----
@@ -217,13 +210,13 @@ inconsistency_report <- rbind(list_primary_inconsistencies,
 object_name <- paste0("inconsistency_report_",
                       download_date)
 
-assign(object_name, 
-       inconsistency_report, 
+assign(object_name,
+       inconsistency_report,
        envir = globalenv())
 
   # Export the PIR
 
-  # "ignore_checked_inconsistencies = FALSE"
+  # Set ignore_checked_inconsistencies to FALSE
   # to take inconsistencies which were previously confirmed by partners
   # into account
 
@@ -244,12 +237,7 @@ source("./src/functions/read_intermediate.R")
 read_intermediate()
 
 
+# Sync local data
 
-
-
-
-
-
-
-
-
+source("./src/functions/sync_local_data.R")
+sync_local_data()
