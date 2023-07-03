@@ -34,7 +34,7 @@ In this project, we aim to preprocess the raw solid soil data of ICP Forests to 
 Observed differences between the soil surveys before versus after the year 2000 are highlighted, and stratified by biogeographical region, forest and soil type, and their spatial autocorrelation with nitrogen deposition levels and link with data from other surveys (e.g. soil solution) is assessed.
 <!-- description: end -->
 
-
+***
 
 ### Repository overview  
 This repository provides data-generating (i.e. preprocessing) and data-processing workflows, to support reproducible and transparent analyses on the solid soil data collected through the ICP Forests monitoring network. The aim of this R project is to convert, transform, and harmonise the raw data forms ("layer 0") into validated and gap-filled data forms ("layer 1"), and into aggregated data forms ("layer 2"). These "layer 1" and "layer 2" data forms are then used for a range of other purposes, including the calculation of soil carbon stocks in European forests. The data preprocessing addresses various aspects, including error correction, incorporation of additional data, harmonisation, validation, and aggregation (e.g. across repetitions). The ultimate aim is to achieve open and reproducible data workflows, as a requirement for qualifiable science and for collaboration.
@@ -70,9 +70,11 @@ The repository is structured as follows:
 
 ```
     .  
-    ├── fscc.Rproj  
-    ├── README.md  
-    ├── .gitignore  
+    ├── fscc.Rproj
+    ├── README.md
+    ├── .gitignore
+    ├── .github
+    ├── inst
     ├── src
     │   ├── functions                            <- Git
     │   ├── transformation_to_layer1             <- Git
@@ -83,23 +85,23 @@ The repository is structured as follows:
     │   ├── [...]                                <- Git
     │   └── sandbox                              <- GITIGNORE
     ├── output                                   <- GITIGNORE
-    │   ├── stocks  
+    │   ├── stocks
     │   ├── indices
     │   ├── physical_data
     │   ├── links_other_surveys
     │   ├── links_n_deposition
-    │   ├── pirs  
-    │   ├── pathfinder  
-    │   └── [...]  
-    └── data  
+    │   ├── pirs
+    │   ├── pathfinder
+    │   └── [...] 
+    └── data
         ├── sensitive_metadata                   <- GITIGNORE - Google Drive URL
         ├── raw_data                             <- GITIGNORE
-        │   ├── 436_s1_20221116152213  
-        │   ├── […]  
-        │   └── 436_so_20221116152441  
+        │   ├── s1
+        │   ├── so
+        │   └── […]
         ├── intermediate_data                    <- GITIGNORE
         │   ├── 0_01_intermediate_data
-        │   │   ├── 0_01_s1
+        │   │   ├── s1
         │   │   │   ├── s1_lqa.csv
         │   │   │   ├── s1_pfh.csv
         │   │   │   ├── s1_pls.csv
@@ -107,26 +109,23 @@ The repository is structured as follows:
         │   │   │   ├── s1_som.csv
         │   │   │   ├── coordinates_s1.csv
         │   │   │   └── data_availability_s1.csv
-        │   │   ├── 0_01_si
-        │   │   ├── 0_01_so
-        │   │   ├── 0_01_sw
-        │   │   └── 0_01_y1
-        │   ├── 0_02_intermediate_data  
+        │   │   ├── si
+        │   │   ├── so
+        │   │   ├── sw
+        │   │   └── y1
+        │   ├── 0_02_intermediate_data
         │   ├── […]  
         │   ├── 1_01_intermediate_data
-        │   ├── […]  
-        │   └── additional_intermediate_data     <- GITIGNORE
-        │       ├── d_country.csv
-        │       └── d_partner.csv
+        │   └── […]  
         ├── layer1_data                          <- GITIGNORE
         ├── layer2_data                          <- GITIGNORE
         └── additional_data                      <- Git (?)
             ├── pir_checked
-            └── shapefiles  
+            └── shapefiles
 ```
 
 
-### Project output  
+### Project output
 The expected output of the code in this repository is:
 
 * "layer 1" versions of the data forms of the "s1" (Level I) and "so" (Level II) surveys
@@ -147,7 +146,7 @@ We use Git and GitHub to facilitate collaboration and version control. The main 
 #### Dataset management
 All individual steps of the data (pre)processing for a certain output type are compiled, documented and applied using one Rmarkdown document per output type, such as `./src/solid_soil_data_transformation_to_layer1.Rmd` for the transformation of "layer 0" to "layer 1".
 
-The two data preprocessing scripts (for the transformation to "layer 1" and for the transformation to "layer 2") contain several so-called **breakpoints**: these are important intermediate points in the Rmarkdown script in which intermediate versions of the data forms (processed with the steps preceding this breakpoint) are stored (in the folder `./output/intermediate_data/`). As such, these breakpoints allow to divide the data transformation process into manageable steps and save the data at specific points to avoid re-running the entire script from the beginning (this way saving processing time). Each breakpoint and the related intermediate data form versions are named as follows: *"[X]_[YY]_intermediate_data"* (e.g. "0_01_intermediate_data"), with:
+The two data preprocessing scripts for the transformation to "layer 1" and for the transformation to "layer 2" contain several so-called **breakpoints**: these are important intermediate points in the Rmarkdown script in which intermediate versions of the data forms (processed with the steps preceding this breakpoint) are stored (in the folder `./output/intermediate_data/`). As such, these breakpoints allow to divide the data transformation process into manageable steps and save the data at specific points to avoid re-running the entire script from the beginning (this way saving processing time). Each breakpoint and the related intermediate data form versions are named as follows: *"[X]_[YY]_intermediate_data"* (e.g. "0_01_intermediate_data"), with:
 * *[X]*: one number which refers to the preceding layer of the data, i.e. "0" for intermediate data between "layer 0" and "layer 1", and "1" for intermediate data between "layer 1" and "layer 2"
 * *[YY]*: two numbers which refer to the breakpoint, e.g. "01" for the first breakpoint. Per "layer" (i.e. per unique *[X]*), numbers always start from 01 and go up.
 
@@ -155,7 +154,7 @@ If a collaborator wants to change the data transformation steps between breakpoi
 (idea: last breakpoint in YAML params?)
 
 In accordance with the ICP Forests policies, data are currently not open, and **storage** relies on a combination of:
-* A private Google Drive folder - advantages:
+* A private Google Drive folder with all versions - advantages:
   + Sharing with collaborators, to ensure everyone is working with the same up-to-date data
   + Backup and recovery
   + Versioning: different versions of the datasets can be saved on Google Drive, including history
@@ -166,8 +165,17 @@ In accordance with the ICP Forests policies, data are currently not open, and **
   + Flexibility (e.g. using local file paths)
   + Improved performance (e.g. faster read access)
   
-Whenever you create a new version of the data that you want to save (e.g. update of an intermediate breakpoint, new breakpoint, layer 1, layer 2...), you are expected to save the data on Google Drive. This ensures that all collaborators have access to the latest versions of the data. 
-Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive. The data on Google Drive serves as the central repository where all versions of the data are stored, while only the most recent versions of the data are stored locally in the R project folder. By synchronising, you ensure that you have the most up-to-date data available for your analysis or development in R.
+Whenever you create a new version of the data that you want to save (e.g. update of an intermediate breakpoint, new breakpoint, layer 1, layer 2...), you are expected to save the data on Google Drive
+using the `save_to_google_drive()` function. This ensures that all collaborators have access to the latest versions of the data. 
+
+Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive using the `sync_local_data()` function. The data on Google Drive serves as the central repository where all versions of the data are stored, while only the most recent versions of the data are stored locally in the R project folder. By synchronising, you ensure that you have the most up-to-date data available for your analysis or development in R.
+
+Data folders in the local project folder have clean names (no version indication). On Google Drive, data are stored in subfolders of a specific folder, such as a subfolder of "0_01_intermediate_data".
+Subfolders have specific naming conventions to indicate their version/modification status:
+* Raw data subfolders are named as "download_(download_date)", e.g., "download_20230605".
+* Other subfolders are named as "(download_date)(change_date)(name_folder)", e.g., "20230605_20230628_0_01_intermediate_data".
+
+
 
 
 <img src="https://github.com/inbo/fscc/assets/125061803/52e47167-21dc-421e-9f42-30e51702e8b1" width="80%">
@@ -183,7 +191,7 @@ Please follow this workflow:
 * **Clone** the repository to your local computer to work on the project.
 * Review the README file for an overview of the project structure and collaboration instructions.
 * Create or paste an R script `./data/sensitive_metadata/google_drive_link.R`, which contains the URL of the private Google Drive folder which contains the data, as explained below.
-* Download the data from the Google Drive folder using the `sync_local_data()` function.
+* Download the data from the Google Drive folder to your local project folder using the `sync_local_data()` function.
 
 Follow these steps to derive and save the URL of the Google Drive root folder:
 
@@ -221,6 +229,13 @@ root_drive <- "1Txxxxxxxe7"
 * Synchronise your local data with the up-to-date Google Drive folder using the `sync_local_data()` function.
 * *Remove any local branches which were merged with the main branch on GitHub*
 
+#### Downloading raw data (layer 0) from PCC database
+* Download the zipped folders per survey
+* On Google Drive: create a subfolder inside `./data/raw_data/´ with the name "download_[download_date in YYYYMMDD]"
+* Place the survey folders in this Google Drive folder (unzipping is possible but not necessary)
+* Synchronise your local folders using the `sync_local_data()` function.
+
+
 #### Adjust the data transformation code
 * Open the main R Markdown script for the given output type (e.g. `./src/solid_soil_data_transformation_to_layer1.Rmd`) to access the data transformation workflow.
 * Review the code and breakpoints in the R Markdown script to understand the different stages of the data transformation process.
@@ -231,6 +246,7 @@ root_drive <- "1Txxxxxxxe7"
 * If any next breakpoint(s) already exists: run the script from the last breakpoint onwards to update intermediate data forms.
 * If no further breakpoint(s) exist while a new breakpoint would be meaningful: create and name a new breakpoint, and run the script up to this breakpoint.
 * Save the updated intermediate data forms on Google Drive when needed.
+* Before committing and/or pushing any new or updated code: apply checklist
 * Regularly **commit** changes, including the new or updated intermediate data forms, using clear and concise commit messages (to describe the modifications made to the code and datasets), and **push** them to the remote GitHub repository.
 * *When edits on the branch are ready: create a pull request on GitHub to merge the branch with the main branch*
 * *Communicate with collaborators to inform them about any new breakpoint(s) and pull requests, and merge the adaptation into the main branch.*
@@ -242,11 +258,11 @@ root_drive <- "1Txxxxxxxe7"
 * Commit often, make small commits
 * Do not mix changes in one commit
 * Think about your commit messages (try to avoid "Update..." etc)
-* Always commit into a feature branch, never in the main branch.
-* Always start features branches from the main branch.
-* Only work in your own branches.
-* Never merge someone else's pull request without their consent.
-* Do not keep long-lived branches (form of technical debt)
+* *Always commit into a feature branch, never in the main branch.*
+* *Always start features branches from the main branch.*
+* *Only work in your own branches.*
+* *Never merge someone else's pull request without their consent.*
+* *Do not keep long-lived branches (form of technical debt)*
 
 #### Refer to: 
 * [Git(Hub) tutorial by INBO](https://inbo.github.io/tutorials/tutorials/git_introduction/)
