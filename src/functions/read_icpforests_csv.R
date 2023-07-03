@@ -6,6 +6,9 @@
 #'
 #' @param survey The name/code of the ICP Forests survey to import
 #' @param download_date A character string of the date in the format "YYYYMMDD"
+#' @param save_to_global Logical which indicates whether the output dataframes
+#' can be saved to the global environment and override any existing objects
+#' with the same name. Default is FALSE.
 #' @details
 #' This function imports survey forms of the specified survey, along with some
 #' additional dataframes containing ICP Forests soil data. Although the
@@ -39,16 +42,19 @@
 #'    └── ICP Forests - soil data (R project)
 #'    ├── src
 #'    │   ├── functions
+#'    │   ├── transformation_to_layer1
 #'    │   └── (...)
 #'    ├── output
-#'    │   └── plots
 #'    └── data
-#'        ├── Download_20221116
-#'        │   ├── 436_s1_20221116152213
-#'        │   ├── (...)
-#'        │   └── 436_so_20221116152441
-#'        ├── Download_... (other download dates)
+#'        ├── raw_data
+#'        │   ├── s1
+#'        │   ├── so
+#'        │   ├── y1
+#'        │   ├── si
+#'        │   └── sw
+#'        ├── intermediate_data
 #'        │   └── (...)
+#'        ├── additional_data
 #'        └── (...)
 #'
 #' This function uses:
@@ -109,7 +115,8 @@
 
 
 read_icpforests_csv <- function(code_survey,
-                                download_date) {
+                                download_date = NULL,
+                                save_to_global = FALSE) {
 
 
 
@@ -160,6 +167,10 @@ if (code_survey %in% c("so", "si", "sw", "ss", "lf",
   survey_level <- "LII"
   }
 
+# If an input download_date was given ----
+
+if (!is.null(download_date)) {
+
 # Assert that download_date is in the right format
 
 assertthat::assert_that(class(download_date) == "character" &&
@@ -169,15 +180,17 @@ assertthat::assert_that(class(download_date) == "character" &&
 
 # Identify the name of the directory with data
 
-dir <- paste0("./data/Download_", download_date)
+dir <- paste0("./data/raw_data/download_", download_date)
 
 # Assert that data are downloaded for the given download date
 
-assertthat::assert_that(dir %in% list.dirs(path = "./data", recursive = FALSE),
+assertthat::assert_that(dir %in% list.dirs(path = "./data/raw_data",
+                                           recursive = FALSE),
                         msg = paste0("There is no folder for the given ",
                                      "download date. Downloaded data must be ",
                                      "located in the path ",
-                                     "./data/Download_[download_date]"))
+                                     "./data/raw_data/",
+                                     "download_[download_date]"))
 
 # Identify the name of the subdirectory with data
 
@@ -187,29 +200,36 @@ subdir <- list.dirs(path = dir,
   str_subset(., pattern = "\\d$") # selects the string that ends in a number
                                  # (i.e. not the subfolders)
 
-# Import d_country and d_partner and save to the global environment
+}
+
+# If no input download_date was given ----
+
+if (is.null(download_date)) {
+
+  dir <- "./data/raw_data/"
+  subdir <- paste0(dir, code_survey, "/")
+
+}
+
+
+# Import d_country and d_partner
 
 d_country <- read.csv(paste0(subdir,
                              "/adds/dictionaries/d_country.csv"), sep = ";")
 d_partner <- read.csv(paste0(subdir,
                              "/adds/dictionaries/d_partner.csv"), sep = ";")
-assign("d_country", d_country, envir = globalenv())
-assign("d_partner", d_partner, envir = globalenv())
 
-# Import inconsistency_catalogue and attribute_catalogue_pir and save to the
-# global environment
+
+# Import inconsistency_catalogue and attribute_catalogue_pir
 
 inconsistency_catalogue <-
   read.csv("./data/additional_data/inconsistency_catalogue.csv",
            sep = ";")
-assign("inconsistency_catalogue", inconsistency_catalogue,
-       envir = globalenv())
 
 attribute_catalogue_pir <-
   read.csv("./data/additional_data/attribute_catalogue_pir.csv",
            sep = ";")
-assign("attribute_catalogue_pir", attribute_catalogue_pir,
-       envir = globalenv())
+
 
 # Import data_availability of the given survey, add unique identifiers and
 # country/partner names, and save to the global environment
@@ -223,60 +243,42 @@ if (file.exists(paste0(subdir,
                     "/adds/data_availability_",
                     code_survey, ".csv"), sep = ";")
 
- data_availability$plot_id <-
-   paste0(
-     data_availability[, which(names(data_availability) == "partner_code")],
-          "_",
-     data_availability[, which(names(data_availability) == "code_plot")])
+ data_availability <- data_availability %>%
+   mutate(plot_id = paste0(partner_code, "_",
+                           code_plot)) %>%
+   mutate(unique_survey = paste0(partner_code, "_",
+                                 survey_year, "_",
+                                 code_plot)) %>%
+   left_join(d_country[, c("code", "lib_country")],
+             by = join_by(code_country == code)) %>%
+   rename(country = lib_country) %>%
+   left_join(d_partner[, c("code", "desc_short", "description")],
+             by = join_by(partner_code == code)) %>%
+   rename(partner_short = desc_short) %>%
+   rename(partner = description) %>%
+   mutate(country = as.factor(country)) %>%
+   mutate(partner_short = as.factor(partner_short)) %>%
+   mutate(partner = as.factor(partner))
 
- data_availability$unique_survey <-
-   paste0(
-     data_availability[, which(names(data_availability) == "partner_code")],
-          "_",
-     data_availability[, which(names(data_availability) == "survey_year")],
-          "_",
-     data_availability[, which(names(data_availability) == "code_plot")])
- data_availability$country <- NA
- data_availability$partner_short <- NA
- data_availability$partner <- NA
-
- for (j in seq_len(nrow(data_availability))) {
-
-   data_availability$country[j] <- 
-   d_country$lib_country[match(data_availability$code_country[j],
-                               d_country$code)]
-  data_availability$partner_short[j] <-
-   d_partner$desc_short[match(data_availability$partner_code[j],
-                              d_partner$code)]
-  data_availability$partner[j] <-
-   d_partner$description[match(data_availability$partner_code[j],
-                               d_partner$code)]
-  }
-
- data_availability$country <- as.factor(data_availability$country)
- data_availability$partner_short <- as.factor(data_availability$partner_short)
- data_availability$partner <- as.factor(data_availability$partner)
- assign(paste0("data_availability_", code_survey), data_availability,
-        envir = globalenv())
  }
 
-# Import individual survey forms of the given survey
+# Import individual survey forms of the given survey ----
 
 # For each of the data tables in the survey:
 
 for (i in seq_along(list_data_tables[[
   which(names(list_data_tables) == code_survey)]])) {
 
-  # Read the data table
+  # Read the data table ----
   df <- read.csv(paste0(subdir, "/", code_survey, "_",
                        list_data_tables[[which(names(list_data_tables) ==
                                                  code_survey)]][i], ".csv"),
                 sep = ";")
 
-  # Replace empty spaces by NA
+  # Replace empty spaces by NA ----
   df[df == ""] <- NA
 
-  # Convert columns that should be factors to factors
+  # Convert columns that should be factors to factors ----
   vec_as_factor <- which(names(df) %in%
                          c("code_layer", "code_texture_class", "origin",
                            "horizon_master", "horizon_subordinate",
@@ -305,7 +307,7 @@ for (i in seq_along(list_data_tables[[
   }
 
 
-  # Convert the columns with dates to dates
+  # Convert the columns with dates to dates ----
   # This removes information about the time of the day in "change_date",
   # but this is usually less important, and ensures that "change_date"
   # and "download_date" are harmonised in PIRs
@@ -317,11 +319,19 @@ for (i in seq_along(list_data_tables[[
     }
     }
 
-  # Add a column with download_date
+  # Add a column with download_date ----
+
+  # If no download_date was given
+  
+  if (is.null(download_date)) {
+  source("./src/functions/get_date_local.R")
+  download_date <- get_date_local(path = dir)
+  }
+  
   df$download_date <-
     as.character(as.Date(parsedate::parse_iso_8601(download_date)))
 
-  # For s1_som and so_som: add column "layer type"
+  # For s1_som and so_som: add column "layer type" ----
   if ((code_survey == "so" || code_survey == "s1") && 
      list_data_tables[[
        which(names(list_data_tables) == code_survey)]][i] == "som") {
@@ -343,7 +353,7 @@ for (i in seq_along(list_data_tables[[
     levels(df$layer_type) <- layer_type_levels
     }
 
-  # For s1_pfh and so_pfh: add column "layer type"
+  # For s1_pfh and so_pfh: add column "layer type" ----
   if ((code_survey == "so" || code_survey == "s1") && 
       list_data_tables[[
         which(names(list_data_tables) == code_survey)]][i] == "pfh") {
@@ -369,7 +379,7 @@ for (i in seq_along(list_data_tables[[
      }
 
 
-  # For sw_swc: add column "layer type"
+  # For sw_swc: add column "layer type" ----
   if ((code_survey == "sw") &&
       list_data_tables[[
         which(names(list_data_tables) == code_survey)]][i] == "swc") {
@@ -393,36 +403,26 @@ for (i in seq_along(list_data_tables[[
   }
 
 
-  # Add column with country names
-  country <- data.frame(matrix(nrow = nrow(df), ncol = 1))
-  names(country) <- "country"
-  for (j in seq_len(nrow(df))) {
-    country[j,] <-
-    d_country$lib_country[match(df$code_country[j], d_country$code)]
-  }
-  country[,1] <- as.factor(country[,1])
+  # Add columns with country and partner names ----
 
-  # Add columns with short and complete partner names
-  partner_short <- data.frame(matrix(nrow = nrow(df), ncol = 1))
-  names(partner_short) <- "partner_short"
-  partner <- data.frame(matrix(nrow = nrow(df), ncol = 1))
-  names(partner) <- "partner"
-
-  for (j in seq_len(nrow(df))) {
-    partner_short[j, ] <-
-    d_partner$desc_short[match(df$partner_code[j],
-                               d_partner$code)]
-   partner[j, ] <-
-    d_partner$description[match(df$partner_code[j],
-                                d_partner$code)]
-   }
-  partner_short[, 1] <- as.factor(partner_short[, 1])
-  partner[, 1] <- as.factor(partner[, 1])
-
-  df <- cbind(country, partner_short, partner, df)
+  df <- df %>%
+    left_join(d_country[, c("code", "lib_country")],
+            by = join_by(code_country == code)) %>%
+    rename(country = lib_country) %>%
+    left_join(d_partner[, c("code", "desc_short", "description")],
+              by = join_by(partner_code == code)) %>%
+    rename(partner_short = desc_short) %>%
+    rename(partner = description) %>%
+    mutate(country = as.factor(country)) %>%
+    mutate(partner_short = as.factor(partner_short)) %>%
+    mutate(partner = as.factor(partner)) %>%
+    relocate(partner) %>%
+    relocate(partner_short) %>%
+    relocate(country)
 
 
-  # For data tables with coordinates (+/-DDMMSS): convert to decimal coordinates
+
+  # For any coordinates (+/-DDMMSS): convert to decimal coordinates ----
   # Add new columns named with "_dec" to store the decimal coordinates,
   # and new columns named with "_error" to store possible inconsistencies
   # in the original coordinate (if MM or SS is not in the possible 0-59 range)
@@ -478,7 +478,7 @@ for (i in seq_along(list_data_tables[[
     names(df)[which(names(df) == "longitude")] <- "longitude_plot"
     }
 
-  # if "repetition" is "NA": insert "1"
+  # if "repetition" is "NA": insert "1" ----
 
   if (!identical(which(names(df) == "repetition"),
                  integer(0))) { # if the column "repetition" exists in df
@@ -486,8 +486,8 @@ for (i in seq_along(list_data_tables[[
     }
 
 
-  # Add columns with unique identifiers for plots, surveys,
-  # repetitions/profile_pit_id's, layers
+  # Add columns with unique identifiers ----
+  # for plots, surveys, repetitions/profile_pit_id's, layers
 
   vec <- c(partner_code = (which(names(df) == "partner_code")),
            survey_year = (which(names(df) == "survey_year")),
@@ -599,12 +599,14 @@ for (i in seq_along(list_data_tables[[
   }
 
 
-  # Save the survey forms to the global environment
+  # Save the survey forms to the global environment if permitted ----
 
+  if (save_to_global == TRUE) {
 assign(paste0(code_survey, "_",
               list_data_tables[[which(names(list_data_tables) ==
                                         code_survey)]][i]),
        df, envir = globalenv())
+  }
   }
 
 
@@ -712,10 +714,19 @@ coordinates <- coordinates %>%
   filter(!is.na(longitude_dec))
 
 
-  # Save the coordinates to the global environment
+# Save remaining dataframes to the global environment if permitted
+
+if (save_to_global == TRUE) {
 
 assign(paste0("coordinates_", code_survey),
        coordinates, envir = globalenv())
-
-
+assign("d_country", d_country, envir = globalenv())
+assign("d_partner", d_partner, envir = globalenv())
+assign("inconsistency_catalogue", inconsistency_catalogue,
+       envir = globalenv())
+assign("attribute_catalogue_pir", attribute_catalogue_pir,
+       envir = globalenv())
+assign(paste0("data_availability_", code_survey), data_availability,
+       envir = globalenv())
+}
 }

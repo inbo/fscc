@@ -1,31 +1,66 @@
 ---
 title: "solid_soil_data_transformation_to_layer1"
 author: "FSCC - ICP Forests"
-date: "2023-05-24"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output: html_document
+params:
+  # Indicates which code chunks need to be evaluated, to avoid rerunning from start
+  breakpoint_recent: "0_01" # "0", "0_01", "0_02", "1", "1_01", or "2"
 ---
 
+# Solid soil data: transformation to "layer 1"
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = FALSE) # Set the default eval value for code chunks
 ```
 
-# Solid soil data: transformation to "layer 1"
+
+```{r required_packages_functions, include=FALSE, warning=FALSE, eval=TRUE}
+stopifnot(require("sf"),
+          require("tidyverse"),
+          require("openxlsx"),
+          require("parsedate"),
+          require("googlesheets4"),
+          require("googledrive"),
+          require("assertthat"))
+
+setwd("../../")
+getwd() # Should be the local "fscc" project root folder
+
+source("./src/functions/read_icpforests_csv.R")
+source("./src/functions/get_date_local.R")
+source("./src/functions/sync_local_data.R")
+
+```
 
 
 ## Import "layer 0"
 
-* Convert columns with time/date information to a date with the function "as.Date()" (in order to allow uniform reporting of the download_date and change_date in PIRs)
-* Add column "layer_type": factor with levels "forest_floor", "mineral" and "peat"
-* Add columns "country", "partner_short" and "partner" (with the respective country, partner_short and partner names)
+* Convert columns with time/date information to a **date** with the function `as.Date()` (in order to allow uniform reporting of the download_date and change_date in PIRs)
+* Add column **layer_type**: factor with levels "forest_floor", "mineral" and "peat"
+* Add columns **country**, **partner_short** and **partner** (with the respective country, partner_short and partner names)
 * "som" survey forms: column "repetition" becomes 1 for records where "repetition" is NA or -9999
 * Add columns with unique identifiers for plots, surveys, repetitions/profile_pit_id's, layers
-    + "plot_ID": "partner_code" + "code_plot"
-    + "unique_survey": "partner_code" + "survey_year" + "code_plot"
-    + "unique_survey_repetition": "partner_code" + "survey_year" + "code_plot" + "repetition" ("som" survey forms)
-    + "unique_survey_profile": "partner_code" + "survey_year" + "code_plot" + "profile_pit_id" ("pfh" survey forms)
-    + "unique_survey_layer": "partner_code" + "survey_year" + "code_plot" + "code_layer" ("som" survey forms); or: "partner_code" + "survey_year" + "code_plot" + "horizon_master" ("pfh" survey forms)
-    + "unique_layer_repetition": "partner_code" + "survey_year" + "code_plot" + "code_layer" + "repetition" ("som" survey forms)
+    + **plot_id**: "partner_code" + "code_plot"
+    + **unique_survey**: "partner_code" + "survey_year" + "code_plot"
+    + **unique_survey_repetition**: "partner_code" + "survey_year" + "code_plot" + "repetition" ("som" survey forms)
+    + **unique_survey_profile**: "partner_code" + "survey_year" + "code_plot" + "profile_pit_id" ("pfh" survey forms)
+    + **unique_survey_layer**: "partner_code" + "survey_year" + "code_plot" + "code_layer" ("som" survey forms); or: "partner_code" + "survey_year" + "code_plot" + "horizon_master" ("pfh" survey forms)
+    + **unique_layer_repetition**: "partner_code" + "survey_year" + "code_plot" + "code_layer" + "repetition" ("som" survey forms)
 
+
+```{r read_layer0}
+if (params$download_date == "0") {
+
+read_icpforests_csv(code_survey = "y1", save_to_global = TRUE)
+read_icpforests_csv(code_survey = "si", save_to_global = TRUE)
+read_icpforests_csv(code_survey = "s1", save_to_global = TRUE)
+read_icpforests_csv(code_survey = "so", save_to_global = TRUE)
+read_icpforests_csv(code_survey = "sw", save_to_global = TRUE)
+}
+```
+
+The date on which these "layer 0" data were downloaded from the central ICP Forests database is `r get_date_local(path = "../../data/raw_data/")`.
 
 ## Merge double records in "so_som"
 
@@ -88,6 +123,16 @@ OL           | OF          | OH
     + "sum_texture": "horizon_clay" + "horizon_silt" + "horizon_sand" (where required data are available). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.5).
     + "c_to_n_ratio": "horizon_c_organic_total" / "horizon_n_total" (where required data are available and not lower than the LOQ, i.e. not equal to -1)
     + "sum_base_cations": "horizon_exch_ca" + "horizon_exch_mg" + "horizon_exch_k" + "horizon_exch_na" (where required data are available and where at least two of the parameters are not below the LOQ, i.e. not equal to -1). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.015).  
+
+
+```{r breakpoint_0_01}
+
+sync_local_data()
+
+
+```
+
+
 
 
 * Harmonisation of "som" survey forms to uniform layers: e.g. to ("OL", "OFH",) "M01", "M12", "M24"... 
