@@ -248,16 +248,6 @@ save_to_google_drive <- function(objects_to_save = NULL,
     id_target <- create_google_folder(folder_name = paths$subfolder[row_index],
                                       id = paths$id[row_index_shorter])
 
-    # drive_mkdir(name = paths$subfolder[row_index],
-    #             path = paths$id[row_index_shorter])
-    #
-    # gd_subfolders_new <- drive_ls(paths$id[row_index_shorter],
-    #                               type = "folder")
-    #
-    # id_target <-
-    #   gd_subfolders_new$id[which(gd_subfolders_new$name ==
-    #                                paths$subfolder[row_index])]
-
     paths$id[row_index] <- id_target
 
   }
@@ -287,9 +277,14 @@ save_to_google_drive <- function(objects_to_save = NULL,
   if (is.null(objects_to_save)) {
 
     # All survey forms which are in the global environment
+    
     survey_forms <- survey_forms_all[
       which(survey_forms_all %in%
-              ls()[sapply(ls(), function(x) class(get(x))) == 'data.frame'])]
+              ls(envir = parent.frame())[
+                sapply(ls(envir = parent.frame()),
+                       function(x) class(get(x, envir = parent.frame()))) == "data.frame"
+              ])
+    ]
     }
 
   # If "objects_to_save" argument is provided:
@@ -385,19 +380,28 @@ save_to_google_drive <- function(objects_to_save = NULL,
   }
 
   # Get download date
-  download_date <- get_download_date(survey_forms = survey_forms)
+  download_date_collapsed <- get_download_date(survey_forms = survey_forms)
 
   # Get change date
+
+  if (!is.null(change_date)) {
+    change_date <- as.character(as.Date(parsedate::parse_iso_8601(change_date)))
+    assertthat::assert_that((!is.na(change_date)),
+                            msg = paste0("The 'change_date' argument should ",
+                                         "be in YYYYMMDD format."))
+    change_date_collapsed <- gsub("-", "", change_date)
+  }
   if (is.null(change_date)) {
-  change_date <- gsub("-", "", as.character(Sys.Date()))
+    change_date <- as.character(Sys.Date())
+    change_date_collapsed <- gsub("-", "", as.character(Sys.Date()))
   }
 
 # Create a subfolder with indication of the dates inside id_target folder ----
 
   # Determine name of new subfolder for version label (dates)
 
-  folder_name <- paste0(download_date, "_",
-                        change_date, "_",
+  folder_name <- paste0(download_date_collapsed, "_",
+                        change_date_collapsed, "_",
                         paths$subfolder[row_index])
 
 
@@ -578,8 +582,8 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
       survey_forms_i <-
         survey_forms[which((survey_forms %in% survey_forms_all) &
-                       (unlist(strsplit(survey_forms, "_"))[1] ==
-                          survey_codes[i]))]
+                             (sapply(strsplit(survey_forms, "_"), "[", 1) ==
+                                survey_codes[i]))]
 
       # Create a subfolder for the given survey code
 
