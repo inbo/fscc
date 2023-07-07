@@ -71,6 +71,16 @@ if (is.null(boundary_buffer_meter)) {
   boundary_buffer_meter <- 2000
   }
 
+  # Import the inconsistency catalogue ----
+
+  assertthat::assert_that(
+    file.exists("./data/additional_data/inconsistency_catalogue.csv"),
+    msg = paste0("There is no 'inconsistency catalogue' in the",
+                 " '.data/additional_data/' folder."))
+
+  inconsistency_catalogue <-
+    read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
+
   # Assert that all surveys contain columns with coordinates and
   # coordinate errors
 

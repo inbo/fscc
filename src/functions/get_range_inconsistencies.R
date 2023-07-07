@@ -75,9 +75,16 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
   df <- get(survey_form, envir = .GlobalEnv)
 
-  # Retrieve a catalogue with possible inconsistencies
+  # Import the inconsistency catalogue ----
 
-  inconsistency_catalogue <- get("inconsistency_catalogue", envir = .GlobalEnv)
+  assertthat::assert_that(
+    file.exists("./data/additional_data/inconsistency_catalogue.csv"),
+    msg = paste0("There is no 'inconsistency catalogue' in the",
+                 " '.data/additional_data/' folder."))
+
+  inconsistency_catalogue <-
+    read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
+
 
   # Retrieve a dataframe which contains ranges that are plausible or possible
   # for different analytical parameters.

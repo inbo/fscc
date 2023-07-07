@@ -542,7 +542,7 @@ map_icpf <- function(layers,
   # Save map ----
 
   # Set path name based on input arguments
-  path_folder <- paste0("./output/plots/",
+  path_folder <- paste0("./output/",
                  export_folder, "/")
 
   # Create path folder if this does not exist
@@ -551,7 +551,7 @@ map_icpf <- function(layers,
     }
 
   # Set path name based on input arguments
-  path <- paste0("./output/plots/",
+  path <- paste0("./output/",
                  export_folder, "/",
                  export_name, ".png")
 

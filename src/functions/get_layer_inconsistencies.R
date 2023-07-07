@@ -115,8 +115,17 @@ if (is.null(solve)) {
   solve <- FALSE
   }
 
+  # Import the inconsistency catalogue ----
+  
+  assertthat::assert_that(
+    file.exists("./data/additional_data/inconsistency_catalogue.csv"),
+    msg = paste0("There is no 'inconsistency catalogue' in the",
+                 " '.data/additional_data/' folder."))
+  
+  inconsistency_catalogue <-
+    read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
-### Part 1: processing "som" survey forms (with fixed depths)
+### Part 1: processing "som" survey forms (with fixed depths) ----
 
   # Check if the given survey form is "som"
 
@@ -2497,7 +2506,7 @@ close(progress_bar)
 
 
 
-  ### Part 2: processing "pfh" survey forms (with pedogenic layers)
+  ### Part 2: processing "pfh" survey forms (with pedogenic layers) ----
 
   # Check if the given survey form is "pfh"
 

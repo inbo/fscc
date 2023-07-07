@@ -187,7 +187,7 @@ export_pir <- function(inconsistency_report_name,
 
 # 3. Inconsistency catalogue: prepare dataframe ----
 
-  # Import the inconsistency catalogue
+  # Import the inconsistency catalogue ----
 
   assertthat::assert_that(
     file.exists("./data/additional_data/inconsistency_catalogue.csv"),

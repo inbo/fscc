@@ -70,7 +70,17 @@
 #' @examples
 #' get_derived_variables("s1_som")
 
-get_derived_variables <- function(survey_form) {
+get_derived_variable_inconsistencies <- function(survey_form) {
+
+  # Import the inconsistency catalogue ----
+
+  assertthat::assert_that(
+    file.exists("./data/additional_data/inconsistency_catalogue.csv"),
+    msg = paste0("There is no 'inconsistency catalogue' in the",
+                 " '.data/additional_data/' folder."))
+
+  inconsistency_catalogue <-
+    read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
   # Retrieve survey form from global environment
 

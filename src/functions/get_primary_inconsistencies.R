@@ -64,6 +64,16 @@ get_primary_inconsistencies <- function(code_survey, solve = NULL) {
     solve <- FALSE
     }
 
+  # Import the inconsistency catalogue ----
+
+  assertthat::assert_that(
+    file.exists("./data/additional_data/inconsistency_catalogue.csv"),
+    msg = paste0("There is no 'inconsistency catalogue' in the",
+                 " '.data/additional_data/' folder."))
+
+  inconsistency_catalogue <-
+    read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
+
   # Create a list with names of the different survey forms per survey
 
   list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
