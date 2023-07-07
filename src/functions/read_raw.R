@@ -1,11 +1,16 @@
 
-#' Import survey forms and additional data for ICP Forests soil analysis
+#' Read raw solid soil data for ICP Forests soil analysis
 #'
 #' This function imports the raw survey forms of the given survey and additional
-#' dataframes with ICP Forests soil data (so-called "Layer 0").
+#' dataframes with ICP Forests soil data (so-called "Layer 0") from local
+#' folders.
 #'
 #' @param survey The name/code of the ICP Forests survey to import
-#' @param download_date A character string of the date in the format "YYYYMMDD"
+#' @param download_date Default is NULL since unnecessary in local folder
+#' structure of 'fscc' project, which only contains one version of the data.
+#' Enter a character string of the date in the format "YYYYMMDD" if multiple
+#' raw data versions exist (organised in 'raw_data/download_date_YYYYMMDD/'
+#' subfolders).
 #' @param save_to_global Logical which indicates whether the output dataframes
 #' can be saved to the global environment and override any existing objects
 #' with the same name. Default is FALSE.
@@ -68,8 +73,6 @@
 #' - dataframes for each of the survey forms of the given survey
 #' - "d_country"
 #' - "d_partner"
-#' - "inconsistency_catalogue"
-#' - "attribute_catalogue_pir"
 #' - "data_availability_[CODESURVEY]"
 #' - "coordinates_[CODESURVEY]"
 #'
@@ -111,12 +114,12 @@
 #'
 #'
 #' @examples
-#' import_icp_forests_data("s1", "20221116")
+#' read_raw("s1", "20221116")
 
 
-read_icpforests_csv <- function(code_survey,
-                                download_date = NULL,
-                                save_to_global = FALSE) {
+read_raw <- function(code_survey,
+                     download_date = NULL,
+                     save_to_global = FALSE) {
 
 
 
@@ -218,17 +221,6 @@ d_country <- read.csv(paste0(subdir,
                              "/adds/dictionaries/d_country.csv"), sep = ";")
 d_partner <- read.csv(paste0(subdir,
                              "/adds/dictionaries/d_partner.csv"), sep = ";")
-
-
-# Import inconsistency_catalogue and attribute_catalogue_pir
-
-inconsistency_catalogue <-
-  read.csv("./data/additional_data/inconsistency_catalogue.csv",
-           sep = ";")
-
-attribute_catalogue_pir <-
-  read.csv("./data/additional_data/attribute_catalogue_pir.csv",
-           sep = ";")
 
 
 # Import data_availability of the given survey, add unique identifiers and

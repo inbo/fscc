@@ -117,7 +117,7 @@ sync_local_data <- function(list_subfolders_data = NULL,
 # List subfolders of Google Drive under the "data" and "output" subfolders ----
 
   root_drive_id <- as_id(root_drive)
-  gd_subfolders <- drive_ls(root_drive_id)
+  gd_subfolders <- drive_ls(root_drive_id, type = "folder")
 
   gd_data <-
     drive_ls(gd_subfolders$id[which(gd_subfolders$name == "data")])
@@ -165,7 +165,7 @@ sync_local_data <- function(list_subfolders_data = NULL,
                         "./data/intermediate_data/0_01_intermediate_data/",
                         "./data/intermediate_data/0_02_intermediate_data/",
                         "./data/layer1_data/",
-                        "./data/layer1_data/"))
+                        "./data/layer2_data/"))
 
 
   # If no "list_subfolders_data" argument is provided,
