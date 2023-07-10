@@ -192,6 +192,7 @@ Please follow this workflow:
 * Review the README file for an overview of the project structure and collaboration instructions.
 * Create or paste an R script `./data/sensitive_metadata/google_drive_link.R`, which contains the URL of the private Google Drive folder which contains the data, as explained below.
 * Download the data from the Google Drive folder to your local project folder using the `sync_local_data()` function.
+* Import the data from your local folder in R using the `read_processed()` function.
 
 Follow these steps to derive and save the URL of the Google Drive root folder:
 
@@ -227,13 +228,16 @@ root_drive <- "1Txxxxxxxe7"
 #### Getting started: next times
 * **Pull** changes from the repository before starting your work to ensure you have the latest code and datasets from other team members.
 * Synchronise your local data with the up-to-date Google Drive folder using the `sync_local_data()` function.
+* Import the data from your local folder in R using the `read_processed()` function.
 * *Remove any local branches which were merged with the main branch on GitHub*
+
 
 #### Downloading raw data (layer 0) from PCC database
 * Download the zipped folders per survey
-* On Google Drive: create a subfolder inside `./data/raw_data/´ with the name "download_[download_date in YYYYMMDD]"
+* On Google Drive: create a subfolder inside `./data/raw_data/` with the name "download_[download_date in YYYYMMDD]"
 * Place the survey folders in this Google Drive folder (unzipping is possible but not necessary)
 * Synchronise your local folders using the `sync_local_data()` function.
+* Import the raw data from your local folder in R using the `read_raw()` function.
 
 
 #### Adjust the data transformation code

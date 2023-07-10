@@ -63,7 +63,7 @@
 #' @examples
 #' local_folder <- "./data/"
 #' drive_folder_id <- "your_folder_id"
-#' sync_data(local_folder, drive_folder_id)
+#' sync_local_data(local_folder, drive_folder_id)
 #'
 #' @export
 

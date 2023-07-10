@@ -12,14 +12,15 @@
 #' or "./output/" folder). Can be in the form of "0_01",
 #' "0_01_intermediate_data", "./data/intermediate_data/0_01_intermediate_data".
 #' @param change_date Character string representing the date on which the
-#' data were changed, in "YYYYMMDD" format. If NULL, today's is used (default).
+#' data were changed, in "YYYYMMDD" format. If NULL, today's date is used
+#' (default).
 #' @param subfolder_non_survey_forms Character string with name of the subfolder
 #' of the folder mentioned in "path_name" where dataframes which are not survey
 #' forms should be stored in Google Drive. If NULL, a subfolder with indication
 #' of the download_date and change_date is used. If FALSE, the objects are
 #' stored in the folder mentioned in "path_name" (i.e. no subfolder is made).
 #' @param ... Arguments to pass to ggplot2::ggsave() function. Can be "dpi",
-#' "width", "height" or "export_name". If not null, the arguments "width" and
+#' "width", "height" or "export_name". If null, the arguments "width" and
 #' "height" take the default values of ggsave, and the argument "dpi" becomes
 #' 500. The argument "export_name" represents the names the ggplot figures
 #' should get in Google Drive. This should be a character vector of the same

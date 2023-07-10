@@ -15,17 +15,17 @@
 #' with the same name. Default is FALSE.
 #'
 #' @details
-#' Not for layer 0?
+#' Not for layer 0
 #'
 #'
 #' @return None
 #'
 #' @examples
 #' # Read all solid soil-related survey forms
-#' read_intermediate()
+#' read_processed()
 #'
 #' # Read specific survey forms from a specific path
-#' read_intermediate(c("so_som", "so_prf"), "./path/to/data/")
+#' read_processed(c("so_som", "so_prf"), "./path/to/data/")
 
 read_processed <- function(survey_forms = NULL,
                            path_name = NULL,
