@@ -183,7 +183,8 @@ sync_local_data <- function(list_subfolders_data = NULL,
   # (i.e. if "list_subfolders_data" is not FALSE)
   # assert that these folders exist
 
-  } else if (!isFALSE(list_subfolders_data_orig)) {
+  } else if (!isFALSE(list_subfolders_data_orig) &&
+             !is.null(list_subfolders_data_orig)) {
 
     # Create a vector which indicates which of the input "list_subfolders_data"
     # does not exist on Google Drive
@@ -264,7 +265,8 @@ sync_local_data <- function(list_subfolders_data = NULL,
     # (i.e. if "list_subfolders_output" is not FALSE)
     # assert that these folders exist
 
-  } else if (!isFALSE(list_subfolders_output_orig)) {
+  } else if (!isFALSE(list_subfolders_output_orig) &&
+             !is.null(list_subfolders_output_orig)) {
 
     # Create a vector which indicates which of the input
     # "list_subfolders_output" does not exist on Google Drive
@@ -531,6 +533,49 @@ sync_local_data <- function(list_subfolders_data = NULL,
   source("./src/functions/get_date_local.R")
 
 
+  # Create function which checks whether the local data are complete ----
+
+  is_complete_local <- function(path) {
+    
+    local_subfolders <- list.files(path)
+    local_subfolders <-
+      local_subfolders[which(local_subfolders != "metadata.txt")]
+    
+    # If this subfolder is currently empty:
+    # return NA
+    
+    if (identical(local_subfolders, character(0))) {
+      return(NA)
+      
+      # If this subfolder is not empty:
+    } else {
+      
+      # Create the full path for each local subfolder
+      full_paths <- paste0(path, local_subfolders, "/")
+      
+      # Check if each local subfolder is not empty
+      not_empty <- sapply(full_paths, function(folder) {
+        if (dir.exists(folder)) {
+          files <- list.files(folder)
+          return(length(files) > 0)
+        }
+        return(FALSE)
+      })
+
+      # Check whether the required folders are there
+      
+      if (all(c("y1", "s1", "si", "so", "sw") %in% local_subfolders) &&
+          all(not_empty)) {
+
+        return(TRUE)
+
+      } else {
+        
+        return(FALSE)
+
+      }
+    }
+  }
 
   # Check whether the local subfolder is up to date ----
 
@@ -538,6 +583,7 @@ sync_local_data <- function(list_subfolders_data = NULL,
   subfolder_paths$download_date_recent <- as.Date(NA)
   subfolder_paths$id_recent <- NA
   subfolder_paths$change_date_local <- as.Date(NA)
+  subfolder_paths$complete_data_local <- NA
   subfolder_paths$up_to_date <- NA
 
   for (i in seq_along(subfolder_paths$subfolder)) {
@@ -556,11 +602,23 @@ sync_local_data <- function(list_subfolders_data = NULL,
     subfolder_paths$change_date_local[i] <-
       get_date_local(subfolder_paths$path[i])
 
+    # Check whether the data in the local folder are complete
+
+      # If the path starts with "./data/"
+
+    if (grepl("^\\.\\/data\\/", subfolder_paths$path[i])) {
+
+      subfolder_paths$complete_data_local[i] <-
+        is_complete_local(subfolder_paths$path[i])
+    }
+
     # Check whether the local folder is up to date
 
     subfolder_paths$up_to_date[i] <-
       ifelse((subfolder_paths$change_date_local[i] <
                subfolder_paths$change_date_recent[i]) ||
+             (!is.na(subfolder_paths$change_date_local[i]) &&
+                isFALSE(subfolder_paths$complete_data_local[i])) ||
              (is.na(subfolder_paths$change_date_local[i]) &&
               !is.na(subfolder_paths$change_date_recent[i])),
              FALSE,
@@ -615,7 +673,8 @@ sync_local_data <- function(list_subfolders_data = NULL,
 
   notify_raw <- function(change_date_recent,
                          change_date_local,
-                         folder_name) {
+                         folder_name,
+                         complete_data_local) {
 
     # Create object which represents permission to delete local data which are
     # not up to date
@@ -630,9 +689,11 @@ sync_local_data <- function(list_subfolders_data = NULL,
                  "download date ",
                  as.character(change_date_recent),
                  " will be downloaded.\n"))
+    }
 
-    # If the local folder is not empty:
-    } else {
+    # If the local folder is not empty but from an older date:
+    if (!is.na(change_date_local) &&
+        change_date_local < change_date_recent) {
 
       cat(paste0("Data in local folder '",
                  folder_name,
@@ -659,6 +720,34 @@ sync_local_data <- function(list_subfolders_data = NULL,
         delete_permission <- TRUE
       }
     }
+    
+    
+    # If the local folder is not empty but not complete:
+    if (!is.na(change_date_local) &&
+        isFALSE(complete_data_local)) {
+      
+      cat(paste0("Data in local folder '",
+                 folder_name,
+                 "' are from the most recent download date (",
+                 as.character(change_date_local),
+                 "), but incomplete.\n"))
+      
+      # Prompt the user for confirmation to delete the local data
+      cat(paste0("Existing raw data in the local folder '",
+                 folder_name,
+                 "' should be deleted to make room for ",
+                 "downloading the complete set of recent data."))
+      confirmation <-
+        readline(prompt =
+                   paste0("Do you grant ",
+                          "permission to delete the current raw data ",
+                          "in the local folder? (Y/N): "))
+      
+      # Check the user's response
+      if (tolower(confirmation) == "y") {
+        delete_permission <- TRUE
+      }
+    }
 
     return(delete_permission)
   }
@@ -669,7 +758,8 @@ sync_local_data <- function(list_subfolders_data = NULL,
 
   notify <- function(change_date_recent,
                      change_date_local,
-                     folder_name) {
+                     folder_name,
+                     complete_data_local) {
 
     # Create object which represents permission to delete local data which are
     # not up to date
@@ -683,9 +773,11 @@ sync_local_data <- function(list_subfolders_data = NULL,
                   "' is empty. Files on Google Drive from change date ",
                   as.character(change_date_recent),
                   " will be downloaded.\n"))
+    }
 
-      # If the local folder is not empty:
-    } else {
+    # If the local folder is not empty but from an older date:
+    if (!is.na(change_date_local) &&
+        change_date_local < change_date_recent) {
 
       cat(paste0("Data in local folder '",
                  folder_name,
@@ -705,6 +797,35 @@ sync_local_data <- function(list_subfolders_data = NULL,
                                  "permission to delete the current files ",
                                  "in the local folder? (Y/N): "))
 
+      # Check the user's response
+      if (tolower(confirmation) == "y") {
+        delete_permission <- TRUE
+      }
+    }
+    
+    
+    
+    # If the local folder is not empty but not complete:
+    if (!is.na(change_date_local) &&
+        isFALSE(complete_data_local)) {
+      
+      cat(paste0("Data in local folder '",
+                 folder_name,
+                 "' are from the most recent change date (",
+                 as.character(change_date_local),
+                 "), but incomplete.\n"))
+      
+      # Prompt the user for confirmation to delete the local data
+      cat(paste0("Existing files in the local folder '",
+                 folder_name,
+                 "' should be deleted to make room for ",
+                 "downloading the complete set of recent data."))
+      confirmation <-
+        readline(prompt =
+                   paste0("Do you grant ",
+                          "permission to delete the current files ",
+                          "in the local folder? (Y/N): "))
+      
       # Check the user's response
       if (tolower(confirmation) == "y") {
         delete_permission <- TRUE
@@ -731,7 +852,7 @@ sync_local_data <- function(list_subfolders_data = NULL,
 
     for (i in seq_along(local_files)) {
 
-      file.remove(local_files[i])
+      suppressWarnings(file.remove(local_files[i]))
       cat("Deleted", local_files[i], "locally.\n")
 
 
@@ -1153,7 +1274,8 @@ return(files_with_paths)
 
     # Notify user
 
-    file_count <- length(which(files_with_paths$file_type == "regular_file"))
+    file_count <- length(which(files_with_paths$file_type %in%
+                                 c("regular_file", "zip_folder")))
     cat("Downloaded", file_count,
         "files from Google Drive into the folder",
         path, "\n")
@@ -1231,7 +1353,9 @@ cat(paste0("Data synchronisation for '",
                    change_date_local =
                      subfolder_paths_to_update$change_date_local[i],
                    folder_name =
-                     subfolder_paths_to_update$subfolder[i])
+                     subfolder_paths_to_update$subfolder[i],
+                   complete_data_local =
+                     subfolder_paths_to_update$complete_data_local[i])
     } else
 
 
@@ -1245,7 +1369,9 @@ cat(paste0("Data synchronisation for '",
                change_date_local =
                  subfolder_paths_to_update$change_date_local[i],
                folder_name =
-                 subfolder_paths_to_update$subfolder[i])
+                 subfolder_paths_to_update$subfolder[i],
+               complete_data_local =
+                 subfolder_paths_to_update$complete_data_local[i])
     }
 
 
