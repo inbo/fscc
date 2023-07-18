@@ -5,17 +5,22 @@ date: "`r format(Sys.Date(), '%Y-%m-%d')`"
 output: html_document
 params:
   # Indicates which code chunks need to be evaluated, to avoid rerunning from start
-  breakpoint_recent: "0_01" # "0", "0_01", "0_02", "1", "1_01", or "2"
+  breakpoint_recent: "0" # "0", "0_01", "0_02", "1", "1_01", or "2"
 ---
 
 # Solid soil data: transformation to "layer 1"
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(eval = FALSE) # Set the default eval value for code chunks
+knitr::opts_chunk$set(eval = TRUE) # Set the default eval value for code chunks
+knitr::opts_chunk$set(cache = TRUE) # Set the default cache value
 ```
 
 
-```{r required_packages_functions, include=FALSE, warning=FALSE, eval=TRUE}
+```{r required_packages_functions, include=FALSE, warning=FALSE, eval=TRUE, cache=FALSE}
+
+# Warning: under Tools > Global Options > R Markdown, make sure that
+# "Evaluate chunks in directory" refers to the dropdown option "Project".
+
 stopifnot(require("sf"),
           require("tidyverse"),
           require("openxlsx"),
@@ -24,19 +29,37 @@ stopifnot(require("sf"),
           require("googledrive"),
           require("assertthat"))
 
-setwd("../../")
-getwd() # Should be the local "fscc" project root folder
+source("./src/functions/read_raw.R", local = knitr::knit_global())
+source("./src/functions/read_processed.R", local = knitr::knit_global())
+source("./src/functions/save_to_google_drive.R", local = knitr::knit_global())
+source("./src/functions/sync_local_data.R", local = knitr::knit_global())
+source("./src/functions/get_date_local.R", local = knitr::knit_global())
+source("./src/functions/sync_local_data.R", local = knitr::knit_global())
+source("./src/functions/merge_duplicate_records.R",
+       local = knitr::knit_global())
+source("./src/functions/assign_env.R", local = knitr::knit_global())
+source("./src/functions/get_env.R", local = knitr::knit_global())
+source("./src/functions/get_primary_inconsistencies.R",
+       local = knitr::knit_global())
+source("./src/functions/bind_inconsistency_lists.R",
+       local = knitr::knit_global())
+source("./src/functions/get_coordinate_inconsistencies.R",
+       local = knitr::knit_global())
+source("./src/functions/get_layer_inconsistencies.R",
+       local = knitr::knit_global())
+source("./src/functions/get_range_inconsistencies.R",
+       local = knitr::knit_global())
+source("./src/functions/get_derived_variables.R", local = knitr::knit_global())
+source("./src/functions/export_pir.R", local = knitr::knit_global())
 
-source("./src/functions/read_icpforests_csv.R")
-source("./src/functions/get_date_local.R")
-source("./src/functions/sync_local_data.R")
 
 ```
 
 
-## Import "layer 0"
+## Import "layer 0" + add extra columns
 
 * Convert columns with time/date information to a **date** with the function `as.Date()` (in order to allow uniform reporting of the download_date and change_date in PIRs)
+* Add column **download_date** with date on which raw "layer 0" data were downloaded from the central PCC database of ICP Forests.
 * Add column **layer_type**: factor with levels "forest_floor", "mineral" and "peat"
 * Add columns **country**, **partner_short** and **partner** (with the respective country, partner_short and partner names)
 * "som" survey forms: column "repetition" becomes 1 for records where "repetition" is NA or -9999
@@ -47,32 +70,87 @@ source("./src/functions/sync_local_data.R")
     + **unique_survey_profile**: "partner_code" + "survey_year" + "code_plot" + "profile_pit_id" ("pfh" survey forms)
     + **unique_survey_layer**: "partner_code" + "survey_year" + "code_plot" + "code_layer" ("som" survey forms); or: "partner_code" + "survey_year" + "code_plot" + "horizon_master" ("pfh" survey forms)
     + **unique_layer_repetition**: "partner_code" + "survey_year" + "code_plot" + "code_layer" + "repetition" ("som" survey forms)
+* Create a list with harmonised coordinates per survey code.
+    + **TO DO: Check with PCC data managers whether coordinates in system installment forms are more likely to be correct than those in solid soil surveys or not.**
 
 
-```{r read_layer0}
-if (params$download_date == "0") {
+```{r read_raw}
+if (params$breakpoint_recent == "0") {
 
-read_icpforests_csv(code_survey = "y1", save_to_global = TRUE)
-read_icpforests_csv(code_survey = "si", save_to_global = TRUE)
-read_icpforests_csv(code_survey = "s1", save_to_global = TRUE)
-read_icpforests_csv(code_survey = "so", save_to_global = TRUE)
-read_icpforests_csv(code_survey = "sw", save_to_global = TRUE)
+read_raw(code_survey = "y1", save_to_env = TRUE)
+read_raw(code_survey = "si", save_to_env = TRUE)
+read_raw(code_survey = "s1", save_to_env = TRUE)
+read_raw(code_survey = "so", save_to_env = TRUE)
+read_raw(code_survey = "sw", save_to_env = TRUE)
 }
 ```
 
-The date on which these "layer 0" data were downloaded from the central ICP Forests database is `r get_date_local(path = "../../data/raw_data/")`.
+The date on which these "layer 0" data were downloaded from the central ICP Forests database is `r get_date_local(path = "./data/raw_data/", save_to_env = TRUE)`.
 
 ## Merge double records in "so_som"
 
-* "so_som" survey form: Merge "duplicate" records - double records (with the same "unique_layer_repetition") exist for several of the old "so_som" data (i.e. one with "origin" == "OPT" and one with "origin" == "MAN"). Data for the analytical parameters are always reported in only one of the two records, so it is no problem to merge them. This way, the "so_som" dataframe which was downloaded on 2 March 2023 was reduced from 18586 to 14580 rows, with records removed (after merging their information to their respective other records) from survey years between 1990 and 2015.
+Double records (with the same "unique_layer_repetition" and layer limits) exist for several of the old "so_som" data.
+This issue arises from the historical separation of mandatory (SOM) and optional (SOO) parameters during the data reporting.
+Some countries reported both the mandatory and optional parameters, while others reported only the primary key and optional parameters.
+To address this issue, the function `merged_duplicate_records()` merges such duplicate records, by taking the unique value over the two records per parameter.
+In case of conflicts (i.e. different non-NA value in MAN versus OPT for the given parameter), the value in MAN is retained, except for the "other_obs" column, in which the different values are pasted into one string (separated by a semicolon).
+This issue has been solved in the past for "s1_som" in the central database. **TO DO: double-check the assumption that this merging happened correctly for s1**
+
+* Add column **origin_merged**: logical which indicates rows which were merged from one "MAN" and one "OPT" record.
+* Add column **origin_merge_info**: character string which gives information on the reduction in the amount of rows at the level of the whole survey form (so_som).
+
+```{r merge_duplicate_records}
+if (params$breakpoint_recent == "0") {
+
+merge_duplicate_records("so_som",
+                        merge = TRUE,
+                        save_to_env = TRUE)
+
+}
+```
+
+This way, the "so_som" dataframe is reduced from `r extract_merge_info(survey_form = "so_som")[1]` to `r extract_merge_info(survey_form = "so_som")[2]` rows, with records removed (after merging their information to their respective other records) from survey years between `r extract_merge_info(survey_form = "so_som")[3]` and `r extract_merge_info(survey_form = "so_som")[4]`.
 
 
-* "s1_som" survey form: If there are non-unique primary keys due to multiple layers with the same "code_layer" within a given profile: 
-    + copy the column "code_layer" to a new column "code_layer_original"
-    + change the "code_layer" column for these ambiguous layers to [first letter, i.e. "M" or "H"] + [layer_limit_superior] + [layer_limit_inferior], e.g. "M5060", "M8590" etc 
+## Harmonise code_layer with layer limits in "som" survey forms + get primary key inconsistencies
+
+* "s1_som" and "so_som" survey forms: If there are non-unique primary keys (duplicated unique_layer_repetition) because of records with the same "code_layer" + different layer limits or NA layer limits + the same "origin" or no "origin" column; within a given profile (repetition).
+    + copy the column "code_layer" to a new column **code_layer_original**
+    + change the **code_layer** column for these ambiguous layers to [first letter, i.e. "M" or "H"] + [layer_limit_superior] + [layer_limit_inferior], e.g. "M5060", "M8590" etc 
     + update unique identifiers that include "code_layer"
   This happened for:
     + 10 plots for which this issue already existed in the past (Sweden, Finland, Estonia - due to multiple "M48", "Mxx" or "Hxx" layers): "13_731", "13_1360", "13_1607", "13_1608", "13_2515", "13_2529", "13_2737", "13_3768", "15_1620", "59_43"
+
+Note: this is only a solution for internal use to avoid conflicts in primary key. This problem arises from not following the manual correctly, since fixed layers should not display pedogenic horizons (even in case of alternating peat and mineral layers).
+
+```{r get_primary_inconsistencies}
+if (params$breakpoint_recent == "0") {
+
+get_primary_inconsistencies("y1", save_to_env = TRUE)
+get_primary_inconsistencies("si", save_to_env = TRUE)
+get_primary_inconsistencies("s1", solve = TRUE, save_to_env = TRUE)
+get_primary_inconsistencies("so", solve = TRUE, save_to_env = TRUE)
+get_primary_inconsistencies("sw", save_to_env = TRUE)
+bind_inconsistency_lists("list_primary_inconsistencies", save_to_env = TRUE)
+
+}
+```
+
+## Create a list with coordinate inconsistencies
+
+* Remove columns "latitude_error" and "longitude_error"
+
+```{r get_coordinate_inconsistencies}
+if (params$breakpoint_recent == "0") {
+get_coordinate_inconsistencies(surveys_with_coordinates = NULL,
+                               boundary_buffer_meter = 3000,
+                               save_to_env = TRUE)
+}
+```
+
+
+## Harmonise layers/horizons
+
 * "som" survey forms: Update "layer_limit_superior" and "layer_limit_inferior":
     + Copy the column "layer_limit_superior" to a new column "layer_limit_superior_orig" + the column "layer_limit_inferior" to a new column "layer_limit_inferior_orig"
     + Update the columns "layer_limit_superior" and "layer_limit_inferior":
@@ -89,6 +167,49 @@ The date on which these "layer 0" data were downloaded from the central ICP Fore
 * Create a column "layer_number" (in "som" survey forms) or "horizon_number_unique" (in "pfh" survey forms) which represents the rank of a layer (from top to bottom) within a profile (unique "repetition" or "profile_pit_id"). "Redundant layers" are not included in this ranking (i.e. layers which cover the same depths like other layers from the same profile and which can therefore be "left out" without any effect on the depths which are covered by the data of the given profile). If there are multiple options when identifying these redundant layers (e.g. "M01" versus "M05" + "M51"): consider the least "detailed" layer(s) (i.e. layer(s) with largest depth range) as redundant (e.g. "M01"). In general, ranking happens based on the superior/upper and inferior/lower layer limits.
     + "pfh" survey forms: If there are no redundant layers: "horizon_number_unique" equals "horizon_number" if the ranking of "horizon_number" equals the ranking of the layer limits (which is not always the case); else "horizon_number_unique" is based on the ranking of the layer limits.
     + "som" survey forms: Include forest floor without layer limits in the ranking. The following table shows how the forest floor layer combinations are ranked (based on theoretical sequence of forest floor layers, e.g. "OL" on top etc + analysis of the total organic carbon content of the existing forest floor combinations):  
+
+          # Special case: Latvian records without code_layer
+          # There are two Latvian records without code_layer, layer_limits,
+          # and with only one organic_carbon_total value
+          # Assumption: since the other records of the same
+          # unique_survey_repetition are M01, M12, M24, M48, and
+          # organic_layer_weight is reported, we will assume that these are
+          # forest floor layers.
+          # Because of the organic_layer_weight, these records are still
+          # valuable for C stock calculations.
+          # However, in order to derive which of the records is on top
+          # and which is below, we can't base ourselves on
+          # organic_carbon_total (only one value reported).
+          # Yet, analysis of the organic_layer_weight in so_som profiles
+          # with at least two forest floor layers teaches us that
+          # it is the most likely that the inferior layer usually has a
+          # higher organic_layer_weight than the superior layer
+          # (570 cases versus 21).
+          # As such, we will name the code_layer of these records so that
+          # they will be sorted accordingly.
+          # df$unique_layer_repetition == "64_2004_5_NA_1"
+
+```{r, eval=FALSE}
+
+ind_latvia <- which(df$unique_layer_repetition == "64_2004_5_NA_1")
+
+if (length(which(duplicated(df$unique_layer_repetition[ind_latvia]))) == 3) {
+
+  # Find indices containing "001"
+  ind_latvia_001 <- which(grepl("001", df$code_line[ind_latvia]))
+
+  # Find indices containing "002"
+  ind_latvia_002 <- which(grepl("002", df$code_line[ind_latvia]))
+
+  # Update unique_layer_repetition
+
+  df$unique_layer_repetition[ind_latvia[ind_latvia_001]] <- "64_2004_5_001_1"
+  df$unique_layer_repetition[ind_latvia[ind_latvia_002]] <- "64_2004_5_002_1"
+  }
+
+```
+
+
 
 **Two forest floor layers**  
 
@@ -125,7 +246,7 @@ OL           | OF          | OH
     + "sum_base_cations": "horizon_exch_ca" + "horizon_exch_mg" + "horizon_exch_k" + "horizon_exch_na" (where required data are available and where at least two of the parameters are not below the LOQ, i.e. not equal to -1). Data below the LOQ (i.e. -1) are replaced by half of the LOQ (i.e. by 0.015).  
 
 
-```{r breakpoint_0_01}
+```{r breakpoint_0_01, eval=FALSE}
 
 sync_local_data()
 
