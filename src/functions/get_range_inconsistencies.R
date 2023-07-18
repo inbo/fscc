@@ -7,7 +7,11 @@
 #' @param survey_form Character string - Name of the survey form (lower case and
 #' separated by '_') to be evaluated
 #' @param solve Logical - Indicates whether obvious mistakes can be solved in
-#' this function (if TRUE)
+#' this function (if TRUE). Default is FALSE.
+#' @param save_to_env Logical which indicates whether the output dataframes
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is FALSE.
+#'
 #' @details
 #' For survey forms: "s1_som", "s1_pfh", "s1_prf", "s1_pls", "y1_st1",
 #' "so_som", "so_pfh", "so_prf", "so_pls", "si_sta", "sw_swc"
@@ -58,22 +62,20 @@
 #' @examples
 #' get_range_inconsistencies("so_som", solve = TRUE)
 
-get_range_inconsistencies <- function(survey_form, solve = NULL) {
+get_range_inconsistencies <- function(survey_form,
+                                      solve = FALSE,
+                                      save_to_env = FALSE) {
 
+  source("./src/functions/get_env.R")
+  source("./src/functions/assign_env.R")
 
   # Monitor how long it takes to run this function
 
   start_time_r <- Sys.time()
 
-  # If no "solve" argument is provided, set it to "FALSE" (by default)
-
-  if (is.null(solve)) {
-    solve <- FALSE
-    }
-
   # Retrieve the survey_form data
 
-  df <- get(survey_form, envir = .GlobalEnv)
+  df <- get_env(survey_form)
 
   # Import the inconsistency catalogue ----
 
@@ -183,13 +185,7 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
     # Create a dataframe "list_codes" which lists the possible codes per
     # coded parameter
 
-  dir <- paste0("./data/Download_", download_date)
-
-  subdir <- list.dirs(path = dir,
-                      full.names = TRUE, recursive = TRUE) %>%
-    str_subset(., pattern = unlist(str_split(survey_form, "_"))[1]) %>%
-    # selects the string that ends in a number (i.e. not the subfolders)
-    str_subset(., pattern = "\\d$")
+  subdir <- paste0("./data/raw_data/", unlist(strsplit(survey_form, "_"))[1])
 
   d_texture_class <-
     read.csv(paste0(subdir, "/adds/dictionaries/d_texture_class.csv"),
@@ -198,7 +194,8 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
     read.csv(paste0(subdir, "/adds/dictionaries/d_soil_group.csv"),
              sep = ";")
   d_soil_adjective <-
-    read.csv(paste0(subdir,"/adds/dictionaries/d_soil_adjective.csv"), sep=";")
+    read.csv(paste0(subdir,"/adds/dictionaries/d_soil_adjective.csv"),
+             sep = ";")
   d_soil_specifier <-
     read.csv(paste0(subdir, "/adds/dictionaries/d_soil_specifier.csv"),
              sep = ";")
@@ -258,11 +255,13 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
   if (unlist(strsplit(survey_form, "_"))[2] %in% c("som", "pfh", "prf",
                                                    "pls", "swc")) {
+    if (!isTRUE(getOption("knitr.in.progress"))) {
   progress_bar <- txtProgressBar(min = 0,
                   max = (length_parameters_mandatory +
                            length_parameters_wrong_units +
                            length_parameters_range + length_parameters_code),
                                  style = 3)
+    }
   }
 
 
@@ -816,7 +815,9 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
     }
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     setTxtProgressBar(progress_bar, i)
+    }
 
   }
   }
@@ -1067,14 +1068,14 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
     # level (Level I, i.e. "s1", versus Level II, i.e. "so")
 
     if (survey_form == "y1_st1") {
-      data_availability_level <- get("data_availability_s1", envir = .GlobalEnv)
+      data_availability_level <- get_env("data_availability_s1")
       } else
     if (survey_form == "si_sta") {
-      data_availability_level <- get("data_availability_so", envir = .GlobalEnv)
+      data_availability_level <- get_env("data_availability_so")
       }
 
     data_availability_plots <- data_availability_level[which(
-                  rowSums((data_availability_level[, 8:11]) == 1) > 0) ]
+                  rowSums((data_availability_level[, 8:11]) == 1) > 0), ]
 
     # Create a table "data_availability_plots"
     # to store information about the (presence of) forest type information
@@ -1440,7 +1441,9 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
     # Update the progress bar
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     setTxtProgressBar(progress_bar, (length_parameters_mandatory + i))
+    }
   }
   }
 
@@ -1922,8 +1925,10 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
     # Update the progress bar
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     setTxtProgressBar(progress_bar, (length_parameters_mandatory +
                                        length_parameters_wrong_units + i))
+    }
   }
   }
 
@@ -2034,9 +2039,12 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
     # Update the progress bar
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
+      
     setTxtProgressBar(progress_bar, (length_parameters_mandatory +
                       length_parameters_wrong_units +
                         length_parameters_range + i))
+    }
   }
   }
 
@@ -2264,7 +2272,9 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
 
   if (unlist(strsplit(survey_form, "_"))[2] %in%
       c("som", "pfh", "prf", "pls", "swc")) {
+    if (!isTRUE(getOption("knitr.in.progress"))) {
   close(progress_bar)
+    }
     }
 
   # Remove the columns that are no longer needed in the data frame
@@ -2311,9 +2321,11 @@ get_range_inconsistencies <- function(survey_form, solve = NULL) {
   # Save the survey form and list_range_inconsistencies for the given survey
   # form to the global environment
 
-  assign(survey_form, df, envir = globalenv())
-  assign(paste0("list_range_inconsistencies_", survey_form),
-                list_range_inconsistencies, envir = globalenv())
+  if (save_to_env == TRUE) {
+  assign_env(survey_form, df)
+  assign_env(paste0("list_range_inconsistencies_", survey_form),
+                list_range_inconsistencies)
+  }
 
   # Return the duration of this function run
 

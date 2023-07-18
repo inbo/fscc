@@ -9,11 +9,13 @@
 #' These data forms must contain the columns "latitude_error" and
 #' "longitude_error", which means that they need to be previously processed
 #' with the function "dec_coordinates()".
-#'
 #' @param boundary_buffer_meter Numeric - Buffer distance in meters to be
 #' added outside the reported partner boundaries as a margin of error for
 #' the check if coordinates are within the partner boundaries. Default is
 #' 2000 meter.
+#' @param save_to_env Logical which indicates whether the output dataframes
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is FALSE.
 #'
 #' @details
 #' Which kind of inconsistencies are identified in this function?
@@ -61,15 +63,38 @@
 #'   c("y1_pl1", "s1_pls", "s1_prf", "si_plt", "so_pls", "so_prf")
 #' get_coordinate_inconsistencies(surveys_with_coordinates, 3000)
 
-get_coordinate_inconsistencies <- function(surveys_with_coordinates,
-                                           boundary_buffer_meter = NULL) {
+get_coordinate_inconsistencies <- function(surveys_with_coordinates = NULL,
+                                           boundary_buffer_meter = 2000,
+                                           save_to_env = FALSE) {
 
-  # If no "boundary_buffer_meter" argument is provided,
-  # set it to 2000 (by default)
+  source("./src/functions/get_env.R")
+  source("./src/functions/assign_env.R")
 
-if (is.null(boundary_buffer_meter)) {
-  boundary_buffer_meter <- 2000
+  if (isTRUE(getOption("knitr.in.progress"))) {
+    envir <- knitr::knit_global()
+  } else {
+    envir <- globalenv()
   }
+
+if (is.null(surveys_with_coordinates)) {
+
+  surveys <- c("y1_pl1", "y1_st1", "s1_lqa", "s1_pfh", "s1_pls", "s1_prf",
+               "s1_som", "si_eve", "si_plt", "si_sta", "si_tco", "so_lqa",
+               "so_pfh", "so_pls", "so_prf", "so_som", "sw_swa", "sw_swc")
+  
+  surveys_with_coordinates <- NULL
+  
+  for (i in seq_along(surveys)) {
+    if (surveys[i] %in% ls(envir = envir)) {
+      if (!identical(get_env(surveys[i])$latitude_dec, NULL) &&
+          !identical(get_env(surveys[i])$longitude_dec, NULL)) {
+
+        surveys_with_coordinates <- c(surveys_with_coordinates,
+                                      surveys[i])
+      }
+    }
+  }
+}
 
   # Import the inconsistency catalogue ----
 
@@ -89,7 +114,7 @@ if (is.null(boundary_buffer_meter)) {
   for (i in seq_along(surveys_with_coordinates)) {
 
     df_name <- surveys_with_coordinates[i]
-    df <- get(df_name)
+    df <- get_env(df_name)
 
     # Check if both "latitude_dec" and "longitude_dec" are present in the
     # column names
@@ -109,7 +134,7 @@ if (is.null(boundary_buffer_meter)) {
   for (i in seq_along(surveys_with_coordinates)) {
 
     df_name <- surveys_with_coordinates[i]
-    df <- get(df_name)
+    df <- get_env(df_name)
     coord_errors[i] <- "latitude_error" %in% names(df) &&
       "longitude_error" %in% names(df)
     }
@@ -124,10 +149,11 @@ if (is.null(boundary_buffer_meter)) {
 
   # Set up a progress bar to track processing
 
-progress_bar <- txtProgressBar(min = 0, max = length(surveys_with_coordinates),
-                               style = 3)
-
-inconsistency_catalogue <- get("inconsistency_catalogue", envir = .GlobalEnv)
+  if (!isTRUE(getOption("knitr.in.progress"))) {
+    progress_bar <- txtProgressBar(min = 0,
+                                   max = length(surveys_with_coordinates),
+                                   style = 3)
+    }
 
 ### Get partner boundaries sf dataframes (partner_boundaries.gpkg) ----
 
@@ -155,7 +181,7 @@ azores_spat <-
 
 ### Match ICP Forests' partners with respective spatial polygons ----
 
-d_partner_spat <- get("d_partner", envir = .GlobalEnv)
+d_partner_spat <- get_env("d_partner")
 d_partner_spat$spatial_feature_source <- NA
 d_partner_spat$spatial_feature_name <- NA
 
@@ -305,9 +331,9 @@ list_coordinate_inconsistencies <-
 
 for (i in seq_along(surveys_with_coordinates)) {
 
-  if (surveys_with_coordinates[i] %in% ls(envir = .GlobalEnv)) {
+  if (surveys_with_coordinates[i] %in% ls(envir = envir)) {
 
-  df <- get(surveys_with_coordinates[i], envir = .GlobalEnv)
+  df <- get_env(surveys_with_coordinates[i])
 
 # FSCC_4: Are minutes and seconds in 0-59 range? "Error: out of range (0 - 59)"
 
@@ -425,10 +451,15 @@ for (i in seq_along(surveys_with_coordinates)) {
   # Create a spatial dataframe with plot locations of the given partner
 
   df_indiv_partner_spat <- df %>%
-    filter(!is.na(latitude_dec) & !is.na(longitude_dec)) %>%
+    filter(partner_code == unique(df$partner_code)[j]) %>%
+    filter(!is.na(latitude_dec) & !is.na(longitude_dec))
+  
+  if (nrow(df_indiv_partner_spat) > 0) {
+  
+  df_indiv_partner_spat <- df_indiv_partner_spat %>%
     st_as_sf(coords = c("longitude_dec", "latitude_dec"), crs = 4326) %>%
-    st_transform(crs = 3035) %>%
-    filter(partner_code == unique(df$partner_code)[j])
+    st_transform(crs = 3035)
+
 
   # Create a dataframe with coordinates of the given partner (without geometry)
 
@@ -444,7 +475,7 @@ for (i in seq_along(surveys_with_coordinates)) {
   spatial_feature_name <- d_partner_spat$spatial_feature_name[
           which(d_partner_spat$code == unique(df$partner_code)[j])]
 
-  indiv_partner_spat <- get(spatial_feature_source[1], envir = environment())
+  indiv_partner_spat <- get(spatial_feature_source[1])
 
   if (!is.na(spatial_feature_name)) {
 
@@ -549,27 +580,40 @@ for (i in seq_along(surveys_with_coordinates)) {
   }
   }
   }
+  }
+
+  if (!isTRUE(getOption("knitr.in.progress"))) {
+    close(progress_bar)
+  }
 
   # Remove columns "latitude_error" and "longitude_error"
 
   df <- df[, -which(names(df) %in% c("latitude_error", "longitude_error"))]
 
-  # Save dataframe to the global environment
+  # Save dataframe to the environment
 
-  assign(surveys_with_coordinates[i], df, envir = globalenv())
-
+  if (save_to_env == TRUE) {
+  assign_env(surveys_with_coordinates[i], df)
+  }
   }
 
+  if (!isTRUE(getOption("knitr.in.progress"))) {
   setTxtProgressBar(progress_bar, i)
   }
+  }
 
-# Save "list_coordinate_inconsistencies" in global environment
+# Save "list_coordinate_inconsistencies" in environment
 
-assign("list_coordinate_inconsistencies",
-       list_coordinate_inconsistencies,
-       envir = globalenv())
+if (save_to_env == TRUE) {
 
-close(progress_bar)
+  assign_env("list_coordinate_inconsistencies",
+             list_coordinate_inconsistencies)
 
+  cat(paste0("'", "list_coordinate_inconsistencies", "' contains ",
+             length(which(
+       list_coordinate_inconsistencies$non_duplicated_error_type_per_record ==
+         TRUE)),
+             " unique inconsistencies.\n"))
 }
 
+}

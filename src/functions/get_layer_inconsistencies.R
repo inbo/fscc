@@ -8,7 +8,10 @@
 #' @param survey_form Character string - Name of the survey form (lower case
 #' and separated by '_') to be evaluated
 #' @param solve Logical - Indicates whether obvious mistakes can be solved
-#' in this function (if TRUE)
+#' in this function (if TRUE). Default is FALSE.
+#' @param save_to_env Logical which indicates whether the output dataframes
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is FALSE.
 #'
 #' @details
 #' This function uses:
@@ -107,13 +110,12 @@
 #' get_layer_inconsistencies("so_som", solve = TRUE)
 #'
 
-get_layer_inconsistencies <- function(survey_form, solve = NULL) {
+get_layer_inconsistencies <- function(survey_form,
+                                      solve = FALSE,
+                                      save_to_env = FALSE) {
 
-# If no "solve" argument is provided, set it to "FALSE" (by default)
-
-if (is.null(solve)) {
-  solve <- FALSE
-  }
+  source("./src/functions/get_env.R")
+  source("./src/functions/assign_env.R")
 
   # Import the inconsistency catalogue ----
   
@@ -125,7 +127,7 @@ if (is.null(solve)) {
   inconsistency_catalogue <-
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
-### Part 1: processing "som" survey forms (with fixed depths) ----
+# Part 1: processing "som" survey forms (with fixed depths) ----
 
   # Check if the given survey form is "som"
 
@@ -135,9 +137,8 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
   # layer limits) and to cross-check forest floor layers in
   # all survey_forms (FSCC_48)
 
-df <- get(survey_form, envir = .GlobalEnv)
-pfh <- get(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"),
-           envir = .GlobalEnv)
+df <- get_env(survey_form)
+pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
 
   # If the input survey form is "so_som" (Level II):
   # retrieve the "som" and "pfh" data from Level I ("s1_som" and "s1_pfh")
@@ -146,22 +147,19 @@ pfh <- get(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"),
 if (unlist(strsplit(survey_form, "_"))[1] == "so") {
 
   survey_level <- "Level II"
-  som_other <- get("s1_som", envir = .GlobalEnv)
-  pfh_other <- get("s1_pfh", envir = .GlobalEnv)
+  som_other <- get_env("s1_som")
+  pfh_other <- get_env("s1_pfh")
   }
 
 
-  # Retrieve a catalogue with possible inconsistencies
-
-inconsistency_catalogue <- get("inconsistency_catalogue", envir = .GlobalEnv)
-
   # Set up a progress bar to track processing
 
+if (!isTRUE(getOption("knitr.in.progress"))) {
 progress_bar <-
   txtProgressBar(min = 0,
                  max = length(unique(df$unique_survey_repetition)),
                  style = 3)
-
+}
 
   # To determine the "layer_number" for forest floor layers without layer
   # limits:
@@ -192,7 +190,10 @@ layer_number_two_forest_floor_layers <-
              combi_7 = c("OL", "OH"),
              combi_8 = c("OLF", "OH"))
 
-layer_number_three_forest_floor_layers <- c("OL", "OF", "OH")
+layer_number_three_forest_floor_layers <-
+  data.frame(layer_number = c(1, 2, 3),
+             combi_1 = c("OL", "OF", "OH"),
+             combi_2 = c("O2", "O3", "O"))
 
   # This dataframe refers to "d_depth_level_soil" in the
   # adds/dictionaries folder of the raw data,
@@ -239,6 +240,11 @@ if (!"layer_limit_superior_orig" %in% names(df)) {
 df$layer_limit_superior_orig <- df$layer_limit_superior
 }
 
+  # Same for code_layer, since this is absent for some Latvian plots in so_som
+
+if (!"code_layer_original" %in% names(df)) {
+df$code_layer_original <- df$code_layer
+}
 
   # The intention is to create a list_layer_inconsistencies of
   # the following format to store inconsistencies found in the survey data:
@@ -278,15 +284,22 @@ for (i in seq_along(unique(df$unique_survey_repetition))) {
 vec <- which(unique(df$unique_survey_repetition)[i] ==
                df$unique_survey_repetition)
 
-# Determine index of forest floor layers in df
-vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
-
 # Determine index of below-ground layers in df
 vec_bg <- vec[which(df$layer_type[vec] == "mineral" |
                       df$layer_type[vec] == "peat")]
 
+# Determine index of forest floor layers in df
+vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
 
-### FSCC_48: Inconsistent presence/absence forest floor layers
+# Special case: Latvian records without code_layer
+if (unique(df$unique_survey_repetition[vec]) == "64_2004_5_1") {
+  if (any(is.na(df$code_layer[vec]))) {
+    vec_ff <- vec[which(is.na(df$code_layer[vec]))]
+  }
+}
+
+
+## FSCC_48: Inconsistent presence/absence forest floor layers ----
 
 # This is only tested in "so_som"
 
@@ -900,7 +913,7 @@ for (j in 1:(length(survey_repetitions_som) +
 
 
 
-# FSCC_2: Caution: the reported layer limits in above-ground (negative) or
+## FSCC_2: Caution: the reported layer limits in above-ground (negative) or ----
 # below-ground (positive) layers have the wrong sign (positive/negative).
 
 # Above-ground
@@ -1131,8 +1144,8 @@ if (all(df$layer_limit_inferior_orig[vec_bg_inf] <= 0) &&
 
 
 
-# FSCC_40: the reported "code_layer" is unknown +
-# FSCC_39: reported layer limits do not correspond with code_layer
+## FSCC_40: the reported "code_layer" is unknown + ----
+## FSCC_39: reported layer limits do not correspond with code_layer ----
 
   # Loop through indices in the vector `vec`
 
@@ -1315,7 +1328,7 @@ for (j in vec) {
 
 
 
-# FSCC_8: No layer limit information
+## FSCC_8: No layer limit information ----
 
   # Check if any but not all superior layer limits are missing
 
@@ -1432,10 +1445,10 @@ if ((any(!is.na(df$layer_limit_inferior_orig[vec]))) &&
 
 
 
-### Step 1: Empty layer limits that are clearly a mistake #----
+# Step 1: Empty layer limits that are clearly a mistake ----
 
 
-# FSCC_9 Error reason: the layer limits equal 0 for multiple depth layers
+## FSCC_9 Error reason: the layer limits equal 0 for multiple depth layers ----
 # in the given profile
 
   # Superior
@@ -1577,7 +1590,7 @@ if ((unique(df$layer_limit_inferior_orig[vec[
 
 
 
-# FSCC_11 Error reason: layer_limit_superior == layer_limit_inferior
+## FSCC_11 Error reason: layer_limit_superior == layer_limit_inferior ----
 
 for (j in vec) {
 
@@ -1669,9 +1682,125 @@ if (!is.na(df$layer_limit_superior_orig[j]) &&
 }
 
 
+## FSCC_51: Layer limit equals -9999 ----
 
-### Step 2: Try to gap-fill any empty layer_limit_superior and
-#   layer_limit_inferior ----
+# Superior
+
+vec_inconsistency <- vec[which(df$layer_limit_superior_orig[vec] < -150)]
+
+if (!identical(vec_inconsistency, integer(0))) {
+
+  # Store information about the inconsistency in "list_layer_inconsistencies"
+
+  rule_id <- "FSCC_51"
+  inconsistency_reason <- inconsistency_catalogue$inconsistency_reason[
+    which(inconsistency_catalogue$rule_id == rule_id)]
+  inconsistency_type <- inconsistency_catalogue$inconsistency_type[
+    which(inconsistency_catalogue$rule_id == rule_id)]
+  
+  if ("code_layer_original" %in% names(df)) {
+    vec_code_layer <- as.character(df$code_layer_original[j])
+  } else {
+    vec_code_layer <- as.character(df$code_layer[j])
+  }
+  
+  list_layer_inconsistencies <- rbind(
+    list_layer_inconsistencies,
+    data.frame(survey_form = as.factor(rep(survey_form,
+                                           length(vec_inconsistency))),
+               partner = df$partner[vec_inconsistency],
+               partner_code = df$partner_code[vec_inconsistency],
+               country = df$country[vec_inconsistency],
+               code_country = df$code_country[vec_inconsistency],
+               survey_year = df$survey_year[vec_inconsistency],
+               code_plot = df$code_plot[vec_inconsistency],
+               plot_id = df$plot_id[vec_inconsistency],
+               code_layer_horizon_master = vec_code_layer,
+               repetition_profile_pit_id = df$repetition[vec_inconsistency],
+               code_line = df$code_line[vec_inconsistency],
+               parameter = as.factor(rep("layer_limit_superior",
+                                         length(vec_inconsistency))),
+               parameter_unit = as.factor(rep("cm", length(vec_inconsistency))),
+               parameter_value =
+                 df$layer_limit_superior_orig[vec_inconsistency],
+               inconsistency_reason = inconsistency_reason,
+               inconsistency_type = inconsistency_type,
+               rule_id = rule_id,
+               non_duplicated_error_type_per_record =
+                 rep(TRUE, length(vec_inconsistency)),
+               change_date = df$change_date[vec_inconsistency],
+               download_date = rep(download_date_pir,
+                                   length(vec_inconsistency))))
+
+  # If "solve" is set to TRUE, set the layer limit to NA
+  
+  if (solve == TRUE) {
+    df$layer_limit_superior[vec_inconsistency] <- NA
+  }
+}
+
+
+# Inferior
+
+vec_inconsistency <- vec[which(df$layer_limit_inferior_orig[vec] < -150)]
+
+if (!identical(vec_inconsistency, integer(0))) {
+  
+  # Store information about the inconsistency in "list_layer_inconsistencies"
+  
+  rule_id <- "FSCC_51"
+  inconsistency_reason <- inconsistency_catalogue$inconsistency_reason[
+    which(inconsistency_catalogue$rule_id == rule_id)]
+  inconsistency_type <- inconsistency_catalogue$inconsistency_type[
+    which(inconsistency_catalogue$rule_id == rule_id)]
+  
+  if ("code_layer_original" %in% names(df)) {
+    vec_code_layer <- as.character(df$code_layer_original[j])
+  } else {
+    vec_code_layer <- as.character(df$code_layer[j])
+  }
+  
+  list_layer_inconsistencies <- rbind(
+    list_layer_inconsistencies,
+    data.frame(survey_form = as.factor(rep(survey_form,
+                                           length(vec_inconsistency))),
+               partner = df$partner[vec_inconsistency],
+               partner_code = df$partner_code[vec_inconsistency],
+               country = df$country[vec_inconsistency],
+               code_country = df$code_country[vec_inconsistency],
+               survey_year = df$survey_year[vec_inconsistency],
+               code_plot = df$code_plot[vec_inconsistency],
+               plot_id = df$plot_id[vec_inconsistency],
+               code_layer_horizon_master = vec_code_layer,
+               repetition_profile_pit_id = df$repetition[vec_inconsistency],
+               code_line = df$code_line[vec_inconsistency],
+               parameter = as.factor(rep("layer_limit_inferior",
+                                         length(vec_inconsistency))),
+               parameter_unit = as.factor(rep("cm", length(vec_inconsistency))),
+               parameter_value =
+                 df$layer_limit_inferior_orig[vec_inconsistency],
+               inconsistency_reason = inconsistency_reason,
+               inconsistency_type = inconsistency_type,
+               rule_id = rule_id,
+               non_duplicated_error_type_per_record =
+                 rep(TRUE, length(vec_inconsistency)),
+               change_date = df$change_date[vec_inconsistency],
+               download_date = rep(download_date_pir,
+                                   length(vec_inconsistency))))
+  
+  # If "solve" is set to TRUE, set the layer limit to NA
+  
+  if (solve == TRUE) {
+    df$layer_limit_inferior[vec_inconsistency] <- NA
+  }
+}
+
+
+
+
+
+# Step 2: Try to gap-fill any empty layer_limit_superior and ----
+#   layer_limit_inferior
 
   # If there is at least one layer without limit information
 
@@ -1686,7 +1815,7 @@ vec_empty_layer_limit_superior <-
 vec_empty_layer_limit_inferior <-
   vec[which(is.na(df$layer_limit_inferior[vec]))]
 
-# Option 2.1: Can we fill these layers based on pfh?
+# Option 2.1: Can we fill these layers based on pfh? ----
 # (mainly for organic layers)
 
   # Get the index of the plot survey in pfh
@@ -1794,7 +1923,7 @@ for (j in vec_empty_layer_limit_superior) {
 
 
 
-# Option 2.2: Can we fill these layers based on d_depth_level_soil?
+# Option 2.2: Can we fill these layers based on d_depth_level_soil? ----
 
   # Superior
 
@@ -1858,7 +1987,7 @@ if (!identical(vec_empty_layer_limit_inferior, integer(0))) {
 
 
 
-### FSCC_2 Error reason: Typo observed
+## FSCC_2 Error reason: Typo observed ----
 
   # One value in the given profile seems to have the wrong sign
 
@@ -1919,7 +2048,7 @@ if ("code_layer_original" %in% names(df)) {
 
 
 
-### FSCC_7 Error reason: none of the layers has layer limit information ----
+## FSCC_7 Error reason: none of the layers has layer limit information ----
 
   # Check if none of the layers has superior layer limit information
 
@@ -1962,7 +2091,7 @@ if ("code_layer_original" %in% names(df)) {
                 change_date = df$change_date[vec],
                 download_date = rep(download_date_pir, length(vec))))
 
-  } else
+  }
 
 
    # Check if none of the layers has inferior layer limit information
@@ -2006,12 +2135,12 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
                change_date = df$change_date[vec],
                download_date = rep(download_date_pir, length(vec))))
 
-  } else
+  }
 
 
 
 
-### Step 3: The layers are ordered (layer_number) from top to bottom
+# Step 3: The layers are ordered (layer_number) from top to bottom ----
    # based on their layer limits
 
 
@@ -2022,7 +2151,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
   # Which layers have layer limit information?
 
-  # If forest floor has no layer limit information
+  # If forest floor has no layer limit information ----
 
     if (!identical(vec_ff, integer(0)) &&
         all(is.na(df$layer_limit_inferior[vec_ff])) &&
@@ -2039,8 +2168,76 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
         if (length(vec_ff) == 2) {
 
+          # Special case: Latvian records without code_layer
+          # There are two Latvian records without code_layer, layer_limits,
+          # and with only one organic_carbon_total value
+          # Assumption: since the other records of the same
+          # unique_survey_repetition are M01, M12, M24, M48, and
+          # organic_layer_weight is reported, we will assume that these are
+          # forest floor layers.
+          # Because of the organic_layer_weight, these records are still
+          # valuable for C stock calculations.
+          # However, in order to derive which of the records is on top
+          # and which is below, we can't base ourselves on
+          # organic_carbon_total (only one value reported).
+          # Yet, analysis of the organic_layer_weight in so_som profiles
+          # with at least two forest floor layers teaches us that
+          # it is the most likely that the inferior layer usually has a
+          # higher organic_layer_weight than the superior layer
+          # (570 cases versus 21).
+          # As such, we will name the code_layer of these records so that
+          # they will be sorted accordingly.
+
+          if (unique(df$unique_survey_repetition[vec_ff]) == "64_2004_5_1") {
+            if (all(is.na(df$code_layer[vec_ff]))) {
+
+              ind_superior <-
+                vec_ff[which(df$organic_layer_weight[vec_ff] ==
+                               max(df$organic_layer_weight[vec_ff]))]
+              ind_inferior <-
+                vec_ff[which(df$organic_layer_weight[vec_ff] ==
+                               min(df$organic_layer_weight[vec_ff]))]
+              df$code_layer[ind_superior] <- "OL"
+              df$code_layer[ind_inferior] <- "OFH"
+              df$unique_survey_layer[vec_ff] <-
+                paste0(df$partner_code[vec_ff], "_",
+                       df$survey_year[vec_ff], "_",
+                       df$code_plot[vec_ff], "_",
+                       df$code_layer[vec_ff])
+              df$unique_layer_repetition[vec_ff] <-
+                paste0(df$partner_code[vec_ff], "_",
+                       df$survey_year[vec_ff], "_",
+                       df$code_plot[vec_ff], "_",
+                       df$code_layer[vec_ff], "_",
+                       df$repetition[vec_ff])
+            }
+          }
+
           layers <- df$code_layer[vec_ff]
 
+        # Assert that the forest floor combination exists in
+        # layer_number_two_forest_floor_layers
+
+          # Generate all combinations of two unique values
+          all_combinations <-
+            apply(layer_number_two_forest_floor_layers[, 3:11], 2,
+                  FUN = function(x) paste(x, collapse = "_"))
+          
+          # Combine the original combinations with their opposites
+          all_combinations <-
+            unique(c(all_combinations,
+                     unlist(map(all_combinations,
+                         .f = function(x) paste(rev(strsplit(x, "_")[[1]]),
+                                                collapse = "_")))))
+          
+          assertthat::assert_that(
+            paste(df$code_layer[vec_ff], collapse = "_") %in% all_combinations,
+            msg = paste0("Unknown combination of two forest floor layers ('",
+                         df$code_layer[vec_ff[1]], "' and '",
+                         df$code_layer[vec_ff[2]],
+                         "')."))
+          
+          
         # If the forest floor layers are called "O1" and "O2",
         # the forest floor layer sequence depends on the country
         # (based on exploration of the % OC data)
@@ -2113,19 +2310,39 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
         if (length(vec_ff) == 3) {
 
         layers <- df$code_layer[vec_ff]
+        
+        # Assert that the combination of three forest floor layers is known
+        
+        # Test if all elements of layers are in either the second or third column
+        
+        assertthat::assert_that(
+          all(layers %in% layer_number_three_forest_floor_layers[, 2]) ||
+          all(layers %in% layer_number_three_forest_floor_layers[, 3]),
+          msg = paste0("Unknown combination of three forest floor layers ('",
+                       df$code_layer[vec_ff[1]], "', '",
+                       df$code_layer[vec_ff[2]], "' and '",
+                       df$code_layer[vec_ff[3]],
+                       "')."))
 
-        if (!is.na(match(layers[1], layer_number_three_forest_floor_layers)) &&
-            !is.na(match(layers[2], layer_number_three_forest_floor_layers)) &&
-            !is.na(match(layers[3], layer_number_three_forest_floor_layers))) {
+        col_table <- ifelse(
+          all(layers %in% layer_number_three_forest_floor_layers[, 2]),
+          2,
+          ifelse(
+            all(layers %in% layer_number_three_forest_floor_layers[, 3]),
+            3,
+            NA)) # In theory NA won't appear
+        
 
         df$layer_number[vec_ff[
-          match(layer_number_three_forest_floor_layers[1], layers)]] <- 1
+          match(layer_number_three_forest_floor_layers[1, col_table],
+                layers)]] <- 1
         df$layer_number[vec_ff[
-          match(layer_number_three_forest_floor_layers[2], layers)]] <- 2
+          match(layer_number_three_forest_floor_layers[2, col_table],
+                layers)]] <- 2
         df$layer_number[vec_ff[
-          match(layer_number_three_forest_floor_layers[3], layers)]] <- 3
+          match(layer_number_three_forest_floor_layers[3, col_table],
+                layers)]] <- 3
 
-        }
         }
       }
 
@@ -2136,7 +2353,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
         df$layer_number_combined_layers[vec] <- df$layer_number[vec]
 
 
-   # Rank the remaining layers that have layer limit information
+   # Rank the remaining layers that have layer limit information ----
 
    # Check which layers have layer limit information but no layer number yet
 
@@ -2281,7 +2498,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
 
 
-### FSCC_10: Error reason: there is a gap between adjacent layers   #----
+## FSCC_10: Error reason: there is a gap between adjacent layers   ----
 
     # Check whether layers have layer limit information and a layer_number
 
@@ -2432,8 +2649,13 @@ vec_layer_number <- vec_nonempty[order(df$layer_number[vec_nonempty])]
     }
 
  # Update the progress bar
-
+if (!isTRUE(getOption("knitr.in.progress"))) {
 setTxtProgressBar(progress_bar, i)
+}
+}
+
+if (!isTRUE(getOption("knitr.in.progress"))) {
+close(progress_bar)
 }
 
 # Remove these columns:
@@ -2448,12 +2670,12 @@ df <- df[, -which(names(df) %in% c("layer_number_superior",
 # Save the survey form and list_layer_inconsistencies for the given survey form
 # to the global environment
 
-assign(survey_form, df, envir = globalenv())
+if (save_to_env == TRUE) {
+assign_env(survey_form, df)
 
-assign(paste0("list_layer_inconsistencies_", survey_form),
-       list_layer_inconsistencies, envir = globalenv())
-
-close(progress_bar)
+assign_env(paste0("list_layer_inconsistencies_", survey_form),
+           list_layer_inconsistencies)
+}
 
 } # end of "som" part
 
@@ -2514,7 +2736,7 @@ close(progress_bar)
 
     # Retrieve the survey_form data
 
-    df <- get(survey_form, envir = .GlobalEnv)
+    df <- get_env(survey_form)
 
     # Convert missing horizon masters to ""
     # This is necessary for the "get_redundant_layers()" function
@@ -2525,21 +2747,18 @@ close(progress_bar)
       df$horizon_master[which(is.na(df$horizon_master))] <- ""
       }
 
-    # Retrieve a catalogue with possible inconsistencies
-
-    inconsistency_catalogue <-
-      get("inconsistency_catalogue", envir = .GlobalEnv)
-
     # Set up a progress bar to track processing
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     progress_bar <-
       txtProgressBar(min = 0,
                      max = length(unique(df$unique_survey_profile)),
                      style = 3)
+    }
 
 
-    # The intention is to create a list_layer_inconsistencies of the following format
-    # to store inconsistencies found in the survey_form data:
+    # The intention is to create a list_layer_inconsistencies of the following
+    # format to store inconsistencies found in the survey_form data:
 
     list_layer_inconsistencies <-
       data.frame(survey_form = NULL,
@@ -2629,8 +2848,9 @@ close(progress_bar)
                           df$layer_type[vec] == "peat")]
 
 
-    # FSCC_2: Caution: the reported layer limits in above-ground (negative) or
-    # below-ground (positive) layers have the wrong sign (positive/negative).
+    ## FSCC_2: Caution: the reported layer limits in above-ground ----
+    # (negative) or below-ground (positive) layers have the wrong sign
+    # (positive/negative).
 
     # above-ground
 
@@ -2852,7 +3072,7 @@ close(progress_bar)
       }
 
 
-    ### FSCC_2 Error reason: Typo observed #----
+    ## FSCC_2 Error reason: Typo observed ----
 
     # One value in the given profile seems to have the wrong sign
 
@@ -2950,7 +3170,7 @@ close(progress_bar)
 
 
 
-    # FSCC_8: No layer limit information
+    ## FSCC_8: No layer limit information ----
 
     # Check if "horizon_limit_up" is missing anywhere
 
@@ -3041,7 +3261,7 @@ close(progress_bar)
       }
 
 
-    # FSCC_11 Error reason: horizon_limit_up == horizon_limit_low
+    # FSCC_11 Error reason: horizon_limit_up == horizon_limit_low ----
 
     for (j in vec) {
 
@@ -3118,11 +3338,128 @@ close(progress_bar)
     }
 
 
+    # FSCC_51: Layer limit equals -9999 ----
+    
+    # Superior
+    
+    vec_inconsistency <- vec[which(df$horizon_limit_up_orig[vec] < -150)]
+    
+    if (!identical(vec_inconsistency, integer(0))) {
+      
+      # Store information about the inconsistency in
+      # "list_layer_inconsistencies"
+      
+      rule_id <- "FSCC_51"
+      inconsistency_reason <- inconsistency_catalogue$inconsistency_reason[
+        which(inconsistency_catalogue$rule_id == rule_id)]
+      inconsistency_type <- inconsistency_catalogue$inconsistency_type[
+        which(inconsistency_catalogue$rule_id == rule_id)]
+      
+      if ("code_layer_original" %in% names(df)) {
+        vec_code_layer <- as.character(df$code_layer_original[j])
+      } else {
+        vec_code_layer <- as.character(df$code_layer[j])
+      }
+      
+      list_layer_inconsistencies <- rbind(
+        list_layer_inconsistencies,
+        data.frame(survey_form = as.factor(rep(survey_form,
+                                               length(vec_inconsistency))),
+                   partner = df$partner[vec_inconsistency],
+                   partner_code = df$partner_code[vec_inconsistency],
+                   country = df$country[vec_inconsistency],
+                   code_country = df$code_country[vec_inconsistency],
+                   survey_year = df$survey_year[vec_inconsistency],
+                   code_plot = df$code_plot[vec_inconsistency],
+                   plot_id = df$plot_id[vec_inconsistency],
+                   code_layer_horizon_master = vec_code_layer,
+                   repetition_profile_pit_id = df$repetition[vec_inconsistency],
+                   code_line = df$code_line[vec_inconsistency],
+                   parameter = as.factor(rep("horizon_limit_up",
+                                             length(vec_inconsistency))),
+                   parameter_unit = as.factor(rep("cm",
+                                                  length(vec_inconsistency))),
+                   parameter_value =
+                     df$horizon_limit_up_orig[vec_inconsistency],
+                   inconsistency_reason = inconsistency_reason,
+                   inconsistency_type = inconsistency_type,
+                   rule_id = rule_id,
+                   non_duplicated_error_type_per_record =
+                     rep(TRUE, length(vec_inconsistency)),
+                   change_date = df$change_date[vec_inconsistency],
+                   download_date = rep(download_date_pir,
+                                       length(vec_inconsistency))))
+      
+      # If "solve" is set to TRUE, set the layer limit to NA
+      
+      if (solve == TRUE) {
+        df$horizon_limit_up[vec_inconsistency] <- NA
+      }
+    }
+    
+    
+    # Inferior
+    
+    vec_inconsistency <- vec[which(df$horizon_limit_low_orig[vec] < -150)]
+    
+    if (!identical(vec_inconsistency, integer(0))) {
+      
+      # Store information about the inconsistency in
+      # "list_layer_inconsistencies"
+      
+      rule_id <- "FSCC_51"
+      inconsistency_reason <- inconsistency_catalogue$inconsistency_reason[
+        which(inconsistency_catalogue$rule_id == rule_id)]
+      inconsistency_type <- inconsistency_catalogue$inconsistency_type[
+        which(inconsistency_catalogue$rule_id == rule_id)]
+      
+      if ("code_layer_original" %in% names(df)) {
+        vec_code_layer <- as.character(df$code_layer_original[j])
+      } else {
+        vec_code_layer <- as.character(df$code_layer[j])
+      }
+      
+      list_layer_inconsistencies <- rbind(
+        list_layer_inconsistencies,
+        data.frame(survey_form = as.factor(rep(survey_form,
+                                               length(vec_inconsistency))),
+                   partner = df$partner[vec_inconsistency],
+                   partner_code = df$partner_code[vec_inconsistency],
+                   country = df$country[vec_inconsistency],
+                   code_country = df$code_country[vec_inconsistency],
+                   survey_year = df$survey_year[vec_inconsistency],
+                   code_plot = df$code_plot[vec_inconsistency],
+                   plot_id = df$plot_id[vec_inconsistency],
+                   code_layer_horizon_master = vec_code_layer,
+                   repetition_profile_pit_id = df$repetition[vec_inconsistency],
+                   code_line = df$code_line[vec_inconsistency],
+                   parameter = as.factor(rep("horizon_limit_low",
+                                             length(vec_inconsistency))),
+                   parameter_unit = as.factor(rep("cm",
+                                                  length(vec_inconsistency))),
+                   parameter_value =
+                     df$horizon_limit_low_orig[vec_inconsistency],
+                   inconsistency_reason = inconsistency_reason,
+                   inconsistency_type = inconsistency_type,
+                   rule_id = rule_id,
+                   non_duplicated_error_type_per_record =
+                     rep(TRUE, length(vec_inconsistency)),
+                   change_date = df$change_date[vec_inconsistency],
+                   download_date = rep(download_date_pir,
+                                       length(vec_inconsistency))))
+      
+      # If "solve" is set to TRUE, set the layer limit to NA
+      
+      if (solve == TRUE) {
+        df$horizon_limit_low[vec_inconsistency] <- NA
+      }
+    }
+    
 
 
-    ### FSCC_10: Error reason: there is a gap between adjacent layers ----
+    ## FSCC_10: Error reason: there is a gap between adjacent layers
 
-    # Step 1: Check for redundant layers
+    # Step 1: Check for redundant layers ----
 
     # Retrieve the row indices and horizon_master from layers with known layer
     # limits
@@ -3343,7 +3680,7 @@ close(progress_bar)
       }
 
 
-    ### FSCC_10: Error reason: there is a gap between adjacent layers
+    ## FSCC_10: Error reason: there is a gap between adjacent layers ----
 
     # Check whether layers have layer limit information and a horizon number
 
@@ -3470,7 +3807,9 @@ close(progress_bar)
 
     # Update the progress bar
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     setTxtProgressBar(progress_bar, i)
+    }
     }
 
     # Convert missing horizon masters back to NA
@@ -3485,15 +3824,19 @@ close(progress_bar)
     # and "list_redundant_layers" for the given survey form
     # to the global environment
 
-    assign(survey_form, df, envir = globalenv())
+    if (save_to_env == TRUE) {
+    assign_env(survey_form, df)
 
-    assign(paste0("list_redundant_layers_", survey_form),
-           list_redundant_layers, envir = globalenv())
+    assign_env(paste0("list_redundant_layers_", survey_form),
+               list_redundant_layers)
 
-    assign(paste0("list_layer_inconsistencies_", survey_form),
-           list_layer_inconsistencies, envir = globalenv())
+    assign_env(paste0("list_layer_inconsistencies_", survey_form),
+               list_layer_inconsistencies)
+    }
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     close(progress_bar)
+    }
     } # end of "pfh" part
 
 }

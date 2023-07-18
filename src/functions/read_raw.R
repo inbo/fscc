@@ -11,7 +11,7 @@
 #' Enter a character string of the date in the format "YYYYMMDD" if multiple
 #' raw data versions exist (organised in 'raw_data/download_date_YYYYMMDD/'
 #' subfolders).
-#' @param save_to_global Logical which indicates whether the output dataframes
+#' @param save_to_env Logical which indicates whether the output dataframes
 #' can be saved to the global environment and override any existing objects
 #' with the same name. Default is FALSE.
 #' @details
@@ -119,7 +119,7 @@
 
 read_raw <- function(code_survey,
                      download_date = NULL,
-                     save_to_global = FALSE) {
+                     save_to_env = FALSE) {
 
 
 
@@ -218,9 +218,9 @@ if (is.null(download_date)) {
 # Import d_country and d_partner
 
 d_country <- read.csv(paste0(subdir,
-                             "/adds/dictionaries/d_country.csv"), sep = ";")
+                             "adds/dictionaries/d_country.csv"), sep = ";")
 d_partner <- read.csv(paste0(subdir,
-                             "/adds/dictionaries/d_partner.csv"), sep = ";")
+                             "adds/dictionaries/d_partner.csv"), sep = ";")
 
 
 # Import data_availability of the given survey, add unique identifiers and
@@ -258,9 +258,32 @@ if (file.exists(paste0(subdir,
 
 # For each of the data tables in the survey:
 
-for (i in seq_along(list_data_tables[[
-  which(names(list_data_tables) == code_survey)]])) {
+survey_forms <- paste0(code_survey, "_",
+                       list_data_tables[[which(names(list_data_tables) ==
+                                                 code_survey)]])
 
+survey_forms_extended <- c(survey_forms,
+                           paste0("data_availability_", code_survey),
+                           paste0("coordinates_", code_survey))
+
+if (isTRUE(getOption("knitr.in.progress"))) {
+  envir <- knitr::knit_global()
+} else {
+  envir <- globalenv()
+}
+
+if (save_to_env == TRUE) {
+
+for (i in seq_along(survey_forms_extended)) {
+
+  if (exists(survey_forms_extended[i], envir = envir)) {
+    rm(list = survey_forms_extended[i], envir = envir)
+  }
+  }
+}
+
+for (i in seq_along(survey_forms)) {
+  
   # Read the data table ----
   df <- read.csv(paste0(subdir, "/", code_survey, "_",
                        list_data_tables[[which(names(list_data_tables) ==
@@ -593,11 +616,15 @@ for (i in seq_along(list_data_tables[[
 
   # Save the survey forms to the global environment if permitted ----
 
-  if (save_to_global == TRUE) {
-assign(paste0(code_survey, "_",
-              list_data_tables[[which(names(list_data_tables) ==
-                                        code_survey)]][i]),
-       df, envir = globalenv())
+  if (save_to_env == TRUE) {
+
+  source("./src/functions/assign_env.R")
+
+  assign_env(paste0(code_survey, "_",
+                list_data_tables[[which(names(list_data_tables) ==
+                                          code_survey)]][i]),
+             df)
+
   }
   }
 
@@ -607,8 +634,7 @@ assign(paste0(code_survey, "_",
 
 
 
-# Create a dataframe with the most common coordinates for each plot of the
-# survey
+  # Create a dataframe with the most common coordinates for each plot ----
 
   # List all the surveys where coordinates have to be looked for
 
@@ -633,12 +659,14 @@ if (survey_level == "LII" &&
 
   # Retrieve survey forms with coordinates (from global environment)
 
+source("./src/functions/get_env.R")
+
 survey_forms_with_coordinates <- NULL
 
 for (i in seq_along(surveys)) {
   if (surveys[i] %in% ls(envir = .GlobalEnv)) {
-    if (!identical(get(surveys[i], envir = .GlobalEnv)$latitude_dec, NULL) &&
-        !identical(get(surveys[i], envir = .GlobalEnv)$longitude_dec, NULL)) {
+    if (!identical(get_env(surveys[i])$latitude_dec, NULL) &&
+        !identical(get_env(surveys[i])$longitude_dec, NULL)) {
 
       if (is.null(survey_forms_with_coordinates)) {
         survey_forms_with_coordinates <- surveys[i]} else
@@ -652,20 +680,22 @@ for (i in seq_along(surveys)) {
 
   # Create vector with unique plots in all surveys
 
-coordinates_full <- get(survey_forms_with_coordinates[1],
-                        envir = .GlobalEnv) %>%
+coordinates_full <- get_env(survey_forms_with_coordinates[1]) %>%
   select(plot_id, longitude_dec, latitude_dec)
 
 if (length(survey_forms_with_coordinates) > 1) {
   for (i in 2:length(survey_forms_with_coordinates)) {
-    coordinates_full_i <- get(survey_forms_with_coordinates[i],
-                              envir = .GlobalEnv) %>%
+    coordinates_full_i <- get_env(survey_forms_with_coordinates[i]) %>%
       select(plot_id, longitude_dec, latitude_dec)
 
     coordinates_full <- rbind(coordinates_full,
                               coordinates_full_i)
     }
-  }
+}
+
+coordinates_full <- coordinates_full %>%
+  filter(!is.na(longitude_dec)) %>%
+  filter(!is.na(latitude_dec))
 
 coordinates <- distinct(coordinates_full, plot_id, .keep_all = TRUE)
 coordinates$longitude_dec <- NA
@@ -708,17 +738,19 @@ coordinates <- coordinates %>%
 
 # Save remaining dataframes to the global environment if permitted
 
-if (save_to_global == TRUE) {
+if (save_to_env == TRUE) {
 
-assign(paste0("coordinates_", code_survey),
-       coordinates, envir = globalenv())
-assign("d_country", d_country, envir = globalenv())
-assign("d_partner", d_partner, envir = globalenv())
-assign("inconsistency_catalogue", inconsistency_catalogue,
-       envir = globalenv())
-assign("attribute_catalogue_pir", attribute_catalogue_pir,
-       envir = globalenv())
-assign(paste0("data_availability_", code_survey), data_availability,
-       envir = globalenv())
+  source("./src/functions/assign_env.R")
+
+  if (exists("data_availability", envir = environment())) {
+    assign_env(paste0("data_availability_", code_survey), data_availability)
+  }
+
+assign_env(paste0("coordinates_", code_survey), coordinates)
+
+assign_env("d_country", d_country)
+
+assign_env("d_partner", d_partner)
+
 }
 }

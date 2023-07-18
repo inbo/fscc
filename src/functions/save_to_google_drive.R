@@ -67,6 +67,8 @@ save_to_google_drive <- function(objects_to_save = NULL,
             require("googledrive"),
             require("assertthat"))
 
+  source("./src/functions/get_env.R")
+
   # Derive the ID from the Google Drive root URL ----
 
   # Assert that an R script with the confidential Google Drive link was created
@@ -278,12 +280,18 @@ save_to_google_drive <- function(objects_to_save = NULL,
   if (is.null(objects_to_save)) {
 
     # All survey forms which are in the global environment
-    
+
+    if (isTRUE(getOption("knitr.in.progress"))) {
+      envir <- knitr::knit_global()
+    } else {
+      envir <- parent.frame()
+    }
+
     survey_forms <- survey_forms_all[
       which(survey_forms_all %in%
               ls(envir = parent.frame())[
                 sapply(ls(envir = parent.frame()),
-                       function(x) class(get(x, envir = parent.frame()))) == "data.frame"
+                       function(x) class(get(x, envir = envir))) == "data.frame"
               ])
     ]
     }
@@ -361,8 +369,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
     for (i in seq_along(survey_forms)) {
       download_date_list <-
         c(download_date_list,
-          suppressWarnings(get(survey_forms[i],
-                               envir = .GlobalEnv)$download_date))
+          suppressWarnings(get_env(survey_forms[i])$download_date))
     }
 
     if (is.null(download_date_list)) {
@@ -596,7 +603,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
       for (j in seq_along(survey_forms_i)) {
 
         # Retrieve df from global environment
-        df <- get(survey_forms_i[j], envir = .GlobalEnv)
+        df <- get_env(survey_forms_i[j])
 
         # Add a new change_date_google_drive
         df$change_date_google_drive <- change_date
@@ -612,9 +619,9 @@ save_to_google_drive <- function(objects_to_save = NULL,
       coordinate_df_name <- paste0("coordinates_", survey_codes[i])
 
       if (exists(coordinate_df_name) &&
-          is.data.frame(get(coordinate_df_name))) {
+          is.data.frame(get_env(coordinate_df_name))) {
 
-        coordinate_df <- get(coordinate_df_name, envir = .GlobalEnv)
+        coordinate_df <- get_env(coordinate_df_name)
         drive_upload_csv(dataframe = coordinate_df,
                          id = id_i,
                          file_name_drive = paste0(coordinate_df_name, ".csv"))
@@ -625,9 +632,9 @@ save_to_google_drive <- function(objects_to_save = NULL,
       data_avail_name <- paste0("data_availability_", survey_codes[i])
 
       if (exists(data_avail_name) &&
-          is.data.frame(get(data_avail_name))) {
+          is.data.frame(get_env(data_avail_name))) {
 
-        data_avail_df <- get(data_avail_name, envir = .GlobalEnv)
+        data_avail_df <- get_env(data_avail_name)
         drive_upload_csv(dataframe = data_avail_df,
                          id = id_i,
                          file_name_drive = paste0(data_avail_name, ".csv"))
@@ -645,8 +652,8 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
     for (i in seq_along(objects)) {
 
-      assertthat::assert_that(inherits(get(objects[i]), "ggplot") ||
-                                inherits(get(objects[i]), "data.frame"),
+      assertthat::assert_that(inherits(get_env(objects[i]), "ggplot") ||
+                                inherits(get_env(objects[i]), "data.frame"),
                               msg = paste0("The function is only able to ",
                                            "save dataframes and ggplot ",
                                            "objects to Google Drive ",
@@ -654,10 +661,10 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
       # If the object is a data frame
 
-      if (inherits(get(objects[i]), "data.frame")) {
+      if (inherits(get_env(objects[i]), "data.frame")) {
 
         # Retrieve df from global environment
-        df <- get(objects[i], envir = .GlobalEnv)
+        df <- get_env(objects[i])
 
         # Save the data frame as a .csv file in Google Drive
         drive_upload_csv(dataframe = df,
@@ -668,10 +675,10 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
       # If the object is a ggplot
 
-      if (inherits(get(objects[i]), "ggplot")) {
+      if (inherits(get_env(objects[i]), "ggplot")) {
 
         # Retrieve plot from global environment
-        plot <- get(objects[i], envir = .GlobalEnv)
+        plot <- get_env(objects[i])
 
         # Retrieve additional input arguments from save_to_google_drive function
         other_args <- list(...)
@@ -693,8 +700,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
           # List the ggplot objects
           objects_ggplot <-
             objects[which((sapply(objects,
-                                  function(obj) inherits(get(obj,
-                                                            envir = .GlobalEnv),
+                                  function(obj) inherits(get_env(obj),
                                                          "ggplot"))))]
           assertthat::assert_that(length(export_name) == length(objects_ggplot),
                                   msg = paste0("The 'export_name' vector ",

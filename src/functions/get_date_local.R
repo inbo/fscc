@@ -6,12 +6,15 @@
 #  from a metadata.txt file which should be present in each local data folder
 #'
 #' @param path The path to the local subfolder.
+#' @param save_to_env Logical which indicates whether the output date
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is FALSE.
 #' @return The selected date from the metadata file.
 #' @examples
 #' date <- get_date_local("./data/raw_data/")
 #' @export
 
-get_date_local <- function(path) {
+get_date_local <- function(path, save_to_env = FALSE) {
   
   local_subfolders <- list.files(path)
   
@@ -66,8 +69,13 @@ get_date_local <- function(path) {
     } else {
       selected_date <- download_date
     }
-    
+
     return(selected_date)
+
+    if (save_to_env == TRUE) {
+      source("./src/functions/assign_env.R")
+      assign_env("download_date", selected_date)
+    }
     
   }
 }

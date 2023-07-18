@@ -11,6 +11,9 @@
 #'
 #' @param survey_form Character string - Name of the survey form (lower case and
 #' separated by '_') to be evaluated
+#' @param save_to_env Logical which indicates whether the output dataframes
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is FALSE.
 #'
 #' @details
 #' This function only applies to "som" and "pfh" survey forms.
@@ -68,9 +71,13 @@
 #'  require refactoring for better performance.
 #'
 #' @examples
-#' get_derived_variables("s1_som")
+#' get_derived_variable_inconsistencies("s1_som")
 
-get_derived_variable_inconsistencies <- function(survey_form) {
+get_derived_variable_inconsistencies <- function(survey_form,
+                                                 save_to_env = FALSE) {
+
+  source("./src/functions/get_env.R")
+  source("./src/functions/assign_env.R")
 
   # Import the inconsistency catalogue ----
 
@@ -84,7 +91,7 @@ get_derived_variable_inconsistencies <- function(survey_form) {
 
   # Retrieve survey form from global environment
 
-  df <- get(survey_form, envir = .GlobalEnv)
+  df <- get_env(survey_form)
 
   # "som" survey forms
 
@@ -1076,14 +1083,15 @@ get_derived_variable_inconsistencies <- function(survey_form) {
     }
 
 
+  if (save_to_env == TRUE) {
+
   # Save dataframe to global environment
 
-  assign(survey_form, df, envir = globalenv())
+  assign_env(survey_form, df)
 
   # Save list of inconsistencies to global environment
 
-  assign(paste0("list_derived_inconsistencies_", survey_form),
-         list_derived_inconsistencies,
-         envir = globalenv())
-
+  assign_env(paste0("list_derived_inconsistencies_", survey_form),
+             list_derived_inconsistencies)
+  }
 }

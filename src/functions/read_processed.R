@@ -10,7 +10,7 @@
 #' which reads all solid soil-related survey forms.
 #' @param path_name Path to the directory containing the data
 #' files. Default is NULL, which reads the most recent path (breakpoint).
-#' @param save_to_global Logical which indicates whether the output dataframes
+#' @param save_to_env Logical which indicates whether the output dataframes
 #' can be saved to the global environment and override any existing objects
 #' with the same name. Default is FALSE.
 #'
@@ -29,7 +29,9 @@
 
 read_processed <- function(survey_forms = NULL,
                            path_name = NULL,
-                           save_to_global = FALSE) {
+                           save_to_env = FALSE) {
+
+  source("./src/functions/assign_env.R")
 
 # Define vectors with survey forms and codes to read ----
 
@@ -167,12 +169,31 @@ cat(paste0("Most recent data were found in the '",
 }
 
 
+  
+# Remove extra dataframes from environment ----
 
+  if (isTRUE(getOption("knitr.in.progress"))) {
+    envir <- knitr::knit_global()
+  } else {
+    envir <- globalenv()
+  }
 
+  survey_forms_extended <- c(paste0("data_availability_", survey_codes),
+                             paste0("coordinates_", survey_codes))
 
-# Check if global environment already contains data frames from this list----
+  if (save_to_env == TRUE) {
+    
+    for (i in seq_along(survey_forms_extended)) {
+      
+      if (exists(survey_forms_extended[i], envir = envir)) {
+        rm(list = survey_forms_extended[i], envir = envir)
+      }
+    }
+  }
 
-  if (save_to_global == TRUE) {
+# Check if global environment already contains data frames from this list ----
+
+  if (save_to_env == TRUE) {
 
   # Check if each data frame exists and is of class "data.frame"
   survey_forms_existing <- data.frame(survey_form = NULL,
@@ -251,7 +272,7 @@ cat(paste0("Most recent data were found in the '",
 
     # Assign survey form to global environment
 
-    assign(survey_forms_code[j], df, envir = globalenv())
+    assign_env(survey_forms_code[j], df)
 
     cat(paste0("Survey form '",
                survey_forms_code[j],
@@ -267,8 +288,8 @@ cat(paste0("Most recent data were found in the '",
                             survey_codes[i], ".csv"),
                      sep = ";")
 
-      assign(paste0("coordinates_", survey_codes[i]),
-             df, envir = globalenv())
+      assign_env(paste0("coordinates_", survey_codes[i]),
+                 df)
 
       cat(paste0("Data form '",
                  paste0("coordinates_", survey_codes[i]),
@@ -284,8 +305,8 @@ cat(paste0("Most recent data were found in the '",
                             survey_codes[i], ".csv"),
                      sep = ";")
 
-      assign(paste0("data_availability_", survey_codes[i]),
-             df, envir = globalenv())
+      assign_env(paste0("data_availability_", survey_codes[i]),
+                 df)
 
       cat(paste0("Data form '",
                  paste0("data_availability_", survey_codes[i]),
@@ -319,8 +340,8 @@ cat(paste0("Most recent data were found in the '",
                           raw_data_paths[ind[1]]),
                    sep = ";")
 
-    assign(list_additional[i],
-           df, envir = globalenv())
+    assign_env(list_additional[i],
+               df)
 
     cat(paste0("Data form '",
                list_additional[i],

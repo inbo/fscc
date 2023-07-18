@@ -27,6 +27,8 @@ export_pir <- function(inconsistency_report_name,
                        ignore_checked_inconsistencies = NULL,
                        version = NULL) {
 
+  source("./src/functions/get_env.R")
+
   # Attribute default values to input parameters
 
   if (is.null(version)) {
@@ -47,8 +49,7 @@ export_pir <- function(inconsistency_report_name,
 
   # Retrieve inconsistency report
 
-  inconsistency_report_orig <-
-    get(inconsistency_report_name, envir = .GlobalEnv)
+  inconsistency_report_orig <- get_env(inconsistency_report_name)
 
   # Correct the name of the column "non_duplicated_inconsistency_per_record"
 
@@ -138,7 +139,7 @@ export_pir <- function(inconsistency_report_name,
 
   # Create folder to save
 
-  path <- "./output/pir_files/"
+  path <- "./output/pirs/"
   path <- paste0(path, download_date, "_pir")
 
   # If no character string to indicate the version in the name of the exported
@@ -245,7 +246,7 @@ export_pir <- function(inconsistency_report_name,
   if (per_partner == TRUE &&
       per_level == FALSE) {
 
-  d_partner <- get("d_partner", envir = .GlobalEnv)
+  d_partner <- get_env("d_partner")
 
   # For each partner
 
@@ -378,7 +379,7 @@ export_pir <- function(inconsistency_report_name,
              "si_eve", "si_plt", "si_sta", "si_tco",
              "sw_swa", "sw_swc")
 
-    d_partner <- get("d_partner", envir = .GlobalEnv)
+    d_partner <- get_env("d_partner")
 
     # For each level
 

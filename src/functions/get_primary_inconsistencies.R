@@ -8,7 +8,11 @@
 #' e.g. 'so') to be evaluated
 #' @param solve Logical - Indicates whether the function should rename
 #' "code_layer" in 's1_som' in case of ambiguous (non-unique) code_layers
-#' (if TRUE).
+#' (if TRUE). Default is FALSE.   # This argument is only relevant for "som"
+#' survey forms
+#' @param save_to_env Logical which indicates whether the output dataframes
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is FALSE.
 #'
 #' @details
 #' For any survey (form) that contains "survey_year", "code_plot",
@@ -55,14 +59,12 @@
 #' get_primary_inconsistencies("s1", solve = TRUE)
 #'
 
-get_primary_inconsistencies <- function(code_survey, solve = NULL) {
+get_primary_inconsistencies <- function(code_survey,
+                                        solve = FALSE,
+                                        save_to_env = FALSE) {
 
-  # If no "solve" argument is provided, set it to "FALSE" (by default)
-  # This argument is only relevant for "som" survey forms
-
-  if (is.null(solve)) {
-    solve <- FALSE
-    }
+  source("./src/functions/get_env.R")
+  source("./src/functions/assign_env.R")
 
   # Import the inconsistency catalogue ----
 
@@ -148,8 +150,7 @@ get_primary_inconsistencies <- function(code_survey, solve = NULL) {
                           list_data_tables[[which(names(list_data_tables) ==
                                                     code_survey)]][i])
 
-    df <- get(survey_form,
-              envir = .GlobalEnv)
+    df <- get_env(survey_form)
 
 
     # FSCC_47: Check for "som" data forms whether code_layer is unique
@@ -184,12 +185,17 @@ get_primary_inconsistencies <- function(code_survey, solve = NULL) {
     # Determine where unique_layer_repetition is not unique
 
     ind_duplicated <- which(duplicated(df$unique_layer_repetition))
+    
+    if (!identical(ind_duplicated, integer(0))) {
+
     layers_duplicated <- unique(df$unique_layer_repetition[ind_duplicated])
 
     # Set up a progress bar to track processing
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     progress_bar <- txtProgressBar(min = 0, max = length(layers_duplicated),
                                    style = 3)
+    }
 
     # For each of the duplicate unique_layer_repetition
 
@@ -304,12 +310,17 @@ get_primary_inconsistencies <- function(code_survey, solve = NULL) {
 
       # Update the progress bar
 
+      if (!isTRUE(getOption("knitr.in.progress"))) {
       setTxtProgressBar(progress_bar, j)
+      }
     }
 
 
 
+    if (!isTRUE(getOption("knitr.in.progress"))) {
     close(progress_bar)
+    }
+    }
 
     # Remove the column "code_layer_original"
     # if the survey form does not contain any ambiguous layers (e.g. for "so_som")
@@ -699,20 +710,26 @@ get_primary_inconsistencies <- function(code_survey, solve = NULL) {
 
     if ((unlist(strsplit(survey_form, "_"))[2] == "som") &&
         (any("FSCC_47" %in% unique(list_primary_inconsistencies$rule_id)))) {
-    assign(survey_form, df, envir = globalenv())
+
+      if (save_to_env == TRUE) {
+        assign_env(survey_form, df)
+      }
       }
 
   }
 
+  if (save_to_env == TRUE) {
+
   if (length(unlist(strsplit(survey_form_as_input, "_"))) > 1) {
 
-    assign(paste0("list_primary_inconsistencies_", survey_form_as_input),
-           list_primary_inconsistencies, envir = globalenv())
+    assign_env(paste0("list_primary_inconsistencies_", survey_form_as_input),
+               list_primary_inconsistencies)
 
     } else {
 
-  assign(paste0("list_primary_inconsistencies_", code_survey),
-         list_primary_inconsistencies, envir = globalenv())
+    assign_env(paste0("list_primary_inconsistencies_", code_survey),
+           list_primary_inconsistencies)
     }
+  }
 
 }
