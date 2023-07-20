@@ -13,20 +13,8 @@ stopifnot(require("sf"),
 
 # Download the most recent versions of the data from Google Drive to local ----
 
-setwd("C:/R_scripts/_GIT_REPO/fscc")
-
 source("./src/functions/sync_local_data.R")
 sync_local_data()
-
-
-## if authentication problems => make sure latest version of googledrive and googlesheets4
-#gs4_deauth()     deauthenicate yourself
-#gs4_auth()       authenticate again 
-
-# authenticate with gargle
-#gargle::token_fetch()
-
-googledrive::drive_scopes("full")
 
 # Import the local data in R ----
 
