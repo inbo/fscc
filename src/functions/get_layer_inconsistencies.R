@@ -175,15 +175,15 @@ progress_bar <-
     # In case it was not clear which layer must have been on top from
     # "code_layer", this information was derived from the total soil
     # organic carbon content in the assumption that:
-    # the lower the layer, the higher the % soil organic carbon
+    # the more superior the layer, the higher the % soil organic carbon
 
 layer_number_two_forest_floor_layers <-
   data.frame(layer_number = c(1, 2),
              code_layer_harmonised = c("OL", "OFH"),
              combi_1 = c("O2", "O"),
+             combi_1_3204 = c("O", "O2"),
              combi_2 = c("O", "O1"),
-             combi_3_france = c("O1", "O2"),
-             combi_3_bulgaria = c("O2", "O1"),
+             combi_3 = c("O1", "O2"),
              combi_4 = c("OF", "OH"),
              combi_5 = c("OL", "OF"),
              combi_6 = c("OL", "OFH"),
@@ -193,7 +193,7 @@ layer_number_two_forest_floor_layers <-
 layer_number_three_forest_floor_layers <-
   data.frame(layer_number = c(1, 2, 3),
              combi_1 = c("OL", "OF", "OH"),
-             combi_2 = c("O2", "O3", "O"))
+             combi_2 = c("O", "O3", "O2"))
 
   # This dataframe refers to "d_depth_level_soil" in the
   # adds/dictionaries folder of the raw data,
@@ -2175,28 +2175,28 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
           # unique_survey_repetition are M01, M12, M24, M48, and
           # organic_layer_weight is reported, we will assume that these are
           # forest floor layers.
-          # Because of the organic_layer_weight, these records are still
-          # valuable for C stock calculations.
-          # However, in order to derive which of the records is on top
-          # and which is below, we can't base ourselves on
-          # organic_carbon_total (only one value reported).
-          # Yet, analysis of the organic_layer_weight in so_som profiles
-          # with at least two forest floor layers teaches us that
+          # Because of the organic_layer_weight information, these records
+          # are still valuable for C stock calculations.
+          # Deriving which of the records is on top
+          # and which is below can only happen based on
+          # analysis of the organic_layer_weight in so_som profiles
+          # with at least two forest floor layers. This teaches us that
           # it is the most likely that the inferior layer usually has a
-          # higher organic_layer_weight than the superior layer
-          # (570 cases versus 21).
+          # higher organic_layer_weight than the superior layer.
           # As such, we will name the code_layer of these records so that
           # they will be sorted accordingly.
+          # This also matches with the values in the columns "code_line" and
+          # "line_nr".
 
           if (unique(df$unique_survey_repetition[vec_ff]) == "64_2004_5_1") {
             if (all(is.na(df$code_layer[vec_ff]))) {
 
               ind_superior <-
                 vec_ff[which(df$organic_layer_weight[vec_ff] ==
-                               max(df$organic_layer_weight[vec_ff]))]
+                               min(df$organic_layer_weight[vec_ff]))]
               ind_inferior <-
                 vec_ff[which(df$organic_layer_weight[vec_ff] ==
-                               min(df$organic_layer_weight[vec_ff]))]
+                               max(df$organic_layer_weight[vec_ff]))]
               df$code_layer[ind_superior] <- "OL"
               df$code_layer[ind_inferior] <- "OFH"
               df$unique_survey_layer[vec_ff] <-
@@ -2238,34 +2238,35 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
                          "')."))
           
           
-        # If the forest floor layers are called "O1" and "O2",
-        # the forest floor layer sequence depends on the country
+        # If the forest floor layers are called "O" and "O2",
+        # the forest floor layer sequence depends on the partner code
         # (based on exploration of the % OC data)
 
         if (!is.na(match(layers[1],
-                         layer_number_two_forest_floor_layers[, 5])) &&
+                         layer_number_two_forest_floor_layers[, 3])) &&
             !is.na(match(layers[2],
-                         layer_number_two_forest_floor_layers[, 5]))) {
+                         layer_number_two_forest_floor_layers[, 3]))) {
 
-        # If it is in Bulgaria
-        if (df$code_country[vec[1]] == 63) {
+        # If the profile has partner_code 3204
+        if (df$partner_code[vec[1]] == 3204) {
 
         if (df$code_layer[vec_ff[1]] ==
-            layer_number_two_forest_floor_layers[1, 6]) {
+            layer_number_two_forest_floor_layers[1, 4]) {
 
                 df$layer_number[vec_ff[1]] <- 1
                 df$layer_number[vec_ff[2]] <- 2
 
                 } else {
+
                 df$layer_number[vec_ff[1]] <- 2
                 df$layer_number[vec_ff[2]] <- 1
 
                 }
           } else {
 
-        # If it is in France
+        # If the profile does not have partner_code 3204
         if (df$code_layer[vec_ff[1]] ==
-             layer_number_two_forest_floor_layers[1, 5]) {
+             layer_number_two_forest_floor_layers[1, 3]) {
 
                 df$layer_number[vec_ff[1]] <- 1
                 df$layer_number[vec_ff[2]] <- 2
@@ -2278,9 +2279,9 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
           }
           } else {
 
-        # If the forest floor layers are not called "O1" and "O2"
+        # If the forest floor layers are not called "O" and "O2"
 
-         for (j in c(3:4, 7:11)) {
+         for (j in c(5:11)) {
 
                 if (!is.na(match(layers[1],
                                  layer_number_two_forest_floor_layers[, j])) &&
