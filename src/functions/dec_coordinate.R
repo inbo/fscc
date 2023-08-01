@@ -5,6 +5,9 @@
 #'
 #' @param coord Integer - Coordinate value (longitude or latitude) in +/-DDMMSS
 #' format
+#' @param error_report Logical - Indicates whether any transformation error
+#' (due to coordinates out of the 0 - 59 range) have to be reported along.
+#' Default is TRUE.
 #' @return
 #' Outputs - This function returns a vector with two values:
 #' - the decimal coordinate
@@ -15,7 +18,8 @@
 #' @examples
 #' dec_coordinate(-3929)
 
-dec_coordinate <- function(coord) {
+dec_coordinate <- function(coord, error_report = TRUE) {
+
 
   # Split all the individual digits of the given coordinate value
   # + convert to numeric + save as "vec"
@@ -126,6 +130,10 @@ vec_short <- vec[2:length(vec)]
   # Return a vector with the decimal coordinate + "coord_error"
   # (inconsistency or NA)
 
+    if (error_report == TRUE) {
 return(c(coord_dec, coord_error))
+    } else {
+        return(coord_dec)
+      }
 
 }
