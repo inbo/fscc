@@ -2154,8 +2154,8 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
   # If forest floor has no layer limit information ----
 
     if (!identical(vec_ff, integer(0)) &&
-        all(is.na(df$layer_limit_inferior[vec_ff])) &&
-        all(is.na(df$layer_limit_superior[vec_ff]))) {
+        (all(is.na(df$layer_limit_inferior[vec_ff])) ||
+        all(is.na(df$layer_limit_superior[vec_ff])))) {
 
     # If there is one forest floor layer
 
@@ -2236,8 +2236,8 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
                          df$code_layer[vec_ff[1]], "' and '",
                          df$code_layer[vec_ff[2]],
                          "')."))
-          
-          
+
+
         # If the forest floor layers are called "O" and "O2",
         # the forest floor layer sequence depends on the partner code
         # (based on exploration of the % OC data)
@@ -2667,6 +2667,23 @@ close(progress_bar)
 df <- df[, -which(names(df) %in% c("layer_number_superior",
                                    "layer_number_inferior",
                                    "layer_number_combined_layers"))]
+
+# Add columns which only give numbers to below-ground versus above-ground
+# layers
+
+df <- df %>%
+  group_by(unique_survey_repetition) %>%
+  mutate(
+    layer_number_bg_only = ifelse(layer_type %in% c("mineral", "peat"),
+                                  layer_number, NA),
+    layer_number_bg_min = suppressWarnings(min(layer_number_bg_only,
+                                               na.rm = TRUE)),
+    layer_number_bg = layer_number_bg_only - (layer_number_bg_min - 1),
+    layer_number_ff = ifelse(layer_type %in% c("forest_floor"),
+                             layer_number, NA),) %>%
+    select(-layer_number_bg_only, -layer_number_bg_min) %>%
+    arrange(partner_code, unique_survey_repetition, layer_number)
+
 
 # Save the survey form and list_layer_inconsistencies for the given survey form
 # to the global environment
@@ -3820,6 +3837,25 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
 
     df$horizon_master <- as.factor(df$horizon_master)
+
+    
+    # Add columns which only give numbers to below-ground versus above-ground
+    # layers
+    
+    df <- df %>%
+      group_by(unique_survey_profile) %>%
+      mutate(
+        horizon_number_bg_only = ifelse(layer_type %in% c("mineral", "peat"),
+                                      horizon_number_unique, NA),
+        horizon_number_bg_min = suppressWarnings(min(horizon_number_bg_only,
+                                                   na.rm = TRUE)),
+        horizon_number_bg =
+          horizon_number_bg_only - (horizon_number_bg_min - 1),
+        horizon_number_ff = ifelse(layer_type %in% c("forest_floor"),
+                                 horizon_number_unique, NA),) %>%
+      select(-horizon_number_bg_only, -horizon_number_bg_min) %>%
+      arrange(partner_code, unique_survey_profile, horizon_number_unique)
+
 
     # Save the survey form; list_layer_inconsistencies for the given survey form
     # and "list_redundant_layers" for the given survey form
