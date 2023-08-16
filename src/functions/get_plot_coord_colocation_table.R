@@ -83,6 +83,8 @@ get_plot_coord_colocation_table <- function(code_survey,
                                             extra_forms = NULL) {
   
   source("./src/functions/get_env.R")
+  source("./src/functions/as_character_summary.R")
+  source("./src/functions/as_sf.R")
   
   stopifnot(require("sf"))
   stopifnot(require("tidyverse"))
@@ -199,19 +201,78 @@ get_plot_coord_colocation_table <- function(code_survey,
     
     list_coords <- rbind(list_coords,
                          list_coords_i)
-    
   }
+  
+  if (any(is.na(list_coords$latitude_dec)) ||
+      any(is.na(list_coords$longitude_dec))) {
+    cat(paste0("Some coordinates are missing for partner ",
+               d_partner$desc_short[which(d_partner$code == partner_code)],
+               " (partner_code: ",
+               partner_code,
+               ") in survey '",
+               code_survey, "'.\n"))
+    list_coords <- list_coords %>%
+      filter(!is.na(latitude_dec)) %>%
+      filter(!is.na(longitude_dec))
+  }
+
+  # Check if all plot_ids have one unique coordinate pair
+  
+  if (length(unique(list_coords$unique_survey_survey_form)) < 
+      length(unique(paste0(list_coords$unique_survey_survey_form, "_",
+                           list_coords$latitude_dec, "_",
+                           list_coords$longitude_dec)))) {
+    
+    # If not: check where
+    
+    df_dupl_coord <- list_coords %>%
+      mutate(comb = paste0(unique_survey_survey_form, "_",
+                           latitude_dec, "_",
+                           longitude_dec)) %>%
+      group_by(unique_survey_survey_form, code_plot, unique_survey_year) %>%
+      summarise(count = n(), .groups = "drop") %>%
+      filter(count > 1)
+    
+    vec_dupl_coord <- df_dupl_coord$code_plot
+    vec_dupl_coord_plot_id <- paste0(partner_code, "_", vec_dupl_coord)
+    vec_dupl_coord_survey <- df_dupl_coord$unique_survey_survey_form
+  
+    cat(paste0("Coordinates for plot_id(s) ",
+               as_character_summary(vec_dupl_coord_plot_id),
+               " are not unique in ",
+               as_character_summary(df_dupl_coord$unique_survey_year),
+               ".\n"))
+    
+    # And update list_coords 
+    for (j in seq_along(vec_dupl_coord_survey)) {
+      
+      ind_rows_to_update_fscc <-
+        which(list_coords$unique_survey_survey_form ==
+                vec_dupl_coord_survey[j])
+      
+      vec_columns_to_update <- which(names(list_coords) %in%
+                                       c("code_plot",
+                                         "plot_id",
+                                         "unique_survey",
+                                         "unique_survey_survey_form"))
+      
+      for (k in vec_columns_to_update) {
+        list_coords[ind_rows_to_update_fscc, k] <-
+          paste0(list_coords[ind_rows_to_update_fscc, k],
+                 "fscc",
+                 seq_along(ind_rows_to_update_fscc))
+      }
+    }
+  }
+  
   
   
   # Convert to spatial
   
   df_spat <- list_coords %>%
-    filter(!is.na(latitude_dec)) %>%
-    filter(!is.na(longitude_dec)) %>%
     st_as_sf(coords = c("longitude_dec", "latitude_dec"),
              crs = 4326) %>%
     st_transform(crs = 3035)
-  
   
   
   # Identify unique combinations of survey_forms and survey_years
@@ -256,7 +317,8 @@ get_plot_coord_colocation_table <- function(code_survey,
     df_spat_i <- df_spat %>%
       filter(unique_survey_year != unique_survey_years[i])
     col_i <- which(names(df_table) == unique_survey_years[i])
-    
+
+
     for (j in seq_along(unique(df_i$plot_id))) {
       
       plot_id_j <- (unique(df_i$plot_id))[j]
@@ -281,14 +343,14 @@ get_plot_coord_colocation_table <- function(code_survey,
           lat_j <- as.numeric(lat_j[!is.na(lat_j)])
           long_j <- as.numeric(long_j[!is.na(long_j)])
           
-          assertthat::assert_that(
-            length(unique(lat_j)) == 1 &&
-              length(unique(long_j)) == 1,
-            msg = paste0("Coordinates for plot_id '",
+          if (isFALSE(length(unique(lat_j)) == 1 &&
+              length(unique(long_j)) == 1)) {
+          cat(paste0("Coordinates for plot_id '",
                          plot_id_j,
                          "' are not unique in '",
                          unique_survey_years[i],
                          "'."))
+          }
           
           lat_j <- unique(lat_j)
           long_j <- unique(long_j)
@@ -520,6 +582,10 @@ get_plot_coord_colocation_table <- function(code_survey,
       relocate(longitude_most_abundant, .after = ncol(.)) %>%
       relocate(latitude_most_abundant, .after = ncol(.))
   }
+
+
+  # Final data processing ----
+
   
   df_table$combined_coords <-
     apply(df_table[, which(names(df_table) %in% c("latitude_most_abundant",
@@ -532,7 +598,8 @@ get_plot_coord_colocation_table <- function(code_survey,
   
   all_equal_function <- function(x) {
     if (length(unique(x[!is.na(x)])) == 1) {
-      return(unique(x[!is.na(x)]))
+      plot_id_unique <- (unique(x[!is.na(x)]))
+      return(gsub("fscc\\d+$", "", plot_id_unique))
     } else {
       return(NA)
     }
@@ -563,7 +630,30 @@ get_plot_coord_colocation_table <- function(code_survey,
                                 NA)) %>%
     arrange(arrange_col) %>%
     select(-arrange_col)
-  
+
+  if (any(df_table$plot_id_survey_duplicated[
+    which(!is.na(df_table$plot_id_survey_duplicated))] == TRUE)) {
+
+    ind_plot_id_dupl <- which(df_table$plot_id_survey_duplicated == TRUE)
+    df_table$dist_plot_move_meter <- NA
+
+    for (i in ind_plot_id_dupl) {
+
+      ind_reference <- which(df_table$all_equal_survey ==
+                               df_table$all_equal_survey[i] &
+                               df_table$plot_id_survey_duplicated == FALSE)
+
+      df_sub_spat <- df_table[c(ind_reference, i), ] %>%
+        mutate(latitude_dec = latitude_most_abundant) %>%
+        mutate(longitude_dec = longitude_most_abundant) %>%
+        as_sf
+
+      df_table$dist_plot_move_meter[i] <-
+        as.numeric(st_distance(df_sub_spat[1, ],
+                               df_sub_spat[2, ]))
+    }
+  }
+
   return(df_table)
   
 }
