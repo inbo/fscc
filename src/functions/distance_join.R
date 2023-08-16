@@ -19,7 +19,8 @@
 #'   is a match in sf2 (logical).
 #' @param summary_stat Character string - the summary statistic to apply when
 #'   there are multiple matches for a feature in `sf1`. The available options
-#'    are "most_abundant", "mean", "median". Default is "most_abundant".
+#'    are "most_abundant", "mean", "median", "min_dist". Default is
+#'    "most_abundant".
 #' @param include_threshold Logical which indicates whether the distance
 #'   threshold (in meters) should be added to the new column in sf1, provided
 #'   that no "join_column" has been given as input argument. Default is FALSE.
@@ -65,7 +66,8 @@
 #' if there is at least one match in sf2 for a given record of sf1:
 #' summarise the data in this column of sf2 for the matched records, using the
 #' summary statistic which is provided in the "summary_stat" input argument,
-#' i.e. either the most abundant value, the mean or the median.
+#' i.e. either the most abundant value, the mean, the median, or the value
+#' at the nearest distance.
 #'
 #' Assumptions:
 #' \itemize{
@@ -91,7 +93,10 @@ distance_join <- function(sf1,
                           sf2,
                           dist_threshold = 2000, # meter
                           join_column = NULL,
-                          summary_stat = c("most_abundant", "mean", "median"),
+                          summary_stat = c("most_abundant",
+                                           "mean",
+                                           "median",
+                                           "min_dist"),
                           include_threshold = FALSE,
                           save_to_env = FALSE) {
 
@@ -222,11 +227,31 @@ distance_join <- function(sf1,
 
 
   # Create most_abundant function
+  # most_abundant <- function(x) {
+  #   ux <- unique(na.omit(x))
+  #   ux[which.max(tabulate(match(x, ux)))]
+  # }
   most_abundant <- function(x) {
-    ux <- unique(na.omit(x))
-    ux[which.max(tabulate(match(x, ux)))]
+    counts <- table(na.omit(x))
+    max_count <- max(counts)
+    most_abundant_values <- names(counts[counts == max_count])
+    if (is.numeric(x)) {
+      most_abundant_values <- as.numeric(most_abundant_values)
+    } else if (is.integer(x)) {
+      most_abundant_values <- as.integer(most_abundant_values)
+    } else if (is.logical(x)) {
+      most_abundant_values <- as.logical(most_abundant_values)
+    } 
+    return(most_abundant_values)
   }
 
+  # Create which_min_dist function
+  which_min_dist <- function(sf1_row,
+                             sf2_subset) {
+    vec_dist <- st_distance(sf1_row, sf2_subset)
+    ind_min_dist <- which(vec_dist == min(vec_dist))
+    return(ind_min_dist)
+  }
 
   # Create generate_summary function
   generate_summary <- function(sf1, sf2, dist_threshold, i, summary_stat) {
@@ -252,12 +277,14 @@ distance_join <- function(sf1,
 
     # if join_column was provided
     # Extract the data and remove NAs
-    vec_data <- st_drop_geometry(sf2[vec, join_column])
+    vec_data <- unlist(as.vector(st_drop_geometry(sf2[vec, join_column])))
     sf1$new_col[i] <- switch(
       summary_stat,
       mean = mean(vec_data, na.rm = TRUE),
       median = median(vec_data, na.rm = TRUE),
-      most_abundant = most_abundant(vec_data)
+      most_abundant = most_abundant(vec_data),
+      min_dist = vec_data[which_min_dist(sf1_row = sf1[i, ],
+                                         sf2_subset = sf2[vec, ])]
     )
     return(sf1)
   }
