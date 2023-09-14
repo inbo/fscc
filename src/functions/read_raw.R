@@ -128,7 +128,7 @@ read_raw <- function(code_survey,
 list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
                          s1 = c("som", "prf", "pls", "pfh", "lqa"),
                          si = c("eve", "plt", "sta", "tco"),
-                         y1 = c("pl1", "st1"),
+                         y1 = c("pl1", "st1", "ev1"),
                          sw = c("swa", "swc"),
                          ss = c("lqa", "pss", "ssm"),
                          bd = c("gpl", "dbh", "tht", "dwd", "can", "gvg"),
@@ -227,6 +227,7 @@ d_partner <- read.csv(paste0(subdir,
 
 # Import data_availability of the given survey, add unique identifiers and
 # country/partner names, and save to the global environment
+# This only exists for "sw", "s1" and "so"
 
 if (file.exists(paste0(subdir,
                        "/adds/data_availability_",
@@ -264,6 +265,8 @@ if (code_survey %in% c("s1", "y1")) {
 if (code_survey %in% c("so", "si")) {
   file_level <- "LII"
 }
+
+if (code_survey %in% c("s1", "y1", "so", "si")) {
 
 if (file.exists(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
                        file_level,
@@ -307,6 +310,8 @@ if (exists("plot_coord_harmonisation_key")) {
                                         "_",
                                         survey_year))
 }
+}
+
 
 
 # Import individual survey forms of the given survey ----
@@ -336,6 +341,73 @@ for (i in seq_along(survey_forms_extended)) {
   }
   }
 }
+
+
+
+
+# Create data_availability table if not existing ----
+if (!file.exists(paste0(subdir,
+                       "/adds/data_availability_",
+                       code_survey, ".csv"))) {
+
+  data_availability_long <- NULL
+
+  for (i in seq_along(survey_forms)) {
+    
+    # Read the data table ----
+    df <- read.csv(paste0(subdir, "/", code_survey, "_",
+                          list_data_tables[[which(names(list_data_tables) ==
+                                                    code_survey)]][i], ".csv"),
+                   sep = ";")
+
+    if (!"survey_year" %in% colnames(df) &&
+        "last_year" %in% colnames(df)) {
+      names(df)[which(names(df) == "last_year")] <- "survey_year"
+    }
+
+    if (!"survey_year" %in% colnames(df) &&
+        !"last_year" %in% colnames(df)) {
+      df$survey_year <- NA
+    }
+
+    df <- df %>%
+      mutate(survey_id = paste0(.data$survey_year, "_",
+                                       .data$code_country, "_",
+                                       .data$partner_code, "_",
+                                       .data$code_plot)) %>%
+      distinct(survey_id)
+    
+    data_availability_long <- bind_rows(data_availability_long,
+                                        df)
+  }
+
+  data_availability <- data_availability_long %>%
+    distinct(survey_id) %>%
+    separate(survey_id, into = c("survey_year",
+                                 "code_country",
+                                 "partner_code",
+                                 "code_plot"), sep = "_") %>%
+    mutate(plot_id = paste0(partner_code, "_",
+                            code_plot)) %>%
+    mutate(unique_survey = paste0(partner_code, "_",
+                                  survey_year, "_",
+                                  code_plot)) %>%
+    mutate(code_country = as.integer(code_country)) %>%
+    left_join(d_country[, c("code", "lib_country")],
+              by = join_by(code_country == code)) %>%
+    rename(country = lib_country) %>%
+    mutate(partner_code = as.integer(partner_code)) %>%
+    left_join(d_partner[, c("code", "desc_short", "description")],
+              by = join_by(partner_code == code)) %>%
+    rename(partner_short = desc_short) %>%
+    rename(partner = description) %>%
+    mutate(country = as.factor(country)) %>%
+    mutate(partner_short = as.factor(partner_short)) %>%
+    mutate(partner = as.factor(partner))
+}
+
+
+
 
 for (i in seq_along(survey_forms)) {
   
@@ -405,6 +477,7 @@ for (i in seq_along(survey_forms)) {
 
     assertthat::assert_that(nrow(data_availability %>%
                                    filter(code_country == 4) %>%
+                                   filter(partner_code != 98) %>%
                                    distinct(plot_id, .keep_all = TRUE) %>%
                                    group_by(code_plot) %>%
                                    summarise(count = n()) %>%
@@ -605,7 +678,9 @@ for (i in seq_along(survey_forms)) {
 
 
   # Convert the plot codes and coordinates where needed ----
-  
+
+  if (code_survey %in% c("so", "si", "s1", "y1")) {
+
   if (any(df$partner_code %in%
           unique(plot_coord_harmonisation_key$partner_code))) {
     
@@ -714,7 +789,7 @@ for (i in seq_along(survey_forms)) {
       names(df)[which(names(df) == "survey_year")] <- "last_year"
     }
   }
-
+}
 
 
   # Add columns with unique identifiers ----
