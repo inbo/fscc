@@ -136,6 +136,11 @@ export_pir <- function(inconsistency_report_name,
       }
 
 
+  # Determine download_date
+
+  download_date <-
+    gsub("-", "",
+         unique(inconsistency_report_orig$download_date))
 
   # Create folder to save
 
