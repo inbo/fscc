@@ -304,6 +304,12 @@ sync_local_data <- function(list_subfolders_data = NULL,
                  by = join_by(subfolder == name))
   }
 
+  # If list_subfolders_output_orig is FALSE, output_paths should be NULL
+  
+  if (isFALSE(list_subfolders_output_orig)) {
+    rm(output_paths)
+  }
+
 
 # Combine "data_paths" and "output_paths" in one df: subfolder_paths ----
 
@@ -991,7 +997,7 @@ for (i in seq_along(child_folders$id)) {
   child_folders_2nd_level <- rbind(child_folders_2nd_level,
                                    child_folders_i)
 }
-}
+
 
 
 
@@ -1153,6 +1159,7 @@ if (nrow(child_folders_3rd_level) > 0) {
   }
 }
 }
+}
 
 # Exclude .sql files by default
 
@@ -1288,7 +1295,7 @@ return(files_with_paths)
 
   if (is.null(list_subfolders_data_orig) ||
       (!isFALSE(list_subfolders_data_orig) &&
-       "additional_data" %in% list_subfolders_data_orig))
+       "additional_data" %in% list_subfolders_data_orig)) {
 
 # Check which files need to be added
 
@@ -1331,7 +1338,7 @@ cat(paste0("Data synchronisation for '",
                "' complete\n"))
 
 }
-
+}
 
 
 
