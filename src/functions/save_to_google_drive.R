@@ -291,7 +291,8 @@ save_to_google_drive <- function(objects_to_save = NULL,
       which(survey_forms_all %in%
               ls(envir = parent.frame())[
                 sapply(ls(envir = parent.frame()),
-                       function(x) class(get(x, envir = envir))) == "data.frame"
+                       function(x) any(grepl("data.frame", class(get(x, envir = envir)))))
+                       #function(x) class(get(x, envir = envir))) == "data.frame"
               ])
     ]
     }
