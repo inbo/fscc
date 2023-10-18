@@ -9,12 +9,18 @@ Please add any observed data issues to this file
     -   Folder AFSCDB.LII.2.2
     -   Folder BIOSOIL.LII - at least ~~Spain,~~ Finland… (Note: missing Spanish data now in layer 0)
     -   Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?
-    -   PIRs! (note separate e-mail Sture Wijk; Czech pH-H2O in “pfh”) + add column with validation code different parameters?
+    -   ~~PIRs! (note separate e-mail Sture Wijk; Czech pH-H2O in “pfh”) + add column with validation code different parameters?~~
     -   Delete impossible values or codes in data? (e.g. forest type 32)
     -   Add column with data source for different variables
     -   Harmonise layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths using C content and bulk density where needed, e.g. Estonia
     -   Check whether harmonisation of layer limits is needed, i.e. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line)
     -   Note that some of the fixed-depth profiles do contain gaps, i.e. impossible to harmonise (except through mass-preserving splines?)
+    -   "som" survey forms gap-filling for C stocks:
+        -   bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density"); pedotransfer functions/machine learning
+        -   organic_carbon_total: from "pfh" ("horizon_c_organic_total")
+        -   coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol"); machine learning?
+        -   effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm?
+        -   profiles with data until 20 cm or 40 cm: monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
 -   Check “other_obs” columns properly
 -   ~~Harmonise plot_id’s and coordinates (e.g. Poland, UK)~~ (Note: completed)
 -   Was there a systematic coordinate issue in the Pyrennees in Spain?
@@ -36,13 +42,13 @@ Please add any observed data issues to this file
 
 
 ## TO DO - Checked PIRs
-* Remove rows in pir where code_nfc_action_taken, nfc_remark and updated_value are empty
-* Ignore code_nfc_action_taken if updated_value is empty (we can't do much with it anyway for now). Not relevant to add "confirmations" (e.g. extreme but correct values; no data avaible...) to the layer 1 data for now. We'll have to use statistics and objective expert reasons to exclude values.
-* I'm sometimes not sure whether the column "parameter_value" was updated by the partner. Checking this is possibly by joining the checked pir with the shared empty pir and comparing these two columns. So possibly, "updated_value"" does not contain all newly delivered data from the pirs. The other way around is also possible: that I placed the "parameter_value" info to the "updated_value" column because I assumed the values looked updated. Also possible by comparing likewise.
-* (less urgent: add a column to the checked pirs which indicates whether inconsistencies were indeed correctly solved in layer 0, as promised in the pirs by partners)
-* inconsistencies with incorrect units (FSCC_22) don't need to be updated because this should have been done by the scripts.
-* if "updated_value" says "record_to_be_removed", partners indicated that this record should be removed
-* if "updated_value" says "data_to_be_removed", partners indicated that the value should be removed (i.e. replaced by NA)
+* ~~Remove rows in pir where code_nfc_action_taken, nfc_remark and updated_value are empty~~
+* ~~Ignore code_nfc_action_taken if updated_value is empty (we can't do much with it anyway for now). Not relevant to add "confirmations" (e.g. extreme but correct values; no data avaible...) to the layer 1 data for now. We'll have to use statistics and objective expert reasons to exclude values.~~
+* ~~I'm sometimes not sure whether the column "parameter_value" was updated by the partner. Checking this is possibly by joining the checked pir with the shared empty pir and comparing these two columns. So possibly, "updated_value"" does not contain all newly delivered data from the pirs. The other way around is also possible: that I placed the "parameter_value" info to the "updated_value" column because I assumed the values looked updated. Also possible by comparing likewise.~~
+* ~~(less urgent: add a column to the checked pirs which indicates whether inconsistencies were indeed correctly solved in layer 0, as promised in the pirs by partners)~~
+* inconsistencies with incorrect units (FSCC_22) don't need to be updated because this should have been done by the scripts. (Note: Decided to not take this into account, since automated correction units happens after this gap-filling)
+* ~~if "updated_value" says "record_to_be_removed", partners indicated that this record should be removed~~
+* ~~if "updated_value" says "data_to_be_removed", partners indicated that the value should be removed (i.e. replaced by NA)~~
 
 
 ## TO DO - Transformation layer 1 –-> layer 2
