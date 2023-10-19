@@ -68,8 +68,8 @@ get_primary_inconsistencies("si", save_to_env = TRUE)
 get_primary_inconsistencies("so", solve = TRUE, save_to_env = TRUE)
 get_primary_inconsistencies("sw", save_to_env = TRUE)
 
-source("./src/functions/bind_inconsistency_lists.R")
-bind_inconsistency_lists("list_primary_inconsistencies", save_to_env = TRUE)
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_primary_inconsistencies", save_to_env = TRUE)
 View(list_primary_inconsistencies)
 
 
@@ -103,8 +103,8 @@ get_layer_inconsistencies("s1_som", solve = TRUE, save_to_env = TRUE)
 get_layer_inconsistencies("so_pfh", solve = TRUE, save_to_env = TRUE)
 get_layer_inconsistencies("s1_pfh", solve = TRUE, save_to_env = TRUE)
 
-source("./src/functions/bind_inconsistency_lists.R")
-bind_inconsistency_lists("list_layer_inconsistencies", save_to_env = TRUE)
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
 View(list_layer_inconsistencies)
 
 
@@ -127,8 +127,8 @@ get_range_inconsistencies("s1_pls", save_to_env = TRUE)
 get_range_inconsistencies("si_sta", save_to_env = TRUE)
 get_range_inconsistencies("y1_st1", save_to_env = TRUE)
 
-source("./src/functions/bind_inconsistency_lists.R")
-bind_inconsistency_lists("list_range_inconsistencies", save_to_env = TRUE)
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
 View(list_range_inconsistencies)
 
 
@@ -142,8 +142,8 @@ get_derived_variable_inconsistencies("so_pfh", save_to_env = TRUE)
 get_derived_variable_inconsistencies("s1_som", save_to_env = TRUE)
 get_derived_variable_inconsistencies("s1_pfh", save_to_env = TRUE)
 
-source("./src/functions/bind_inconsistency_lists.R")
-bind_inconsistency_lists("list_derived_inconsistencies", save_to_env = TRUE)
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
 View(list_derived_inconsistencies)
 
 
