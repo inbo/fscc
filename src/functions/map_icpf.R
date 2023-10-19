@@ -21,7 +21,10 @@
 #' @param point_col A character vector specifying the colour names or hex codes
 #' of the points of the layers (in the 'layers' argument) on the map, in the
 #' same order as the layers. Recommendation: c("orange", "#e95198", "red")
-#'
+#' @param biogeo_palette A character value specifying the colour palette to be
+#' used for the biogeographical regions layer. The default is "biogeo_col",
+#' a custom colour palette in mostly green-blue hues. Another option is
+#' "viridis".
 #'
 #' @return None
 #'
@@ -34,7 +37,7 @@
 #' @details 
 #' By default, this function plots a map of Europe with small inset maps for the
 #' Azores, Canary Islands and Cyprus. The map shows biogeographical regions 
-#' (viridis colour scheme) as well as country borders. On top, it shows the
+#' as well as country borders. On top, it shows the
 #' data layers in the 'layers' argument categorically as points.
 #' 
 #' Note that this map is quite sensitive to changes in dimensions, since the
@@ -70,7 +73,8 @@ map_icpf <- function(layers,
                      export_name,
                      export_folder,
                      point_size,
-                     point_col) {
+                     point_col,
+                     biogeo_palette = "biogeo_col") {
 
   # Install packages ----
 
@@ -101,7 +105,7 @@ map_icpf <- function(layers,
   # Import the shapefile with biogeographical regions
   biogeo_sf <-
     read_sf(paste0("./data/additional_data/shapefiles/",
-                   "BiogeoRegions2016_shapefile/BiogeoRegions2016.shp"))
+                   "BiogeoRegions2016.shp"))
 
   biogeo_sf <- biogeo_sf %>%
     # Reduce the file size
@@ -168,8 +172,18 @@ map_icpf <- function(layers,
   # Define the panel background colours (i.e. colour of the sea)
   sea_col <- "#D8E0E0"
 
-
-
+  # Define colour palette biogeographical regions
+  biogeo_col <- c("#14293a",
+                  "#556400",
+                  "#6b9c6c",
+                  "#005f0e",
+                  "#004a30",
+                  "#006e6a",
+                  "#649600",
+                  "#0097a5",
+                  "#c99800",
+                  "#00001f",
+                  "#33002d")
 
   # Make a map for the first layer ----
 
@@ -182,10 +196,18 @@ map_icpf <- function(layers,
     ggplot() +
     # Map the fill colour of the countries (outside of Europe)
     geom_sf(data = world_spat, color = NA, fill = background_col) +
-    # Map the biogeographical regions in viridis_d scale
-    geom_sf(data = biogeo_sf, aes(fill = .data$code), color = NA) +
-    scale_fill_viridis_d() +
+    # Map the biogeographical regions
+    geom_sf(data = biogeo_sf, aes(fill = .data$code), color = NA)
+
+    # Define the colour scale for the biogeographical regions layer
+    if (biogeo_palette == "viridis") {
+      base_map <- base_map + scale_fill_viridis_d()
+    } else if (biogeo_palette == "biogeo_col") {
+      base_map <- base_map + scale_fill_manual(values = biogeo_col)
+    }
+
     # Create a legend for the biogeographical regions
+  base_map <- base_map + 
     guides(fill = guide_legend(title = "Biogeographical region", # Title
                                # Size of legend symbols (squares)
                                override.aes = list(size = 5),
@@ -198,6 +220,8 @@ map_icpf <- function(layers,
       legend.title = element_text(size = 10),
       # Set the font family to "sans" and colour to black for text elements
       text = element_text(family = "sans", color = "black"),
+      # Black coordinates
+      axis.text = element_text(color = "black"),
       # Set the size of the plot title to 10 and make it bold
       title = element_text(size = 10, face = "bold"),
       # Position the legend at the top right corner of the plot
@@ -277,8 +301,15 @@ map_icpf <- function(layers,
   azores_map <-
     ggplot() +
     geom_sf(data = world_spat, color = NA, fill = background_col) +
-    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA) +
-    scale_fill_viridis_d() +
+    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
+
+    if (biogeo_palette == "viridis") {
+      azores_map <- azores_map + scale_fill_viridis_d()
+    } else if (biogeo_palette == "biogeo_col") {
+      azores_map <- azores_map + scale_fill_manual(values = biogeo_col)
+    }
+
+  azores_map <- azores_map + 
     theme(legend.title = element_text(size = 10),
           text = element_text(family = "sans", color = "black"),
           # Adjust the margins around the plot title
@@ -312,8 +343,15 @@ map_icpf <- function(layers,
   canary_map <-
     ggplot() +
     geom_sf(data = world_spat, color = NA, fill = background_col) +
-    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA) +
-    scale_fill_viridis_d() +
+    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
+
+    if (biogeo_palette == "viridis") {
+      canary_map <- canary_map + scale_fill_viridis_d()
+    } else if (biogeo_palette == "biogeo_col") {
+      canary_map <- canary_map + scale_fill_manual(values = biogeo_col)
+    }
+
+  canary_map <- canary_map +
     theme(legend.title = element_text(size = 10),
           text = element_text(family = "sans", color = "black"),
           plot.title = element_text(size = 10,
@@ -342,8 +380,15 @@ map_icpf <- function(layers,
   cyprus_map <- 
     ggplot() + 
     geom_sf(data = world_spat, color = NA, fill = background_col) +
-    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA) +
-    scale_fill_viridis_d() +
+    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
+
+    if (biogeo_palette == "viridis") {
+      cyprus_map <- cyprus_map + scale_fill_viridis_d()
+    } else if (biogeo_palette == "biogeo_col") {
+      cyprus_map <- cyprus_map + scale_fill_manual(values = biogeo_col)
+    }
+
+  cyprus_map <- cyprus_map +
     theme(legend.title = element_text(size = 10),
           text = element_text(family = "sans", color = "black"),
           plot.title = element_text(size = 10,
@@ -478,6 +523,71 @@ map_icpf <- function(layers,
                ylim = c(1770000, 1550000))
     }
 
+
+
+  
+  
+  # Add the second + third + 4th layer and coordinate system in case of 4 ----
+  
+  if (length(layers) == 4) {
+    
+    # Retrieve the second + third spatial layer of the 'layers' argument
+    spat_layer_2 <- get(layers[2], envir = .GlobalEnv)
+    spat_layer_3 <- get(layers[3], envir = .GlobalEnv)
+    spat_layer_4 <- get(layers[4], envir = .GlobalEnv)
+    
+    base_map <- base_map +
+      geom_sf(data = spat_layer_2,
+              aes(color = legend_classes[2]),
+              size = point_size) +
+      geom_sf(data = spat_layer_3,
+              aes(color = legend_classes[3]),
+              size = point_size) +
+      geom_sf(data = spat_layer_4,
+              aes(color = legend_classes[4]),
+              size = point_size) +
+      coord_sf(xlim = c(2400000, 6000000),
+               ylim = c(1000000, 5400000))
+    
+    azores_map <- azores_map +
+      geom_sf(data = spat_layer_2,
+              aes(color = legend_classes[2]),
+              size = point_size) +
+      geom_sf(data = spat_layer_3,
+              aes(color = legend_classes[3]),
+              size = point_size) +
+      geom_sf(data = spat_layer_4,
+              aes(color = legend_classes[4]),
+              size = point_size) +
+      coord_sf(xlim = c(929000, 1370000),
+               ylim = c(2800000, 2200000))
+    
+    canary_map <- canary_map +
+      geom_sf(data = spat_layer_2,
+              aes(color = legend_classes[2]),
+              size = point_size) +
+      geom_sf(data = spat_layer_3,
+              aes(color = legend_classes[3]),
+              size = point_size) +
+      geom_sf(data = spat_layer_4,
+              aes(color = legend_classes[4]),
+              size = point_size) +
+      coord_sf(xlim = c(1550000, 2050000),
+               ylim = c(1200000, 920000))
+    
+    cyprus_map <- cyprus_map +
+      geom_sf(data = spat_layer_2,
+              aes(color = legend_classes[2]),
+              size = point_size) +
+      geom_sf(data = spat_layer_3,
+              aes(color = legend_classes[3]),
+              size = point_size) +
+      geom_sf(data = spat_layer_4,
+              aes(color = legend_classes[4]),
+              size = point_size) +
+      coord_sf(xlim = c(6330000, 6550000),
+               ylim = c(1770000, 1550000))
+  }
 
 
 

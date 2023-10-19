@@ -128,7 +128,7 @@ read_raw <- function(code_survey,
 list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
                          s1 = c("som", "prf", "pls", "pfh", "lqa"),
                          si = c("eve", "plt", "sta", "tco"),
-                         y1 = c("pl1", "st1"),
+                         y1 = c("pl1", "st1", "ev1"),
                          sw = c("swa", "swc"),
                          ss = c("lqa", "pss", "ssm"),
                          bd = c("gpl", "dbh", "tht", "dwd", "can", "gvg"),
@@ -215,6 +215,8 @@ if (is.null(download_date)) {
 }
 
 
+# Import other supplementary forms ----
+
 # Import d_country and d_partner
 
 d_country <- read.csv(paste0(subdir,
@@ -225,6 +227,7 @@ d_partner <- read.csv(paste0(subdir,
 
 # Import data_availability of the given survey, add unique identifiers and
 # country/partner names, and save to the global environment
+# This only exists for "sw", "s1" and "so"
 
 if (file.exists(paste0(subdir,
                        "/adds/data_availability_",
@@ -252,7 +255,64 @@ if (file.exists(paste0(subdir,
    mutate(partner_short = as.factor(partner_short)) %>%
    mutate(partner = as.factor(partner))
 
- }
+}
+
+# Import plot coordinate harmonisation keys
+
+if (code_survey %in% c("s1", "y1")) {
+  file_level <- "LI"
+} else
+if (code_survey %in% c("so", "si")) {
+  file_level <- "LII"
+}
+
+if (code_survey %in% c("s1", "y1", "so", "si")) {
+
+if (file.exists(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                       file_level,
+                       "_6_plot_coord_harmonisation_key_UK.csv"))) {
+
+  plot_coord_harmonisation_key_uk <-
+    read.csv2(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                     file_level,
+                     "_6_plot_coord_harmonisation_key_UK.csv"),
+              na.strings = "")
+
+  plot_coord_harmonisation_key <- plot_coord_harmonisation_key_uk
+}
+
+
+if (file.exists(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                       file_level,
+                       "_53_plot_coord_harmonisation_key_Poland.csv"))) {
+  
+  plot_coord_harmonisation_key_poland <-
+    read.csv2(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                     file_level,
+                     "_53_plot_coord_harmonisation_key_Poland.csv"),
+              na.strings = "")
+  
+  plot_coord_harmonisation_key <- plot_coord_harmonisation_key_poland
+}
+
+if (exists("plot_coord_harmonisation_key_uk") &&
+    exists("plot_coord_harmonisation_key_poland")) {
+  plot_coord_harmonisation_key <-
+    rbind(plot_coord_harmonisation_key_poland,
+          plot_coord_harmonisation_key_uk)
+}
+
+if (exists("plot_coord_harmonisation_key")) {
+  plot_coord_harmonisation_key <-
+    plot_coord_harmonisation_key %>%
+    filter(grepl(code_survey, plot_coord_harmonisation_key$survey_code)) %>%
+    mutate(partner_survey_year = paste0(partner_code,
+                                        "_",
+                                        survey_year))
+}
+}
+
+
 
 # Import individual survey forms of the given survey ----
 
@@ -281,6 +341,73 @@ for (i in seq_along(survey_forms_extended)) {
   }
   }
 }
+
+
+
+
+# Create data_availability table if not existing ----
+if (!file.exists(paste0(subdir,
+                       "/adds/data_availability_",
+                       code_survey, ".csv"))) {
+
+  data_availability_long <- NULL
+
+  for (i in seq_along(survey_forms)) {
+    
+    # Read the data table ----
+    df <- read.csv(paste0(subdir, "/", code_survey, "_",
+                          list_data_tables[[which(names(list_data_tables) ==
+                                                    code_survey)]][i], ".csv"),
+                   sep = ";")
+
+    if (!"survey_year" %in% colnames(df) &&
+        "last_year" %in% colnames(df)) {
+      names(df)[which(names(df) == "last_year")] <- "survey_year"
+    }
+
+    if (!"survey_year" %in% colnames(df) &&
+        !"last_year" %in% colnames(df)) {
+      df$survey_year <- NA
+    }
+
+    df <- df %>%
+      mutate(survey_id = paste0(.data$survey_year, "_",
+                                       .data$code_country, "_",
+                                       .data$partner_code, "_",
+                                       .data$code_plot)) %>%
+      distinct(survey_id)
+    
+    data_availability_long <- bind_rows(data_availability_long,
+                                        df)
+  }
+
+  data_availability <- data_availability_long %>%
+    distinct(survey_id) %>%
+    separate(survey_id, into = c("survey_year",
+                                 "code_country",
+                                 "partner_code",
+                                 "code_plot"), sep = "_") %>%
+    mutate(plot_id = paste0(partner_code, "_",
+                            code_plot)) %>%
+    mutate(unique_survey = paste0(partner_code, "_",
+                                  survey_year, "_",
+                                  code_plot)) %>%
+    mutate(code_country = as.integer(code_country)) %>%
+    left_join(d_country[, c("code", "lib_country")],
+              by = join_by(code_country == code)) %>%
+    rename(country = lib_country) %>%
+    mutate(partner_code = as.integer(partner_code)) %>%
+    left_join(d_partner[, c("code", "desc_short", "description")],
+              by = join_by(partner_code == code)) %>%
+    rename(partner_short = desc_short) %>%
+    rename(partner = description) %>%
+    mutate(country = as.factor(country)) %>%
+    mutate(partner_short = as.factor(partner_short)) %>%
+    mutate(partner = as.factor(partner))
+}
+
+
+
 
 for (i in seq_along(survey_forms)) {
   
@@ -321,6 +448,53 @@ for (i in seq_along(survey_forms)) {
     df[, j] <- as.factor(df[, j])
   }
 
+  # Replace SWETHRO plots of Sweden to the partner code of Sweden ----
+
+  # (only present in Level II)
+  # There are three sources of Swedish Level II data:
+  # - managed by Swedish Forest Agency, submitted by partner Sweden
+  # - managed by Swedish Forest Agency, submitted by partner SWETHRO
+  # - managed by SLU, submitted by partner Sweden
+  # As such, there is no reason to keep them separated as different partners.
+
+  if (any(df$partner_code == "1301")) {
+
+  df <- df %>%
+    mutate(partner_code_orig = partner_code) %>%
+    mutate(partner_code =
+             ifelse(.data$partner_code == "1301",
+                    as.integer("13"),
+                    as.integer(.data$partner_code)))
+  }
+
+  # Convert partner codes of German LI to 98 if this is not the case ----
+
+  if (code_survey %in% c("s1", "y1")) {
+
+    vec_partner_codes_german_LI <-
+      c(3004, 3204, 2804, 3304, 2904, 3104, 2704, 3604, 3704, 3504,
+        9804, 3404)
+
+    assertthat::assert_that(nrow(data_availability %>%
+                                   filter(code_country == 4) %>%
+                                   filter(partner_code != 98) %>%
+                                   distinct(plot_id, .keep_all = TRUE) %>%
+                                   group_by(code_plot) %>%
+                                   summarise(count = n()) %>%
+                                   arrange(code_plot) %>%
+                                   filter(count > 1)) == 0,
+                            msg = paste0("Some plot codes occur in multiple ",
+                                         "German partners."))
+
+    df <- df %>%
+      mutate(partner_code_orig = ifelse(exists("partner_code_orig"),
+                                        partner_code_orig,
+                                        partner_code)) %>%
+      mutate(partner_code =
+               ifelse(.data$partner_code %in% vec_partner_codes_german_LI,
+                      as.integer("98"),
+                      as.integer(.data$partner_code)))
+  }
 
   # Convert the columns with dates to dates ----
   # This removes information about the time of the day in "change_date",
@@ -499,6 +673,123 @@ for (i in seq_along(survey_forms)) {
                  integer(0))) { # if the column "repetition" exists in df
     df$repetition[which(is.na(df$repetition) | df$repetition == -9999)] <- 1
     }
+
+
+
+
+  # Convert the plot codes and coordinates where needed ----
+
+  if (code_survey %in% c("so", "si", "s1", "y1")) {
+
+  if (any(df$partner_code %in%
+          unique(plot_coord_harmonisation_key$partner_code))) {
+    
+    df$code_plot_orig <- df$code_plot
+    
+    if ("latitude_dec" %in% names(df) &&
+        "longitude_dec" %in% names(df)) {
+
+      df$latitude_dec_orig <- df$latitude_dec
+      df$longitude_dec_orig <- df$longitude_dec
+    }
+
+    renamed_survey_year <- FALSE
+    
+    if ("last_year" %in% names(df) &&
+        !"survey_year" %in% names(df)) {
+
+      names(df)[which(names(df) == "last_year")] <- "survey_year"
+      renamed_survey_year <- TRUE
+    }
+    
+    for (j in
+         seq_along(unique(plot_coord_harmonisation_key$partner_survey_year))) {
+      
+      plot_coord_harmonisation_key_j <- plot_coord_harmonisation_key %>%
+        filter(partner_survey_year ==
+                 unique(plot_coord_harmonisation_key$partner_survey_year)[j])
+      
+      join_key_j <- plot_coord_harmonisation_key_j %>%
+        select(code_plot_orig, code_plot,
+               longitude_dec, latitude_dec) %>%
+        rename(code_plot_join = code_plot,
+               latitude_dec_join = latitude_dec,
+               longitude_dec_join = longitude_dec)
+      
+      if (!"latitude_dec" %in% names(df) &&
+          !"longitude_dec" %in% names(df)) {
+        join_key_j <- select(join_key_j, code_plot_orig, code_plot_join)
+      }
+
+      survey_years_j <-
+        unlist(strsplit(unique(plot_coord_harmonisation_key_j$survey_year),
+                        "_"))
+      
+      code_plot_orig_j <-
+        sort(unique(df$code_plot_orig[
+          which(df$partner_code ==
+                  unique(plot_coord_harmonisation_key_j$partner_code) &
+                  df$survey_year %in% survey_years_j)]))
+      
+      # If most of the wrong code_plots do not appear in the original
+      # code_plots of df,
+      # the plot codes have probably been corrected in Layer 0
+      # So no need to do the conversion in that case
+      
+      if ((unique(plot_coord_harmonisation_key_j$partner_code) != 53) ||
+          (sum(sort(plot_coord_harmonisation_key_j$code_plot_orig) %in%
+              code_plot_orig_j) >=
+          length(plot_coord_harmonisation_key_j$code_plot_orig) * 0.7)) {
+
+        df <- df %>%
+          left_join(join_key_j,
+                    by = "code_plot_orig")
+
+
+        df <- df %>%
+          mutate(code_plot =
+                   ifelse(partner_code ==
+                            unique(
+                              plot_coord_harmonisation_key_j$partner_code) &
+                            (.data$survey_year %in% survey_years_j) &
+                            !is.na(code_plot_join),
+                          code_plot_join,
+                          code_plot)) %>%
+          select(-code_plot_join)
+
+        if ("latitude_dec" %in% names(df) &&
+            "longitude_dec" %in% names(df)) {
+
+          df <- df %>%
+            mutate(latitude_dec =
+                     ifelse(partner_code ==
+                              unique(
+                                plot_coord_harmonisation_key_j$partner_code) &
+                              (.data$survey_year %in% survey_years_j) &
+                              !is.na(latitude_dec_join),
+                            latitude_dec_join,
+                            latitude_dec)) %>%
+            select(-latitude_dec_join) %>%
+            mutate(longitude_dec =
+                     ifelse(partner_code ==
+                              unique(
+                                plot_coord_harmonisation_key_j$partner_code) &
+                              (.data$survey_year %in% survey_years_j) &
+                              !is.na(longitude_dec_join),
+                            longitude_dec_join,
+                            longitude_dec)) %>%
+            select(-longitude_dec_join)
+        }
+        
+      }
+      
+    }
+    
+    if (renamed_survey_year == TRUE) {
+      names(df)[which(names(df) == "survey_year")] <- "last_year"
+    }
+  }
+}
 
 
   # Add columns with unique identifiers ----

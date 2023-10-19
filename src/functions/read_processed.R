@@ -33,6 +33,70 @@ read_processed <- function(survey_forms = NULL,
 
   source("./src/functions/assign_env.R")
 
+# Define columns that should be numeric
+
+  vec_numeric <-
+    c("survey_year", "code_country", "code_plot", "repetition",
+      "layer_limit_superior", "layer_limit_inferior",
+      "subsamples", "moisture_content", "part_size_clay", "part_size_silt",
+      "part_size_sand", "bulk_density",
+      "coarse_fragment_vol", "organic_layer_weight", "ph_cacl2", "ph_h2o",
+      "organic_carbon_total", "n_total",
+      "carbonates", "exch_acidiy", "exch_al", "exch_ca", "exch_fe", "exch_k",
+      "exch_mg", "exch_mn", "exch_na",
+      "free_h", "extrac_al", "extrac_ca", "extrac_cd", "extrac_cr",
+      "extrac_cu", "extrac_fe", "extrac_hg",
+      "extrac_k", "extrac_mg", "extrac_mn", "extrac_na", "extrac_ni",
+      "extrac_p", "extrac_pb", "extrac_s",
+      "extrac_zn", "tot_al", "tot_ca", "tot_fe", "tot_k", "tot_mg",
+      "tot_mn", "tot_na", "rea_al", "rea_fe",
+      "exch_bce", "exch_ace", "exch_cec", "elec_cond", "ni",
+      "base_saturation", "code_soil_horizon_sample_c",
+      "p_ox", "partner_code", "q_flag", "line_nr",
+      "horizon_number", "code_horizon_discont", "horizon_vertical",
+      "horizon_limit_up", "horizon_limit_low",
+      "code_horizon_destinct", "code_horizon_topo", "code_soil_structure",
+      "horizon_clay", "horizon_silt",
+      "horizon_sand", "code_horizon_coarse_vol", "horizon_coarse_weight",
+      "horizon_c_organic_total", "horizon_n_total",
+      "horizon_caco3_total", "horizon_gypsum", "horizon_ph",
+      "horizon_elec_cond", "horizon_exch_ca", "horizon_exch_mg",
+      "horizon_exch_k", "horizon_exch_na", "horizon_cec",
+      "code_horizon_porosity", "horizon_bulk_dens_measure",
+      "horizon_bulk_dens_est", "code_roots_very_fine", "code_roots_fine",
+      "code_roots_medium", "code_roots_coarse",
+      "latitude", "longitude", "elevation_profile", "depth_diagnostic_1",
+      "depth_diagnostic_2", "depth_diagnostic_3",
+      "depth_diagnostic_4", "depth_diagnostic_5", "depth_diagnostic_6",
+      "depth_diagnostic_7", "depth_diagnostic_8",
+      "depth_diagnostic_9", "code_parent_material_1",
+      "code_parent_material_2", "code_water_level_high", "code_water_level_low",
+      "code_water_type", "code_water", "code_humus", "eff_soil_depth",
+      "rooting_depth", "rock_depth", "obstacle_depth",
+      "code_altitude", "quantification_limit", "control_chart_mean",
+      "control_chart_std", "code_event_location",
+      "code_tools", "trees_before", "trees_loss", "basal_area_before",
+      "basal_area_loss", "code_logging_method",
+      "code_extraction_tools", "code_extraction_method", "code_slash_disposal",
+      "size_residues", "code_soil_compaction_ways",
+      "code_soil_compaction_area", "soil_preparation_area", "chemics_quantity",
+      "code_treatment_aim", "last_year",
+      "relocated_plot", "altitude_m", "slope", "code_plot_design",
+      "code_orientation", "plot_size", "code_stand_history",
+      "code_prev_landuse", "code_stand_actual", "code_tree_species",
+      "code_tree_species_mix", "top_height",
+      "code_det_top_height", "code_forest_type", "code_mean_age",
+      "code_tree_layers", "coverage_tree_layer", "canopy_closure",
+      "code_status_mcpfe_class1", "code_status_mcpfe_class2",
+      "code_status_mcpfe_class3", "code_fencing",
+      "code_notimb_util_plot", "code_notimb_util_buffer", "code_manage_type",
+      "code_manage_intensity_plot",
+      "code_manage_intensity_buffer", "code_silvicult_system",
+      "code_forest_owner", "cutting_year", "code_canopy_gaps",
+      "stand_rotation", "code_plot_status", "code_nfi_status",
+      "cc_tree_number", "azimuth", "distance",
+      "latitude_dec", "longitude_dec")
+  
 # Define vectors with survey forms and codes to read ----
 
   survey_forms_all <- c("so_som", "so_prf", "so_pls", "so_pfh", "so_lqa",
@@ -203,13 +267,27 @@ cat(paste0("Most recent data were found in the '",
     if (exists(survey_forms[i]) &&
         is.data.frame(get(survey_forms[i]))) {
 
+      if (!identical(unique(get(survey_forms[i])$change_date_google_drive),
+                     NULL)) {
     survey_forms_existing <-
       rbind(survey_forms_existing,
             data.frame(survey_form = survey_forms[i],
                        change_date_google_drive =
                          unique(get(survey_forms[i])$change_date_google_drive)))
+      } else {
+      survey_forms_existing <-
+        rbind(survey_forms_existing,
+              data.frame(survey_form = survey_forms[i],
+                         change_date_google_drive = NA))
+      }
 
     }
+  }
+
+  if (nrow(survey_forms_existing) > 0) {
+  survey_forms_existing <- survey_forms_existing %>%
+    mutate(change_date_google_drive =
+             as.character(as.Date(change_date_google_drive)))
   }
 
   # If any objects with the same names currently exist (from other
@@ -220,7 +298,8 @@ cat(paste0("Most recent data were found in the '",
     # Notify user about survey forms currently in the global environment
 
   cat(paste0("The following survey forms (with date of the last Google ",
-             "Drive update) currently exist in the Global Environment:\n"))
+             "Drive update if applicable) currently exist in the Global ",
+             "Environment:\n"))
   print(survey_forms_existing)
 
     # Ask permission to overwrite existing survey forms in global environment
@@ -262,9 +341,22 @@ cat(paste0("Most recent data were found in the '",
 
     for (j in seq_along(survey_forms_code)) {
 
-    df <- read.csv(paste0(path_name_survey, survey_forms_code[j], ".csv"),
-                   sep = ";")
+    df <- read.csv2(paste0(path_name_survey, survey_forms_code[j], ".csv"))
+                    # sep = ";")
 
+    # Replace any "" values by NA
+    df[df == ""] <- NA
+    
+    # Convert numeric columns to numeric
+    vec_df <- names(df)[which(names(df) %in% vec_numeric)]
+    vec_df <- vec_df[which(!vec_df %in%
+                             names(df)[sapply(df, is.numeric)])]
+
+    if (!identical(vec_df, character(0))) {
+    df <- df %>%
+      mutate(across(all_of(vec_df), as.numeric))
+    }
+    
       # Add change date of Google Drive version of imported data
       # (to keep track of which version you are working on internally)
 
@@ -274,9 +366,6 @@ cat(paste0("Most recent data were found in the '",
 
     assign_env(survey_forms_code[j], df)
 
-    cat(paste0("Survey form '",
-               survey_forms_code[j],
-               "' imported in Global Environment.\n"))
     }
 
     # Read coordinates data form

@@ -9,12 +9,14 @@
 #' @param save_to_env Logical which indicates whether the output date
 #' can be saved to the environment and override any existing objects
 #' with the same name. Default is FALSE.
+#' @param collapsed Logical which indicates whether the date has to be returned
+#' in a collapsed form, e.g. "2023-09-14" becomes "20230914". Default is FALSE.
 #' @return The selected date from the metadata file.
 #' @examples
 #' date <- get_date_local("./data/raw_data/")
 #' @export
 
-get_date_local <- function(path, save_to_env = FALSE) {
+get_date_local <- function(path, save_to_env = FALSE, collapsed = FALSE) {
   
   local_subfolders <- list.files(path)
   
@@ -68,6 +70,10 @@ get_date_local <- function(path, save_to_env = FALSE) {
       selected_date <- change_date
     } else {
       selected_date <- download_date
+    }
+
+    if (collapsed == TRUE) {
+      selected_date <- gsub("-", "", selected_date)
     }
 
     return(selected_date)

@@ -118,7 +118,7 @@ list_man <- c("country", "partner_short", "partner", "survey_year",
               "tot_al", "tot_ca", "tot_fe", "tot_k", "tot_mg",
               "tot_mn", "tot_na", "rea_al", "rea_fe", "exch_bce",
               "exch_ace", "exch_cec", "elec_cond", "ni", "base_saturation",
-              "p_ox", "bulk_density")
+              "p_ox", "bulk_density", "partner_code_orig", "code_plot_orig")
 
   # Rule:
   # if both values are the same: take the unique value,

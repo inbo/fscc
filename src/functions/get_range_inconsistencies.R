@@ -750,7 +750,13 @@ get_range_inconsistencies <- function(survey_form,
     # Store information about the inconsistency in "list_range_inconsistencies"
 
     vec_data <-
-      df[vec_inconsistency,which(names(df) == parameters_mandatory_names[i])]
+      df[vec_inconsistency,
+         which(names(df) == parameters_mandatory_names[i])]
+    
+    if ("tbl_df" %in% class(vec_data)) {
+      vec_data <- pull(vec_data)
+    }
+
     if (is.factor(vec_data)) {vec_data <- as.character(vec_data)
     }
 
@@ -913,7 +919,7 @@ get_range_inconsistencies <- function(survey_form,
                    code_plot = df$code_plot[vec_inconsistency],
                    plot_id = df$plot_id[vec_inconsistency],
                    code_layer_horizon_master =
-                     rep(NA,length(vec_inconsistency)),
+                     rep(NA, length(vec_inconsistency)),
                    repetition_profile_pit_id =
                      df$profile_pit_id[vec_inconsistency],
                    code_line = df$code_line[vec_inconsistency],
@@ -921,7 +927,7 @@ get_range_inconsistencies <- function(survey_form,
                                              length(vec_inconsistency))),
                    parameter_unit = rep(parameter_unit,
                                         length(vec_inconsistency)),
-                   parameter_value = df[vec_inconsistency,col_ind],
+                   parameter_value = df[vec_inconsistency, col_ind],
                    inconsistency_reason = inconsistency_reason,
                    inconsistency_type = inconsistency_type,
                    rule_id = rule_id,
@@ -1267,6 +1273,11 @@ get_range_inconsistencies <- function(survey_form,
                      unique(df$unique_partner_survey)[j])
       vec_nonempty <- vec[which(!is.na(df[vec, col_ind]))]
       vec_data <- df[vec, col_ind]
+
+      if ("tbl_df" %in% class(vec_data)) {
+        vec_data <- pull(vec_data)
+      }
+
       vec_data <- vec_data[which(!is.na(vec_data))]
       vec_layer_type <- df$layer_type[vec_nonempty]
 
@@ -1996,6 +2007,10 @@ get_range_inconsistencies <- function(survey_form,
       }
 
       vec_data <- df[vec_inconsistency, col_ind]
+      
+      if ("tbl_df" %in% class(vec_data)) {
+        vec_data <- pull(vec_data)
+      }
 
       if (is.factor(vec_data)) {
         vec_data <- as.character(vec_data)

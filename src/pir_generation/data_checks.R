@@ -16,15 +16,28 @@ stopifnot(require("sf"),
           require("googledrive"),
           require("assertthat"))
 
+# Place the downloaded zipped raw data files on Google Drive
+# (in folder "./data/raw_data/download_[download_date]/")
+
+# Save the raw data locally ----
+
+source("./src/functions/sync_local_data.R")
+sync_local_data(list_subfolders_data = "raw_data",
+                list_subfolders_output = FALSE)
 
 # Specify date on which 'layer 0' data were downloaded ----
 # from ICP Forests website
-download_date <- "20230717"
+
+source("./src/functions/get_date_local.R")
+download_date <- get_date_local(path = "./data/raw_data/",
+                                save_to_env = TRUE,
+                                collapsed = TRUE)
 download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
 
 # Import data ----
 # First read "y1" and "si", as their coordinates are used to list coordinates
 # of "s1" and "so"
+
 source("./src/functions/read_raw.R")
 read_raw("y1", save_to_env = TRUE)
 read_raw("si", save_to_env = TRUE)
