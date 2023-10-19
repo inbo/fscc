@@ -107,7 +107,7 @@ read_processed <- function(survey_forms = NULL,
   list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
                            s1 = c("som", "prf", "pls", "pfh", "lqa"),
                            si = c("eve", "plt", "sta", "tco"),
-                           y1 = c("pl1", "st1"),
+                           y1 = c("pl1", "st1", "ev1"),
                            sw = c("swa", "swc"))
 
   # To remember the original input
