@@ -1,7 +1,8 @@
 ### Function calculating 10 cm stocks with SOILSPLINE function for each profile
 ###
 ### FUNCTIONS BASED ON SELECTED PROFILE ####
-### PROF<-pv[,c("plot_ID","profile_ID","code_layer","TOP","BOT","CD")] 
+### Bruno De Vos - based on earlier function
+
 
 Csmpspline<-function(PROF) {
   
