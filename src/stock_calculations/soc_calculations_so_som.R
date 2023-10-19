@@ -3,8 +3,7 @@
 #### INPUT FILE = so_som
 #### Bruno De Vos - adapted 19/07/2023 - based on earlier developed scripts
 
-
-setwd("C:/R_scripts/_GIT_REPO/fscc")
+setwd("C:/R_scripts/_GIT_REPO/fscc")   ## to be changed from Local drive => Gdrive when it works
 
 #### Work folders (on local drive) ####
 # scripts in "./scr/stock_calculations/"
@@ -280,6 +279,6 @@ View(CsFF)
 
 
 
-
+# Writing output file with FF stocks per plot and profile
 write.csv(CsFF,file="./output/stocks/so/so.som.CsFF.csv", row.names = FALSE)
 
