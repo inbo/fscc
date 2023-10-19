@@ -95,19 +95,23 @@
 #'    possible 0-59 range, are added.
 #' 8. Add columns with unique identifiers for plots, surveys,
 #'    repetitions/profile_pit_id's, layers
-#'        - "plot_id": "partner_code" + "code_plot"
-#'        - "unique_survey": "partner_code" + "survey_year" + "code_plot"
-#'        - "unique_survey_repetition": "partner_code" + "survey_year" +
+#'        - "plot_id": "code_country" + "code_plot"
+#'        - "unique_survey": "code_country" + "survey_year" + "code_plot"
+#'        - "unique_survey_repetition": "code_country" + "survey_year" +
 #'          "code_plot" + "repetition" ("som" survey forms)
-#'        - "unique_survey_profile": "partner_code" + "survey_year" +
+#'        - "unique_survey_profile": "code_country" + "survey_year" +
 #'          "code_plot" + "profile_pit_id" ("pfh" survey forms)
-#'        - "unique_survey_layer": "partner_code" + "survey_year" +
+#'        - "unique_survey_layer": "code_country" + "survey_year" +
 #'          "code_plot" + "code_layer" ("som" survey forms);
 #'           or:
-#'           "partner_code" + "survey_year" +
+#'           "code_country" + "survey_year" +
 #'          "code_plot" + "horizon_master" ("pfh" survey forms)
-#'        - "unique_layer_repetition": "partner_code" + "survey_year" +
-#'          "code_plot" + "code_layer" + "repetition" ("som" survey forms)
+#'        - "unique_layer_repetition": "code_country" + "survey_year" +
+#'          "code_plot" + "code_layer" + "repetition" ("som" survey forms);
+#'          or:
+#'          "code_country" + "survey_year" +
+#'          "code_plot" + "horizon_master" + "profile_pit_id"
+#'          ("pfh" survey forms)
 #'
 #' WARNING - This function may not be optimally efficient and may ideally
 #' require refactoring for better performance.
@@ -239,7 +243,7 @@ if (file.exists(paste0(subdir,
                     code_survey, ".csv"), sep = ";")
 
  data_availability <- data_availability %>%
-   mutate(plot_id = paste0(partner_code, "_",
+   mutate(plot_id = paste0(code_country, "_",
                            code_plot)) %>%
    mutate(unique_survey = paste0(partner_code, "_",
                                  survey_year, "_",
@@ -387,7 +391,7 @@ if (!file.exists(paste0(subdir,
                                  "code_country",
                                  "partner_code",
                                  "code_plot"), sep = "_") %>%
-    mutate(plot_id = paste0(partner_code, "_",
+    mutate(plot_id = paste0(code_country, "_",
                             code_plot)) %>%
     mutate(unique_survey = paste0(partner_code, "_",
                                   survey_year, "_",
@@ -448,53 +452,7 @@ for (i in seq_along(survey_forms)) {
     df[, j] <- as.factor(df[, j])
   }
 
-  # Replace SWETHRO plots of Sweden to the partner code of Sweden ----
 
-  # (only present in Level II)
-  # There are three sources of Swedish Level II data:
-  # - managed by Swedish Forest Agency, submitted by partner Sweden
-  # - managed by Swedish Forest Agency, submitted by partner SWETHRO
-  # - managed by SLU, submitted by partner Sweden
-  # As such, there is no reason to keep them separated as different partners.
-
-  if (any(df$partner_code == "1301")) {
-
-  df <- df %>%
-    mutate(partner_code_orig = partner_code) %>%
-    mutate(partner_code =
-             ifelse(.data$partner_code == "1301",
-                    as.integer("13"),
-                    as.integer(.data$partner_code)))
-  }
-
-  # Convert partner codes of German LI to 98 if this is not the case ----
-
-  if (code_survey %in% c("s1", "y1")) {
-
-    vec_partner_codes_german_LI <-
-      c(3004, 3204, 2804, 3304, 2904, 3104, 2704, 3604, 3704, 3504,
-        9804, 3404)
-
-    assertthat::assert_that(nrow(data_availability %>%
-                                   filter(code_country == 4) %>%
-                                   filter(partner_code != 98) %>%
-                                   distinct(plot_id, .keep_all = TRUE) %>%
-                                   group_by(code_plot) %>%
-                                   summarise(count = n()) %>%
-                                   arrange(code_plot) %>%
-                                   filter(count > 1)) == 0,
-                            msg = paste0("Some plot codes occur in multiple ",
-                                         "German partners."))
-
-    df <- df %>%
-      mutate(partner_code_orig = ifelse(exists("partner_code_orig"),
-                                        partner_code_orig,
-                                        partner_code)) %>%
-      mutate(partner_code =
-               ifelse(.data$partner_code %in% vec_partner_codes_german_LI,
-                      as.integer("98"),
-                      as.integer(.data$partner_code)))
-  }
 
   # Convert the columns with dates to dates ----
   # This removes information about the time of the day in "change_date",
@@ -795,113 +753,97 @@ for (i in seq_along(survey_forms)) {
   # Add columns with unique identifiers ----
   # for plots, surveys, repetitions/profile_pit_id's, layers
 
-  vec <- c(partner_code = (which(names(df) == "partner_code")),
-           survey_year = (which(names(df) == "survey_year")),
-           code_plot = (which(names(df) == "code_plot")),
-           repetition = (which(names(df) == "repetition")),
-           code_layer = (which(names(df) == "code_layer")),
-           profile_pit_id = (which(names(df) == "profile_pit_id")),
-           horizon_master = (which(names(df) == "horizon_master")))
 
   # plot_id
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0))) {
-    df$plot_id <- paste0(df[, vec[which(names(vec) == "partner_code")]], "_",
-                            df[, vec[which(names(vec) == "code_plot")]])
+  if ("code_country" %in% names(df) &&
+      "code_plot" %in% names(df)) {
+    df <- df %>%
+      mutate(plot_id = paste0(code_country, "_",
+                              code_plot))
       }
 
   # unique_survey
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0))) {
-    df$unique_survey <- paste0(df[, vec[which(names(vec) == "partner_code")]],
-                              "_",
-                              df[, vec[which(names(vec) == "survey_year")]],
-                              "_",
-                              df[, vec[which(names(vec) == "code_plot")]])
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot))
   }
 
-  # unique_survey_repetition
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0)) &&
-      !identical(which(names(vec) == "repetition"), integer(0))) {
-    df$unique_survey_repetition <-
-                       paste0(df[, vec[which(names(vec) == "partner_code")]],
-                              "_",
-                              df[, vec[which(names(vec) == "survey_year")]],
-                              "_",
-                              df[, vec[which(names(vec) == "code_plot")]],
-                              "_",
-                              df[, vec[which(names(vec) == "repetition")]])}
+  # unique_survey_repetition = prof_id
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "repetition" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_survey_repetition = paste0(code_country, "_",
+                                               survey_year, "_",
+                                               code_plot, "_",
+                                               repetition))
+    }
 
-  # unique_survey_profile
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0)) &&
-      !identical(which(names(vec) == "profile_pit_id"), integer(0))) {
-    df$unique_survey_profile <-
-    paste0(df[, vec[which(names(vec) == "partner_code")]], "_",
-           df[, vec[which(names(vec) == "survey_year")]], "_",
-           df[, vec[which(names(vec) == "code_plot")]], "_",
-           df[, vec[which(names(vec) == "profile_pit_id")]])
+  # unique_survey_profile = prof_id
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "profile_pit_id" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_survey_profile = paste0(code_country, "_",
+                                            survey_year, "_",
+                                            code_plot, "_",
+                                            profile_pit_id))
   }
 
   # unique_survey_layer
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0)) &&
-      !identical(which(names(vec) == "code_layer"), integer(0))) {
-    df$unique_survey_layer <-
-                       paste0(df[, vec[which(names(vec) == "partner_code")]],
-                              "_",
-                              df[, vec[which(names(vec) == "survey_year")]],
-                              "_",
-                              df[,vec[which(names(vec) == "code_plot")]],
-                              "_",
-                              df[, vec[which(names(vec) == "code_layer")]])
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "code_layer" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_survey_layer = paste0(code_country, "_",
+                                          survey_year, "_",
+                                          code_plot, "_",
+                                          code_layer))
   }
 
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0)) &&
-      !identical(which(names(vec) == "horizon_master"), integer(0))) {
-    df$unique_survey_layer <-
-    paste0(df[, vec[which(names(vec) == "partner_code")]], "_",
-           df[, vec[which(names(vec) == "survey_year")]], "_",
-           df[, vec[which(names(vec) == "code_plot")]], "_",
-           df[, vec[which(names(vec) == "horizon_master")]])
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "horizon_master" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_survey_layer = paste0(code_country, "_",
+                                          survey_year, "_",
+                                          code_plot, "_",
+                                          horizon_master))
   }
 
   # unique_layer_repetition
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0)) &&
-      !identical(which(names(vec) == "code_layer"), integer(0)) &&
-      !identical(which(names(vec) == "repetition"), integer(0))) {
-    df$unique_layer_repetition <-
-                       paste0(df[, vec[which(names(vec) == "partner_code")]],
-                              "_",
-                              df[, vec[which(names(vec) == "survey_year")]],
-                              "_",
-                              df[, vec[which(names(vec) == "code_plot")]],
-                              "_",
-                              df[, vec[which(names(vec) == "code_layer")]],
-                              "_",
-                              df[, vec[which(names(vec) == "repetition")]])
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "code_layer" %in% names(df) &&
+      "repetition" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_layer_repetition = paste0(code_country, "_",
+                                              survey_year, "_",
+                                              code_plot, "_",
+                                              code_layer, "_",
+                                              repetition))
   }
 
-  if (!identical(which(names(vec) == "partner_code"), integer(0)) &&
-      !identical(which(names(vec) == "survey_year"), integer(0)) &&
-      !identical(which(names(vec) == "code_plot"), integer(0)) &&
-      !identical(which(names(vec) == "horizon_master"), integer(0)) &&
-      !identical(which(names(vec) == "profile_pit_id"), integer(0))) {
-    df$unique_layer_repetition <-
-    paste0(df[, vec[which(names(vec) == "partner_code")]], "_",
-           df[, vec[which(names(vec) == "survey_year")]], "_",
-           df[, vec[which(names(vec) == "code_plot")]], "_",
-           df[, vec[which(names(vec) == "horizon_master")]], "_",
-           df[, vec[which(names(vec) == "profile_pit_id")]])
+  if ("code_country" %in% names(df) &&
+      "survey_year" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "horizon_master" %in% names(df) &&
+      "profile_pit_id" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_layer_repetition = paste0(code_country, "_",
+                                              survey_year, "_",
+                                              code_plot, "_",
+                                              horizon_master, "_",
+                                              profile_pit_id))
   }
 
 
