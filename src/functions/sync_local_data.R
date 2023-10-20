@@ -382,7 +382,7 @@ sync_local_data <- function(list_subfolders_data = NULL,
     #   - "coordinates_sw.csv"
     #   - "data_availability_sw.csv"
 
-    if (((length(id_subfolders_data$name) >= 31) &&
+    if (((length(id_subfolders_data$name) >= 4) &&
         (folder_name %in% c("intermediate_data",
                             "layer1_data",
                             "layer2_data"))) ||
@@ -421,7 +421,8 @@ sync_local_data <- function(list_subfolders_data = NULL,
     for (i in seq_along(id_subfolders$name)) {
 
       id_subfolders$contains_data[i] <-
-        contains_data_gd(id_subfolders$id[i], folder_name)
+        contains_data_gd(id = id_subfolders$id[i],
+                         folder_name = folder_name)
     }
 
     id_subfolders <- filter(id_subfolders,
