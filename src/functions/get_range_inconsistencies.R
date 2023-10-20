@@ -63,6 +63,7 @@
 #' get_range_inconsistencies("so_som", solve = TRUE)
 
 get_range_inconsistencies <- function(survey_form,
+                                      data_frame = NULL,
                                       solve = FALSE,
                                       save_to_env = FALSE) {
 
@@ -75,7 +76,11 @@ get_range_inconsistencies <- function(survey_form,
 
   # Retrieve the survey_form data
 
-  df <- get_env(survey_form)
+  if (is.null(data_frame)) {
+    df <- get_env(survey_form)
+  } else {
+    df <- data_frame
+  }
 
   # Import the inconsistency catalogue ----
 
@@ -2340,6 +2345,8 @@ get_range_inconsistencies <- function(survey_form,
   assign_env(survey_form, df)
   assign_env(paste0("list_range_inconsistencies_", survey_form),
                 list_range_inconsistencies)
+  } else {
+    return(df)
   }
 
   # Return the duration of this function run

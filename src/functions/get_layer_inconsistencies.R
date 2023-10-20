@@ -111,6 +111,7 @@
 #'
 
 get_layer_inconsistencies <- function(survey_form,
+                                      data_frame = NULL,
                                       solve = FALSE,
                                       save_to_env = FALSE) {
 
@@ -137,8 +138,13 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
   # layer limits) and to cross-check forest floor layers in
   # all survey_forms (FSCC_48)
 
-df <- get_env(survey_form)
-pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
+  if (is.null(data_frame)) {
+    df <- get_env(survey_form)
+  } else {
+    df <- data_frame
+  }
+  
+  pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
 
   # If the input survey form is "so_som" (Level II):
   # retrieve the "som" and "pfh" data from Level I ("s1_som" and "s1_pfh")
@@ -371,6 +377,10 @@ df_ff_i <- df[vec_som[
 names(df_ff_i)[which(names(df_ff_i) == "repetition")] <-
   "repetition_profile_pit_id"
 
+df_ff_i$repetition_profile_pit_id <-
+  as.integer(df_ff_i$repetition_profile_pit_id)
+
+
 pfh_ff_i <- pfh[vec_pfh[
   which(!duplicated(pfh$unique_survey_profile[vec_pfh]))],
   which(names(pfh) %in% c("partner_code", "survey_year",
@@ -383,6 +393,10 @@ names(pfh_ff_i)[which(names(pfh_ff_i) == "profile_pit_id")] <-
 names(pfh_ff_i)[which(names(pfh_ff_i) == "unique_survey_profile")] <-
   "unique_survey_repetition"
 
+pfh_ff_i$repetition_profile_pit_id <-
+  as.integer(pfh_ff_i$repetition_profile_pit_id)
+
+
 
 som_other_ff_i <- som_other[vec_som_other[
   which(!duplicated(som_other$unique_survey_repetition[vec_som_other]))],
@@ -394,6 +408,10 @@ som_other_ff_i <- som_other[vec_som_other[
 names(som_other_ff_i)[
   which(names(som_other_ff_i) == "repetition")] <-
   "repetition_profile_pit_id"
+
+som_other_ff_i$repetition_profile_pit_id <-
+  as.integer(som_other_ff_i$repetition_profile_pit_id)
+
 
 
 pfh_other_ff_i <- pfh_other[vec_pfh_other[
@@ -410,6 +428,9 @@ names(pfh_other_ff_i)[
 names(pfh_other_ff_i)[
   which(names(pfh_other_ff_i) == "unique_survey_profile")] <-
   "unique_survey_repetition"
+
+pfh_other_ff_i$repetition_profile_pit_id <-
+  as.integer(pfh_other_ff_i$repetition_profile_pit_id)
 
 
 # Merge these four dataframes to one data_frame "list_ff_meta_i"
@@ -2194,22 +2215,31 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
               ind_superior <-
                 vec_ff[which(df$organic_layer_weight[vec_ff] ==
                                min(df$organic_layer_weight[vec_ff]))]
+              
               ind_inferior <-
                 vec_ff[which(df$organic_layer_weight[vec_ff] ==
                                max(df$organic_layer_weight[vec_ff]))]
+              
               df$code_layer[ind_superior] <- "OL"
               df$code_layer[ind_inferior] <- "OFH"
+              
               df$unique_survey_layer[vec_ff] <-
-                paste0(df$partner_code[vec_ff], "_",
+                paste0(df$code_country[vec_ff], "_",
                        df$survey_year[vec_ff], "_",
                        df$code_plot[vec_ff], "_",
                        df$code_layer[vec_ff])
+              
               df$unique_layer_repetition[vec_ff] <-
-                paste0(df$partner_code[vec_ff], "_",
+                paste0(df$code_country[vec_ff], "_",
                        df$survey_year[vec_ff], "_",
                        df$code_plot[vec_ff], "_",
                        df$code_layer[vec_ff], "_",
                        df$repetition[vec_ff])
+              
+              df$unique_layer[vec_ff] <-
+                paste0(df$code_country[vec_ff], "_",
+                       df$code_plot[vec_ff], "_",
+                       df$code_layer[vec_ff])
             }
           }
 
@@ -2693,6 +2723,8 @@ assign_env(survey_form, df)
 
 assign_env(paste0("list_layer_inconsistencies_", survey_form),
            list_layer_inconsistencies)
+} else {
+  return(df)
 }
 
 } # end of "som" part
@@ -3869,6 +3901,9 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
     assign_env(paste0("list_layer_inconsistencies_", survey_form),
                list_layer_inconsistencies)
+    
+    } else {
+      return(df)
     }
 
     if (!isTRUE(getOption("knitr.in.progress"))) {
