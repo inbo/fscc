@@ -35,6 +35,7 @@ Please add any observed data issues to this file
     -   s1_prf: create machine-learning model to predict WRB soil classes in plots where this information is lacking?
 -   Check Russian plots in “so” survey: some of them actually belong to “s1”. Move accordingly.
 -   ~~Germany: harmonisation partner code across different survey forms?~~ (Note: completed in scripts after automatically asserting that plot codes are unique across Germany - all German partner codes are now 98)
+-   Replace impossible data (e.g. bulk density above 2650 kg m-3) by NA
 -   LOQ: harmonise and list assumptions
 -   (Ring tests: no need to exclude any data on the basis of bad ring tests at this stage)
 -   Gap-filling forest types and WRB LI and humus + confirmation by national experts
