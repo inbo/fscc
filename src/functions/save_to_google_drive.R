@@ -176,7 +176,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
 # List the existing Google Drive paths
 
-  gd_subfolders <- drive_ls(root_drive_id, type = "folder")
+  gd_subfolders <- drive_ls(root_drive, type = "folder")
 
   gd_data <-
     drive_ls(gd_subfolders$id[which(gd_subfolders$name == "data")],

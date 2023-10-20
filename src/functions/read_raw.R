@@ -846,6 +846,26 @@ for (i in seq_along(survey_forms)) {
                                               profile_pit_id))
   }
 
+  # unique_layer
+  if ("code_country" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "code_layer" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_layer = paste0(code_country, "_",
+                                          code_plot, "_",
+                                          code_layer))
+  }
+  
+  if ("code_country" %in% names(df) &&
+      "code_plot" %in% names(df) &&
+      "horizon_master" %in% names(df)) {
+    df <- df %>%
+      mutate(unique_layer = paste0(code_country, "_",
+                                          code_plot, "_",
+                                          horizon_master))
+  }
+  
+  
 
   # Save the survey forms to the global environment if permitted ----
 
