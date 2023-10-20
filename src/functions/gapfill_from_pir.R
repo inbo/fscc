@@ -149,6 +149,10 @@ gapfill_from_pir <- function(survey_form = NA,
       mutate(parameter_value = ifelse(parameter_value == "",
                                       NA,
                                       parameter_value))
+    
+    assign_env("pir_orig",
+               pir_orig)
+    
   }
   
   
@@ -209,6 +213,9 @@ gapfill_from_pir <- function(survey_form = NA,
     gsub("^5.*", "5", pir_checked$code_nfc_action_taken)
   pir_checked$code_nfc_action_taken <-
     as.integer(pir_checked$code_nfc_action_taken)
+  
+  assign_env("pir_checked",
+             pir_checked)
   }
   
   
@@ -372,6 +379,68 @@ gapfill_from_pir <- function(survey_form = NA,
   
   # Replace values if not up to date ----
   
+  # Columns that should be converted to numeric class:
+  
+  numeric_columns <- c(
+    "layer_limit_superior",
+    "layer_limit_inferior",
+    "moisture_content",
+    "part_size_clay",
+    "part_size_silt",
+    "part_size_sand",
+    "bulk_density",
+    "coarse_fragment_vol",
+    "organic_layer_weight",
+    "ph_cacl2",
+    "ph_h2o",
+    "organic_carbon_total",
+    "n_total",
+    "carbonates",
+    "exch_acidiy",
+    "exch_ca",
+    "exch_fe",
+    "exch_mg",
+    "exch_mn",
+    "exch_na",
+    "free_h",
+    "extrac_al",
+    "extrac_ca",
+    "extrac_cd",
+    "extrac_cr",
+    "extrac_cu",
+    "extrac_fe",
+    "extrac_hg",
+    "extrac_k",
+    "extrac_mg",
+    "extrac_mn",
+    "extrac_na",
+    "extrac_ni",
+    "extrac_p",
+    "extrac_pb",
+    "extrac_s",
+    "extrac_zn",
+    "tot_ca",
+    "base_saturation",
+    "p_ox",
+    "horizon_limit_up",
+    "horizon_limit_low",
+    "horizon_silt",
+    "horizon_sand",
+    "horizon_clay",
+    "horizon_coarse_weight",
+    "horizon_c_organic_total",
+    "horizon_caco3_total",
+    "horizon_n_total",
+    "horizon_ph",
+    "horizon_elec_cond",
+    "horizon_exch_ca",
+    "horizon_exch_mg",
+    "horizon_exch_k",
+    "horizon_exch_na",
+    "horizon_cec",
+    "horizon_bulk_dens_measure")
+  
+  
   for (i in seq_len(nrow(pir_checked_survey_form))) {
 
     col_ind <- which(colnames(df) == pir_checked_survey_form$parameter[i])
@@ -432,7 +501,12 @@ gapfill_from_pir <- function(survey_form = NA,
       if (!is_the_same(df[row_ind, col_ind],
                        pir_checked_survey_form$updated_value[i])) {
 
+        if (pir_checked_survey_form$parameter[i] %in% numeric_columns) {
+          df[row_ind, col_ind] <-
+            as.numeric(pir_checked_survey_form$updated_value[i])
+        } else {
         df[row_ind, col_ind] <- pir_checked_survey_form$updated_value[i]
+        }
 
         pir_checked_survey_form$fscc_action[i] <- "updated"
       }
