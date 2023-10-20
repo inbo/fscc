@@ -6,19 +6,19 @@ Please add any observed data issues to this file
 
 -   Gap-filling:
     -   Folder with direct partner communication (AFSCDB.LII.2.1 subfolder) - at least Austria, Spain, bulk density and coarse fragments from Sweden…
-    -   Folder AFSCDB.LII.2.2
+    -   ~~Folder AFSCDB.LII.2.2~~
     -   Folder BIOSOIL.LII - at least ~~Spain,~~ Finland… (Note: missing Spanish data now in layer 0)
     -   Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?
     -   ~~PIRs! (note separate e-mail Sture Wijk; Czech pH-H2O in “pfh”) + add column with validation code different parameters?~~
     -   Delete impossible values or codes in data? (e.g. forest type 32)
-    -   Add column with data source for different variables
-    -   Harmonise layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths using C content and bulk density where needed, e.g. Estonia
-    -   Check whether harmonisation of layer limits is needed, i.e. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line)
+    -   Add column with data source for different variables (Note: partly completed)
+    -   Harmonise layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths using C content and bulk density where needed, e.g. Estonia. 
+    -   Check whether harmonisation of layer limits is needed, i.e. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Move layer limits of profiles with at least one mineral or peat layer with negative layer limits.
     -   Note that some of the fixed-depth profiles do contain gaps, i.e. impossible to harmonise (except through mass-preserving splines?)
-    -   "som" survey forms gap-filling for C stocks:
-        -   bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density"); pedotransfer functions/machine learning
-        -   organic_carbon_total: from "pfh" ("horizon_c_organic_total")
-        -   coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol"); machine learning?
+    -   ~~"som" survey forms gap-filling for C stocks:~~
+        -   ~~bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density");~~ pedotransfer functions/machine learning
+        -   ~~organic_carbon_total: from "pfh" ("horizon_c_organic_total")~~
+        -   ~~coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol");~~ machine learning?
         -   effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm?
         -   profiles with data until 20 cm or 40 cm: monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
 -   Check “other_obs” columns properly
@@ -27,9 +27,9 @@ Please add any observed data issues to this file
 -   Correct coordinate sign mistakes (e.g. in Spain, where the minus sign was clearly sometimes forgotten, since it was there for other records of the same plot)
 -   Harmonise “horizon_coarse_weight” if volumetric instead of wt% (e.g. Slovak Republic)
 -   Harmonise soil textures where needed (e.g. Wallonia) to 63 µm limit using R soil texture wizard
--   “so_prf” (+ when possible: “s1_prf”): Left-join dataframe with harmonised WRB soil classification information by Nathalie --> one record per profile
-    -   Include column with harmonisation method
-    -   Include column with qualitative eutric/dystric factor
+-   ~~“so_prf” (+ when possible: “s1_prf”): Left-join dataframe with harmonised WRB soil classification information by Nathalie --> one record per profile~~
+    -   ~~Include column with harmonisation method~~
+    -   ~~Include column with qualitative eutric/dystric factor~~
     -   Recode humus type (e.g. amphihumus) in accordance with survey year
     -   After joining: identify missing plots without soil classification (due to gap-filling) - also check in other survey forms.
     -   s1_prf: create machine-learning model to predict WRB soil classes in plots where this information is lacking?
