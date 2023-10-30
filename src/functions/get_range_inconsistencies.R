@@ -59,7 +59,7 @@
 #'  WARNING - This function may not be optimally efficient and may ideally
 #'  require refactoring for better performance.
 #'
-#'  test
+#' addendum Bruno
 #'
 #' @examples
 #' get_range_inconsistencies("so_som", solve = TRUE)
