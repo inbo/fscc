@@ -59,8 +59,6 @@
 #'  WARNING - This function may not be optimally efficient and may ideally
 #'  require refactoring for better performance.
 #'
-#' addendum Bruno
-#'
 #' @examples
 #' get_range_inconsistencies("so_som", solve = TRUE)
 
@@ -84,7 +82,9 @@ get_range_inconsistencies <- function(survey_form,
     df <- data_frame
   }
 
-  # Import the inconsistency catalogue ----
+  # Import required dataframes ----
+  
+  # Import the inconsistency catalogue
 
   assertthat::assert_that(
     file.exists("./data/additional_data/inconsistency_catalogue.csv"),
@@ -107,19 +107,17 @@ get_range_inconsistencies <- function(survey_form,
   # often not be higher than 100 %; bulk densities can't be higher than
   # 2650 kg m-3 (mineral density of quartz)...
 
-  ranges_qaqc <- read.csv("./data/additional_data/ranges_qaqc.csv",
-                          sep = ";", dec = ",",
-                          colClasses = c(NA, NA, NA, rep("numeric", 6)))
+  ranges_qaqc <- read.csv2("./data/additional_data/ranges_qaqc.csv")
 
-  # 1. Identify the parameters which will be evaluated in this function
-  #    (depending on the survey form)
+  # Identify the parameters to be evaluated ----
+  # (depending on the survey form)
 
-  # 1.1 Mandatory parameters
+  ## 1. Mandatory parameters ----
 
   if (unlist(strsplit(survey_form, "_"))[2] %in% c("som", "prf", "pfh")) {
 
-    # Retrieve a dataframe with information about which soil parameters have been
-    # mandatory in ICP Forests + since when + for which layers
+    # Retrieve a dataframe with information about which soil parameters have
+    # been mandatory in ICP Forests + since when + for which layers
 
     parameters_mandatory <-
       read.csv("./data/additional_data/parameters_mandatory.csv",
@@ -138,7 +136,7 @@ get_range_inconsistencies <- function(survey_form,
     }
 
 
-  # 1.2 Wrong units
+  ## 2. Wrong units ----
 
   if (unlist(strsplit(survey_form, "_"))[2] %in% c("som", "pfh", "swc")) {
 
@@ -151,14 +149,16 @@ get_range_inconsistencies <- function(survey_form,
                                      "horizon_c_organic_total",
                                      "horizon_n_total",
                                      "horizon_gypsum",
-                                     "horizon_caco3_total"))]
+                                     "horizon_caco3_total",
+                                     "organic_layer_weight"))]
+  
   length_parameters_wrong_units <- length(parameters_wrong_units)
   } else {
     length_parameters_wrong_units <- 0
   }
 
 
-  # 1.3 Plausible or possible ranges
+  ## 3. Plausible or possible ranges ----
 
   if (unlist(strsplit(survey_form, "_"))[2] %in% c("som", "pfh", "swc")) {
 
@@ -179,12 +179,13 @@ get_range_inconsistencies <- function(survey_form,
 
   parameters <- names(df)[names(df) %in% ranges_qaqc$parameter]
   length_parameters_range <- length(parameters)
+  
   } else {
     length_parameters_range <- 0
   }
 
 
-  # 1.4 Possible codes
+  ## 4. Possible codes ----
 
   if (unlist(strsplit(survey_form, "_"))[2] %in% c("som", "pfh",
                                                    "prf", "pls")) {
@@ -195,26 +196,19 @@ get_range_inconsistencies <- function(survey_form,
   subdir <- paste0("./data/raw_data/", unlist(strsplit(survey_form, "_"))[1])
 
   d_texture_class <-
-    read.csv(paste0(subdir, "/adds/dictionaries/d_texture_class.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_texture_class.csv"))
   d_soil_group <-
-    read.csv(paste0(subdir, "/adds/dictionaries/d_soil_group.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_soil_group.csv"))
   d_soil_adjective <-
-    read.csv(paste0(subdir,"/adds/dictionaries/d_soil_adjective.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir,"/adds/dictionaries/d_soil_adjective.csv"))
   d_soil_specifier <-
-    read.csv(paste0(subdir, "/adds/dictionaries/d_soil_specifier.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_soil_specifier.csv"))
   d_wrb_pub <-
-    read.csv(paste0(subdir, "/adds/dictionaries/d_wrb_pub.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_wrb_pub.csv"))
   d_parent_material <-
-    read.csv(paste0(subdir, "/adds/dictionaries/d_parent_material.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_parent_material.csv"))
   d_hori_disc <-
-    read.csv(paste0(subdir, "/adds/dictionaries/d_hori_disc.csv"),
-             sep = ";")
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_hori_disc.csv"))
 
   list_codes <- list("code_horizon_discont" = d_hori_disc$code,
                      "code_horizon_destinct" = (1:6),
@@ -272,8 +266,8 @@ get_range_inconsistencies <- function(survey_form,
   }
 
 
-  # The intention is to create a list_range_inconsistencies of the following format
-  # to store inconsistencies found in the survey_form data:
+  # The intention is to create a list_range_inconsistencies of the following
+  # format to store inconsistencies found in the survey_form data:
 
   list_range_inconsistencies <-
     data.frame(survey_form = NULL,
@@ -301,7 +295,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # 2. FSCC_15: Check whether mandatory data are reported
+  # FSCC_15: Are mandatory data reported ----
 
   # Check if this has to be tested for the given survey_form
 
@@ -311,8 +305,8 @@ get_range_inconsistencies <- function(survey_form,
 
   if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-    # Create a dataframe "parameter_layers" which shows for which layers and depths
-    # the indicated layers in "parameter_mandatory_df" are exactly valid
+    # Create a dataframe "parameter_layers" which shows for which layers and
+    # depths the indicated layers in "parameter_mandatory_df" are exactly valid
 
     parameters_layers <- rbind(data.frame(layer_name_table = "LI_OF_OH_H",
                                           code_layer = "OF",
@@ -457,7 +451,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
  # For the survey forms:
- # "som"
+ ## som ----
 
     if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
@@ -697,7 +691,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
  # For the survey forms:
- # "prf"
+ ## prf ----
 
     if (unlist(strsplit(survey_form, "_"))[2] == "prf") {
 
@@ -725,7 +719,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
  # For the survey forms:
- # "pfh"
+ ## pfh ----
 
     if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
 
@@ -840,7 +834,10 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_42: some parameters in "prf" are highly informative, even though they have
+  # FSCC_42: Are informative but non-mandatory data reported ----
+  
+  # Some parameters in "prf" are highly informative
+  # even though they have
   # not always been mandatory to report
 
   # Check if this has to be tested for the given survey_form
@@ -951,7 +948,9 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_50: ask NFCs who reported soil classification according to FAO88
+  # FSCC_50: Can soil classifications in FAO88 be converted to WRB ----
+
+  # Ask NFCs who reported soil classification according to FAO88
   # to resubmit this information according to WRB 2006 or 2007
 
   # Check if this has to be tested for the given survey_form
@@ -1071,7 +1070,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC 49: Ask to report the European forest type if missing
+  # FSCC_49: Can the European forest type be reported if missing ----
 
   # Check if this has to be tested for the given survey_form
 
@@ -1197,7 +1196,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # 3. FSCC_22: Check whether data have been reported in the correct units
+  # FSCC_22: Have data have been reported in the correct units ----
 
   # Check if this has to be tested for the given survey_form
 
@@ -1210,7 +1209,7 @@ get_range_inconsistencies <- function(survey_form,
   # in the same units. So if a mistake in units has been made, it should be
   # the case for all data of the given "unique_partner_survey"
 
-  df$unique_partner_survey <- paste0(df$partner_code, "_", df$survey_year)
+  df$unique_partner_survey <- paste0(df$code_country, "_", df$survey_year)
 
   # For parameter for which units can be potentially wrong:
 
@@ -1266,7 +1265,19 @@ get_range_inconsistencies <- function(survey_form,
       df$caco3_wrong_unit <- NA
       wrong_range_org <- c(0, 36)
       wrong_range_mineral <- c(0, 66) # %
-  }
+      } else
+      
+    if (parameters_wrong_units[i] == "organic_layer_weight") {
+        df$organic_layer_weight_wrong_unit <- NA
+        # Filter so_som for organic_layer_weight < 100: 0.16 - 15.976
+        # Take 0.025 - 0.975 quantile
+        # Multiply with 500 (a factor 100 seems too low; a factor 1000 too high)
+        # (Not sure whether wrongly reported in:
+        #  - tonnes ha-1 --> factor 100
+        #  - g m-3 --> factor 1000)
+        wrong_range_org <- c(80, 7988)
+        wrong_range_mineral <- c(NA, NA) # Assumption: g m-3
+      }
 
     # For each "unique_partner_survey":
 
@@ -1308,13 +1319,20 @@ get_range_inconsistencies <- function(survey_form,
         # this is only tested for "unique_partner_surveys" with at least two
         # observations)
 
-        if ((length(which((vec_layer_type != "mineral" &
+        if (((parameters_wrong_units[i] != "organic_layer_weight" &&
+              (length(which((vec_layer_type != "mineral" &
                    vec_data > wrong_range_org[1] &
                    vec_data < wrong_range_org[2]) |
                   (vec_layer_type == "mineral" &
                      vec_data > wrong_range_mineral[1] &
                      vec_data < wrong_range_mineral[2]))) >=
-             0.9 * length(vec_data)) &&
+             0.9 * length(vec_data))) ||
+             # For organic_layer_weight: only look at organic matrices
+             (parameters_wrong_units[i] == "organic_layer_weight" &&
+              (length(which((vec_layer_type != "mineral" &
+                             vec_data > wrong_range_org[1] &
+                             vec_data < wrong_range_org[2]))) >=
+               0.9 * length(vec_data)))) &&
             length(vec_data) >= 2) {
 
           # Store the information whether a given observation was reported in
@@ -1347,7 +1365,11 @@ get_range_inconsistencies <- function(survey_form,
 
           if (parameters_wrong_units[i] == "horizon_gypsum") {
             df$gypsum_wrong_unit[vec_nonempty] <- TRUE
-            }
+            } else
+          
+          if (parameters_wrong_units[i] == "organic_layer_weight") {
+            df$organic_layer_weight_wrong_unit[vec_nonempty] <- TRUE
+          }
 
           # Store information about the inconsistency in
           # "list_range_inconsistencies"
@@ -1395,6 +1417,15 @@ get_range_inconsistencies <- function(survey_form,
           ind_parameter_units <- as.factor(rep("g kg-1", length(vec_nonempty)))
           inconsistency_reason <- paste0(inconsistency_reason,
                   " (i.e. reported in % instead of g kg-1).")
+          } else
+
+          if (parameters_wrong_units[i] %in% c("organic_layer_weight")) {
+
+            ind_parameter_units <- as.factor(rep("kg m-2",
+                                                 length(vec_nonempty)))
+            inconsistency_reason <- paste0(inconsistency_reason,
+                                           " (i.e. probably reported in g m-2 ",
+                                           "instead of kg m-2).")
           }
 
           inconsistency_type <-
@@ -1451,6 +1482,12 @@ get_range_inconsistencies <- function(survey_form,
                                                  "horizon_gypsum")) {
               df[vec_nonempty, col_ind] <- 10 * df[vec_nonempty, col_ind]
             }
+            
+            # probably reported in g m-2 instead of kg m-2
+            if (parameters_wrong_units[i] %in% c("organic_layer_weight")) {
+              df[vec_nonempty, col_ind] <- 0.001 * df[vec_nonempty, col_ind]
+            }
+            
             }
 
         }
@@ -1475,8 +1512,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # 4. FSCC 38 and FSCC 14: Check whether values are in possible or plausible 
-  # range
+  # FSCC_38: Are values within a possible range ----
 
   # Check if this has to be tested for the given survey_form
 
@@ -1695,6 +1731,33 @@ get_range_inconsistencies <- function(survey_form,
       if (!is.na(range_min_possible) && !is.na(range_max_possible) &&
           !is.na(df$active_column[j])) {
 
+        # Update range_max_possible
+        # In case the parameter is organic_layer_weight and
+        # the thickness of the given layer is known:
+        # We can derive the maximum possible value, assuming that the
+        # density of organic matter is 1400 kg m-3 (see below)
+        
+        # Source:
+        # "Particle densities generally fall between 2.60 and 2.75 g/cm3 for
+        # mineral particles. Organic matter weighs much less than an equal
+        # volume of mineral solids and often has a particle density of 1.2
+        # to 1.4 g/cm3."
+        
+        # Reference:
+        # Haan, C.T., Barfield, B.J., Hayes, J.C. (1994).
+        # Design Hydrology and Sedimentology for Small Catchments.
+        
+        if (!is.na(df$layer_limit_inferior[j]) &&
+            !is.na(df$layer_limit_superior)) {
+          
+          layer_thickness_j_meter <-
+            0.01 * abs(diff(c(df$layer_limit_inferior[j],
+                              df$layer_limit_superior[j])))
+          
+          range_max_possible <- 1400 * layer_thickness_j_meter
+          
+        }
+        
         # Ignore the parameter value if a value of -1 was reported, because this
         # indicates that the measurement was below a limit of quantification.
 
@@ -1764,9 +1827,22 @@ get_range_inconsistencies <- function(survey_form,
                        change_date = df$change_date[j],
                        download_date = rep(download_date_pir, length(j))))
 
+          
+          # Replace by NA
+          
+          if (solve == TRUE) {
+            
+            df$active_column[j] <- NA
+            
+          }
+          
+          
         }
         }
 
+      
+  # FSCC_14: Are values within a plausible range ----
+  #          (See partly code above)
 
      # Error: outside plausible range
 
@@ -1811,6 +1887,9 @@ get_range_inconsistencies <- function(survey_form,
          } else
        if (column_name == "horizon_gypsum") {
          j_wrong_units <- df$gypsum_wrong_unit[j]
+         } else
+         if (column_name == "organic_layer_weight") {
+           j_wrong_units <- df$organic_layer_weight_wrong_unit[j]
          }
 
        # Only if the parameter value was probably reported in the correct units:
@@ -1882,9 +1961,7 @@ get_range_inconsistencies <- function(survey_form,
     }
 
 
-
-      # FSCC_12: for pfh$horizon_ph: if there are pH values without specification
-      # of the extraction method: caution
+  # FSCC_12: Is pH extraction method reported in pfh (other_obs) ----
 
       # If the given column is "horizon_ph", and if a value has been reported
       # while no extraction method has been specified in the "other_obs" column:
@@ -1955,7 +2032,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # 5. FSCC_41: Possible codes
+  # FSCC_41: Are the reported codes possible ----
 
   # Check if this has to be tested for the given survey_form
 
@@ -2074,7 +2151,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_46: one of the three texture classes (clay/silt/sand) is missing
+  # FSCC_46: One of the three texture classes (clay/silt/sand) is missing ----
   # while the others are not.
 
   # Check if this has to be tested for the given survey_form
@@ -2213,7 +2290,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_43: is horizon_coarse_weight a weight percentage?
+  # FSCC_43: Is horizon_coarse_weight a weight percentage ----
 
   # For survey form "pfh"
 
@@ -2299,6 +2376,8 @@ get_range_inconsistencies <- function(survey_form,
     }
     }
 
+  # Final processing and saving of dataframe ----
+  
   # Remove the columns that are no longer needed in the data frame
 
   if (any(names(df) %in% c("unique_partner_survey",
