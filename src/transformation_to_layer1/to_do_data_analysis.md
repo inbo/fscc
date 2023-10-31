@@ -6,26 +6,25 @@ Please add any observed data issues to this file
 
 -   Gap-filling:
     -   Folder with direct partner communication (AFSCDB.LII.2.1 subfolder) - at least Austria, Spain, bulk density and coarse fragments from Sweden…
-    -   ~~Folder AFSCDB.LII.2.2~~
+    -   Folder AFSCDB.LII.2.2: also check whether there are any plot surveys that do not appear in so_som at all
     -   Folder BIOSOIL.LII - at least ~~Spain,~~ Finland… (Note: missing Spanish data now in layer 0)
     -   Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?
     -   ~~PIRs! (note separate e-mail Sture Wijk; Czech pH-H2O in “pfh”) + add column with validation code different parameters?~~
     -   Delete impossible values or codes in data? (e.g. forest type 32)
     -   Add column with data source for different variables (Note: partly completed)
-    -   Harmonise layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths using C content and bulk density where needed, e.g. Estonia. 
-    -   Check whether harmonisation of layer limits is needed, i.e. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Move layer limits of profiles with at least one mineral or peat layer with negative layer limits.
-    -   Note that some of the fixed-depth profiles do contain gaps, i.e. impossible to harmonise (except through mass-preserving splines?)
     -   ~~"som" survey forms gap-filling for C stocks:~~
         -   ~~bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density");~~ pedotransfer functions/machine learning
         -   ~~organic_carbon_total: from "pfh" ("horizon_c_organic_total")~~
         -   ~~coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol");~~ machine learning?
         -   effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm?
         -   profiles with data until 20 cm or 40 cm: monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
+- Check whether harmonisation of layer limits is needed, i.e. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Move layer limits of profiles with at least one mineral or peat layer with negative layer limits.
+- Harmonise layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths using C content and bulk density where needed, e.g. Estonia. Note that some of the fixed-depth profiles do contain gaps, i.e. impossible to harmonise (except through mass-preserving splines?)
 -   Check “other_obs” columns properly
 -   ~~Harmonise plot_id’s and coordinates (e.g. Poland, UK)~~ (Note: completed)
 -   Was there a systematic coordinate issue in the Pyrennees in Spain?
 -   Correct coordinate sign mistakes (e.g. in Spain, where the minus sign was clearly sometimes forgotten, since it was there for other records of the same plot)
--   Harmonise “horizon_coarse_weight” if volumetric instead of wt% (e.g. Slovak Republic)
+-   Harmonise “horizon_coarse_weight” if volumetric instead of wt% (e.g. Slovak Republic), as indicated by partners in PIRs.
 -   Harmonise soil textures where needed (e.g. Wallonia) to 63 µm limit using R soil texture wizard
 -   ~~“so_prf” (+ when possible: “s1_prf”): Left-join dataframe with harmonised WRB soil classification information by Nathalie --> one record per profile~~
     -   ~~Include column with harmonisation method~~
@@ -35,8 +34,15 @@ Please add any observed data issues to this file
     -   s1_prf: create machine-learning model to predict WRB soil classes in plots where this information is lacking?
 -   Check Russian plots in “so” survey: some of them actually belong to “s1”. Move accordingly.
 -   ~~Germany: harmonisation partner code across different survey forms?~~ (Note: completed in scripts after automatically asserting that plot codes are unique across Germany - all German partner codes are now 98)
--   Replace impossible data (e.g. bulk density above 2650 kg m-3) by NA
--   LOQ: harmonise and list assumptions
+-   ~~Replace impossible data (e.g. bulk density above 2650 kg m-3) by NA~~
+-   ~~Regarding implausible values of "organic_layer_weight":~~
+    -   ~~Are Slovakian organic_layer_weight values for code_plot 211 and 212 reported in the wrong units?~~
+        -  ~~Other Slovakian plots: organic layer weights give a bulk density of 13.74 - 170 kg m-3 (95 % quantile)~~
+        -  ~~Plot 211: organic layer weights give a bulk density of 7056.38 - 47071.00 kg m-3 (95 % quantile), i.e. a factor 280 higher~~
+        -  ~~Plot 212: organic layer weights give a bulk density of 19212.08 - 88668.75 kg m-3 (95 % quantile), i.e. a factor 455 higher~~
+        -  ~~Conclusion there are two options: (i) either the data are wrongly reported in tonnes per ha (factor 100 higher); of (ii) the data are wrongly reported in g per m2 (factor 1000 higher). Assumption: they were reported in g per m2.~~
+    -   ~~Values of organic_layer_weight for which the derived bulk density is higher than 1400 kg m-3 (density of organic matter) are impossible and replaced by NA.~~
+-   ~~LOQ: harmonise and list assumptions~~
 -   (Ring tests: no need to exclude any data on the basis of bad ring tests at this stage)
 -   Gap-filling forest types and WRB LI and humus + confirmation by national experts
 -   Remove incomplete unique profiles (e.g. profiles with only one forest floor layer)? Or do we keep it for plot-level integration (at least in “som” forms, i.e. with fixed depths)?
