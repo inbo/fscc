@@ -66,7 +66,7 @@ get_primary_inconsistencies <- function(code_survey,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
-  # Import the inconsistency catalogue ----
+# Import the inconsistency catalogue ----
 
   assertthat::assert_that(
     file.exists("./data/additional_data/inconsistency_catalogue.csv"),
@@ -76,6 +76,8 @@ get_primary_inconsistencies <- function(code_survey,
   inconsistency_catalogue <-
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
+# Identify the survey (form)s to be evaluated ----
+  
   # Create a list with names of the different survey forms per survey
 
   list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
@@ -138,7 +140,7 @@ get_primary_inconsistencies <- function(code_survey,
                  download_date = NULL)
 
 
-  # Evaluate inconsistencies per survey form for the given code_survey
+# Evaluate inconsistencies per survey form for the given code_survey ----
   # (i.e. for one survey form if the name of a survey form is given as input)
 
   for (i in seq_along(list_data_tables[[which(names(list_data_tables) ==
@@ -153,7 +155,7 @@ get_primary_inconsistencies <- function(code_survey,
     df <- get_env(survey_form)
 
 
-    # FSCC_47: Check for "som" data forms whether code_layer is unique
+# FSCC_47: Check for "som" data forms whether code_layer is unique ----
     # within a given profile
     # This is possibly not the case for some records:
 
@@ -208,12 +210,14 @@ get_primary_inconsistencies <- function(code_survey,
       # If there are different values in layer_limit_superior or
       # layer_limit_inferior, or if they are all NA
 
-      if ((length(unique(df$layer_limit_superior[j_dupl])) == length(j_dupl)) ||
-          (length(unique(df$layer_limit_inferior[j_dupl])) == length(j_dupl)) ||
+      if (((length(unique(df$layer_limit_superior[j_dupl])) ==
+            length(j_dupl)) ||
+          (length(unique(df$layer_limit_inferior[j_dupl])) ==
+           length(j_dupl)) ||
           (all(is.na(df$layer_limit_superior[j_dupl])) &&
            all(is.na(df$layer_limit_inferior[j_dupl])) &&
            (!"origin" %in% names(df) ||
-            (length(unique(df$origin[j_dupl])) == 1)))) {
+            (length(unique(df$origin[j_dupl])) == 1))))) {
 
         # Then it makes sense to rename "code_layer" in the working data
         # (internally within FSCC) to ensure its uniqueness if "solve" == TRUE
@@ -232,9 +236,12 @@ get_primary_inconsistencies <- function(code_survey,
                                     df$code_layer_original[j_dupl])))
 
           # If the layer limits are known:
+          # (only if not forest floor)
 
-          if (all(!is.na(df$layer_limit_superior[j_dupl])) &&
-              all(!is.na(df$layer_limit_inferior[j_dupl]))) {
+          if ((all(!is.na(df$layer_limit_superior[j_dupl])) &&
+               all(!is.na(df$layer_limit_inferior[j_dupl]))) &&
+              (!identical(unique(as.character(df$layer_type[j_dupl])),
+                          "forest_floor"))) {
 
           df$code_layer[j_dupl] <-
             paste0(initial_letters,
@@ -242,7 +249,7 @@ get_primary_inconsistencies <- function(code_survey,
               abs(df$layer_limit_inferior[j_dupl]))
           } else {
 
-          # If the layer limits are not known:
+          # If the layer limits are not known or if it concerns forest floor:
 
           df$code_layer[j_dupl] <-
             paste0(initial_letters,
@@ -263,6 +270,10 @@ get_primary_inconsistencies <- function(code_survey,
                    df[j_dupl, which(names(df) == "code_plot")], "_",
                    df[j_dupl, which(names(df) == "code_layer")], "_",
                    df[j_dupl, which(names(df) == "repetition")])
+          df$unique_layer[j_dupl] <-
+            paste0(df[j_dupl, which(names(df) == "code_country")], "_",
+                   df[j_dupl, which(names(df) == "code_plot")], "_",
+                   df[j_dupl, which(names(df) == "code_layer")])
           }
 
 
@@ -312,6 +323,49 @@ get_primary_inconsistencies <- function(code_survey,
 
       if (!isTRUE(getOption("knitr.in.progress"))) {
       setTxtProgressBar(progress_bar, j)
+      }
+    }
+    
+    
+    
+    # If there are two OL layers in Slovakia: plot_id 54_208 (repetition 1)
+    # And the same unique plot survey contains repetitions with only one OL
+    # layer:
+    # Rename the "common" OL layer of this unique plot survey (i.e. the layer
+    # with layer_limit_inferior -1) to "OL"
+    
+    vec <- which(df$unique_survey_repetition == "54_2007_208_1" &
+                   df$layer_type == "forest_floor" &
+                   df$layer_limit_inferior == -1 &
+                   df$code_layer == "OL2")
+    
+    vec_other <- which(df$unique_survey == "54_2007_208" &
+                         df$unique_survey_repetition != "54_2007_208_1" &
+                         df$layer_type == "forest_floor" &
+                         df$code_layer == "OL" &
+                         df$layer_limit_inferior == -1)
+    
+    if (!identical(vec, integer(0)) &&
+        !identical(vec_other, integer(0))) {
+      
+      if (solve == TRUE) {
+        
+        df$code_layer[vec] <- "OL"
+        df$unique_survey_layer[vec] <-
+          paste0(df[vec, which(names(df) == "code_country")], "_",
+                 df[vec, which(names(df) == "survey_year")], "_",
+                 df[vec, which(names(df) == "code_plot")], "_",
+                 df[vec, which(names(df) == "code_layer")])
+        df$unique_layer_repetition[vec] <-
+          paste0(df[vec, which(names(df) == "code_country")], "_",
+                 df[vec, which(names(df) == "survey_year")], "_",
+                 df[vec, which(names(df) == "code_plot")], "_",
+                 df[vec, which(names(df) == "code_layer")], "_",
+                 df[vec, which(names(df) == "repetition")])
+        df$unique_layer[vec] <-
+          paste0(df[vec, which(names(df) == "code_country")], "_",
+                 df[vec, which(names(df) == "code_plot")], "_",
+                 df[vec, which(names(df) == "code_layer")])
       }
     }
 
