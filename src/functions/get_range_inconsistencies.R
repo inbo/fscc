@@ -209,19 +209,42 @@ get_range_inconsistencies <- function(survey_form,
     read.csv2(paste0(subdir, "/adds/dictionaries/d_parent_material.csv"))
   d_hori_disc <-
     read.csv2(paste0(subdir, "/adds/dictionaries/d_hori_disc.csv"))
+  d_hori_distinct <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_hori_distinct.csv"))
+  d_hori_topography <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_hori_topography.csv"))
+  d_soil_structure <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_soil_structure.csv"))
+  d_soil_coarse_fragments <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_soil_coarse_fragments.csv"))
+  d_soil_code_porosity <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_soil_code_porosity.csv"))
+  d_root_abundance <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_root_abundance.csv"))
+  d_altitude <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_altitude.csv"))
+  d_ground_water_table <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_ground_water_table.csv"))
+  d_water_table_type <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_water_table_type.csv"))
+  d_water <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_water.csv"))
+  d_humus <-
+    read.csv2(paste0(subdir, "/adds/dictionaries/d_humus.csv"))
+
 
   list_codes <- list("code_horizon_discont" = d_hori_disc$code,
-                     "code_horizon_destinct" = (1:6),
-                     "code_horizon_topo" = (1:5),
-                     "code_soil_structure" = (1:10),
+                     "code_horizon_destinct" = d_hori_distinct$code,
+                     "code_horizon_topo" = d_hori_topography$code,
+                     "code_soil_structure" = d_soil_structure$code,
                      "code_horizon_texture_class" = d_texture_class$code,
-                     "code_horizon_coarse_vol" = c(1, 2, 3, 4, 5, 9),
-                     "code_horizon_porosity" = (1:5),
-                     "code_roots_very_fine" = c(1, 2, 3, 4, 9),
-                     "code_roots_fine" = c(1, 2, 3, 4, 9),
-                     "code_roots_medium" = c(1, 2, 3, 4, 9),
-                     "code_roots_coarse" = c(1, 2, 3, 4, 9),
-                     "code_altitude" = (1:51),
+                     "code_horizon_coarse_vol" = d_soil_coarse_fragments$code,
+                     "code_horizon_porosity" = d_soil_code_porosity$code,
+                     "code_roots_very_fine" = d_root_abundance$code,
+                     "code_roots_fine" = d_root_abundance$code,
+                     "code_roots_medium" = d_root_abundance$code,
+                     "code_roots_coarse" = d_root_abundance$code,
+                     "code_altitude" = d_altitude$code,
                      "code_wrb_soil_group" = d_soil_group$code,
                      "code_wrb_qualifier_1" = d_soil_adjective$code,
                      "code_wrb_spezifier_1" = d_soil_specifier$code,
@@ -238,11 +261,11 @@ get_range_inconsistencies <- function(survey_form,
                      "code_wrb_publication" = d_wrb_pub$code,
                      "code_parent_material_1" = d_parent_material$code,
                      "code_parent_material_2" = d_parent_material$code,
-                     "code_water_level_high" = c(1, 2, 3, 4, 5, 9),
-                     "code_water_level_low" = c(1, 2, 3, 4, 5, 9),
-                     "code_water_type" = c(1, 2, 9),
-                     "code_water" = c(1, 2, 3),
-                     "code_humus" = (1:9),
+                     "code_water_level_high" = d_ground_water_table$code,
+                     "code_water_level_low" = d_ground_water_table$code,
+                     "code_water_type" = d_water_table_type$code,
+                     "code_water" = d_water$code,
+                     "code_humus" = d_humus$code,
                      "code_texture_class" = d_texture_class$code)
 
   parameters_code <- names(df)[which(names(df) %in% names(list_codes))]
@@ -1747,8 +1770,10 @@ get_range_inconsistencies <- function(survey_form,
         # Haan, C.T., Barfield, B.J., Hayes, J.C. (1994).
         # Design Hydrology and Sedimentology for Small Catchments.
         
-        if (!is.na(df$layer_limit_inferior[j]) &&
-            !is.na(df$layer_limit_superior)) {
+        if ((unlist(strsplit(survey_form, "_"))[2] == "som") &&
+            !is.na(df$layer_limit_inferior[j]) &&
+            !is.na(df$layer_limit_superior[j]) &&
+            (column_name == "organic_layer_weight")) {
           
           layer_thickness_j_meter <-
             0.01 * abs(diff(c(df$layer_limit_inferior[j],
@@ -2134,6 +2159,16 @@ get_range_inconsistencies <- function(survey_form,
                    change_date = df$change_date[vec_inconsistency],
                    download_date = rep(download_date_pir,
                                        length(vec_inconsistency))))
+      
+      # Replace by NA
+      
+      if (solve == TRUE) {
+        
+        df[vec_inconsistency, col_ind] <- NA
+        
+      }
+      
+      
       }
 
     # Update the progress bar
