@@ -2240,6 +2240,8 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
                 paste0(df$code_country[vec_ff], "_",
                        df$code_plot[vec_ff], "_",
                        df$code_layer[vec_ff])
+              
+              df$layer_type[vec_ff] <- "forest_floor"
             }
           }
 
@@ -2522,7 +2524,33 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
            df$layer_number_inferior[vec_nonempty_remaining] <-
              rank(as.numeric(df$layer_limit_inferior[vec_nonempty_remaining])) +
              layer_number_max
+           
+           source("./src/functions/get_redundant_layers.R")
+           
+           redundant_layers <-
+             get_redundant_layers(layers =
+                                    df$code_layer[vec_nonempty_remaining],
+                      superior_layer_limits =
+                        df$layer_limit_superior[vec_nonempty_remaining],
+                      inferior_layer_limits =
+                        df$layer_limit_inferior[vec_nonempty_remaining],
+                      df_sub =
+                        as.data.frame(df[vec_nonempty_remaining, ])) %>%
+             filter(redundancy_type == 0)
+           
+           vec_non_redundant <-
+             vec_nonempty_remaining[which(
+               !df$code_layer[vec_nonempty_remaining] %in%
+                 c(redundant_layers$layer,
+                   redundant_layers$combined_layer))]
 
+           # Rank the remaining non-redundant layers
+           # based on layer_limit_superior
+           
+           df$layer_number[vec_non_redundant] <-
+             rank(as.numeric(
+               df$layer_limit_superior[vec_non_redundant])) +
+             layer_number_max
            }
       }
       }
@@ -2689,19 +2717,17 @@ if (!isTRUE(getOption("knitr.in.progress"))) {
 close(progress_bar)
 }
 
-# Remove these columns:
-# - layer_number_superior
-# - layer_number_inferior
-# - layer_number_combined_layers
-
-df <- df[, -which(names(df) %in% c("layer_number_superior",
-                                   "layer_number_inferior",
-                                   "layer_number_combined_layers"))]
-
-# Add columns which only give numbers to below-ground versus above-ground
-# layers
+# Final dataset preparations
 
 df <- df %>%
+  # Remove these columns:
+  # - layer_number_superior
+  # - layer_number_inferior
+  # - layer_number_combined_layers
+  select(-layer_number_superior,
+         -layer_number_inferior,
+         -layer_number_combined_layers) %>%
+  # Add layer numbers for below-ground and above-ground only
   group_by(unique_survey_repetition) %>%
   mutate(
     layer_number_bg_only = ifelse(layer_type %in% c("mineral", "peat"),
@@ -2712,7 +2738,14 @@ df <- df %>%
     layer_number_ff = ifelse(layer_type %in% c("forest_floor"),
                              layer_number, NA),) %>%
     select(-layer_number_bg_only, -layer_number_bg_min) %>%
-    arrange(partner_code, unique_survey_repetition, layer_number)
+  # Sort in different levels
+  arrange(country,
+          code_plot,
+          survey_year,
+          repetition,
+          layer_number) %>%
+  relocate(layer_number, .after = layer_limit_inferior)
+  # arrange(partner_code, unique_survey_repetition, layer_number)
 
 
 # Save the survey form and list_layer_inconsistencies for the given survey form
@@ -3875,18 +3908,29 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     # layers
     
     df <- df %>%
+      rename(horizon_number_orig = horizon_number) %>%
+      rename(layer_number = horizon_number_unique) %>%
       group_by(unique_survey_profile) %>%
       mutate(
-        horizon_number_bg_only = ifelse(layer_type %in% c("mineral", "peat"),
-                                      horizon_number_unique, NA),
-        horizon_number_bg_min = suppressWarnings(min(horizon_number_bg_only,
+        layer_number_bg_only = ifelse(layer_type %in% c("mineral", "peat"),
+                                      layer_number, NA),
+        layer_number_bg_min = suppressWarnings(min(layer_number_bg_only,
                                                    na.rm = TRUE)),
-        horizon_number_bg =
-          horizon_number_bg_only - (horizon_number_bg_min - 1),
-        horizon_number_ff = ifelse(layer_type %in% c("forest_floor"),
-                                 horizon_number_unique, NA),) %>%
-      select(-horizon_number_bg_only, -horizon_number_bg_min) %>%
-      arrange(partner_code, unique_survey_profile, horizon_number_unique)
+        layer_number_bg =
+          layer_number_bg_only - (layer_number_bg_min - 1),
+        layer_number_ff = ifelse(layer_type %in% c("forest_floor"),
+                                 layer_number, NA),) %>%
+      select(-layer_number_bg_only, -layer_number_bg_min) %>%
+      # Sort in different levels
+      arrange(country,
+              code_plot,
+              survey_year,
+              profile_pit_id,
+              layer_number) %>%
+      relocate(horizon_master, .after = profile_pit_id) %>%
+      relocate(horizon_limit_up, .after = horizon_master) %>%
+      relocate(horizon_limit_low, .after = horizon_limit_up) %>%
+      relocate(layer_number, .after = horizon_limit_low)
 
 
     # Save the survey form; list_layer_inconsistencies for the given survey form

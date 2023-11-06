@@ -23,9 +23,9 @@ harmonise_into_fixed_depth_layers <-
   # Priority: horizon_bulk_dens_measure
   # Second: horizon_bulk_dens_est
   
-  assertthat::assert_that("horizon_number_unique" %in%
+  assertthat::assert_that("layer_number" %in%
                             names(survey_form),
-                          msg = paste0("The column 'horizon_number_unique' ",
+                          msg = paste0("The column 'layer_number' ",
                                        "is missing but required for this ",
                                        "function,\nin order to be able to ",
                                        "remove redundant/overlapping layers.\n",
@@ -38,7 +38,7 @@ harmonise_into_fixed_depth_layers <-
                                  horizon_bulk_dens_measure,
                                  horizon_bulk_dens_est)) %>%
     mutate(horizon_master = as.character(horizon_master)) %>%
-    filter(!is.na(horizon_number_unique))
+    filter(!is.na(layer_number))
   
   # Split parameters into numeric and categorical ones
   

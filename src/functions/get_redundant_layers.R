@@ -676,7 +676,9 @@ for (i in seq_len(nrow(redundant_layers_short))) {
   }
 
 ind_max <- which(redundant_layers_short$length ==
-                   max(redundant_layers_short$length))
+                   max(redundant_layers_short$length) &
+                 redundant_layers_short$redundancy_type ==
+                   min(redundant_layers_short$redundancy_type))
 
 if ((length(ind_max) == 1)) {
   redundant_layers <-
