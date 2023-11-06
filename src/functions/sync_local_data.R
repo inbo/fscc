@@ -382,7 +382,7 @@ sync_local_data <- function(list_subfolders_data = NULL,
     #   - "coordinates_sw.csv"
     #   - "data_availability_sw.csv"
 
-    if (((length(id_subfolders_data$name) >= 4) &&
+    if (((length(id_subfolders_data$name) >= 1) &&
         (folder_name %in% c("intermediate_data",
                             "layer1_data",
                             "layer2_data"))) ||
