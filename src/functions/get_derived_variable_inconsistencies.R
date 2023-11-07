@@ -74,6 +74,7 @@
 #' get_derived_variable_inconsistencies("s1_som")
 
 get_derived_variable_inconsistencies <- function(survey_form,
+                                                 data_frame = NULL,
                                                  save_to_env = FALSE) {
 
   source("./src/functions/get_env.R")
@@ -89,15 +90,20 @@ get_derived_variable_inconsistencies <- function(survey_form,
   inconsistency_catalogue <-
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
-  # Retrieve survey form from global environment
-
-  df <- get_env(survey_form)
-
-  # "som" survey forms
+  # Retrieve the survey_form data
+  
+  if (is.null(data_frame)) {
+    df <- get_env(survey_form)
+  } else {
+    df <- data_frame
+  }
+  
+  
+  # "som" survey forms ----
 
   if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-  # Add new variables
+  # Add new variables ----
 
   df$layer_thickness <- NA
   df$bulk_density_layer_weight <- NA
@@ -135,23 +141,25 @@ get_derived_variable_inconsistencies <- function(survey_form,
         !is.na(df$part_size_sand[i])) {
 
       # LOQ = 1 %
-      if (df$part_size_clay[i] == -1) {
-          clay <- 0.5
-      } else {
-          clay <- df$part_size_clay[i]
-      }
-      if (df$part_size_silt[i] == -1) {
-          silt <- 0.5
-      } else {
-          silt <- df$part_size_silt[i]
-      }
-      if (df$part_size_sand[i] == -1) {
-          sand <- 0.5
-      } else {
-          sand <- df$part_size_sand[i]
-      }
+      # if (df$part_size_clay[i] == -1) {
+      #     clay <- 0.5
+      # } else {
+      #     clay <- df$part_size_clay[i]
+      # }
+      # if (df$part_size_silt[i] == -1) {
+      #     silt <- 0.5
+      # } else {
+      #     silt <- df$part_size_silt[i]
+      # }
+      # if (df$part_size_sand[i] == -1) {
+      #     sand <- 0.5
+      # } else {
+      #     sand <- df$part_size_sand[i]
+      # }
       
-      df$sum_texture[i] <- clay + silt + sand
+      df$sum_texture[i] <- df$part_size_clay[i] +
+        df$part_size_silt[i] +
+        df$part_size_sand[i]
       # This should be between 97 and 103 %
   }
 
@@ -159,14 +167,18 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
     if (!is.na(df$organic_carbon_total[i]) &&
         !is.na(df$n_total[i]) &&
-        (df$organic_carbon_total[i] != -1) &&
-        (df$n_total[i] != -1)) {
+        !is.na(df$organic_carbon_total_loq[i]) &&
+        !is.na(df$n_total_loq[i]) &&
+        (df$organic_carbon_total[i] >= df$organic_carbon_total_loq[i]) &&
+        (df$n_total[i] >= df$n_total_loq[i])) {
 
       df$c_to_n_ratio[i] <- (df$organic_carbon_total[i]) / (df$n_total[i])
       # This should be in a plausible range (1 to 100)
   }
 
     # sum_base_cations
+
+    # TO DO: update LOQ implementation
 
     if (!is.na(df$exch_ca[i]) &&
         !is.na(df$exch_mg[i]) &&
@@ -202,6 +214,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
     }
 
     # sum_acid_cations
+
+    # TO DO: update LOQ implementation
 
     if (!is.na(df$exch_al[i]) &&
         !is.na(df$exch_fe[i]) &&
@@ -242,11 +256,11 @@ get_derived_variable_inconsistencies <- function(survey_form,
   }
 
 
-  # "pfh" survey forms
+  # "pfh" survey forms ----
 
   if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
 
-    # Add new variables
+    # Add new variables ----
 
     df$sum_texture <- NA
     df$c_to_n_ratio <- NA
@@ -261,37 +275,45 @@ get_derived_variable_inconsistencies <- function(survey_form,
           !is.na(df$horizon_sand[i])) {
 
         # LOQ = 1 %
-        if (df$horizon_clay[i] == -1) {
-          clay <- 0.5
-        } else {
-            clay <- df$horizon_clay[i]
-        }
-        if (df$horizon_silt[i] == -1) {
-          silt <- 0.5
-        } else {
-            silt <- df$horizon_silt[i]
-        }
-        if (df$horizon_sand[i] == -1) {
-          sand <- 0.5
-        } else {
-            sand <- df$horizon_sand[i]
-        }
+        # if (df$horizon_clay[i] == -1) {
+        #   clay <- 0.5
+        # } else {
+        #     clay <- df$horizon_clay[i]
+        # }
+        # if (df$horizon_silt[i] == -1) {
+        #   silt <- 0.5
+        # } else {
+        #     silt <- df$horizon_silt[i]
+        # }
+        # if (df$horizon_sand[i] == -1) {
+        #   sand <- 0.5
+        # } else {
+        #     sand <- df$horizon_sand[i]
+        # }
 
-        df$sum_texture[i] <- clay + silt + sand
+        df$sum_texture[i] <- df$horizon_clay[i] +
+          df$horizon_silt[i] +
+          df$horizon_sand[i]
         }
 
       # c_to_n_ratio
 
       if (!is.na(df$horizon_c_organic_total[i]) &&
           !is.na(df$horizon_n_total[i]) &&
-          (df$horizon_c_organic_total[i] != -1) &&
-          (df$horizon_n_total[i] != -1)) {
+          !is.na(df$horizon_c_organic_total_loq[i]) &&
+          !is.na(df$horizon_n_total_loq[i]) &&
+          (df$horizon_c_organic_total[i] >=
+             df$horizon_c_organic_total_loq[i]) &&
+          (df$horizon_n_total[i] >=
+            df$horizon_n_total_loq[i])) {
 
         df$c_to_n_ratio[i] <-
           (df$horizon_c_organic_total[i]) / (df$horizon_n_total[i])}
 
       # sum_base_cations
 
+      # TO DO: update LOQ implementation
+      
       if (!is.na(df$horizon_exch_ca[i]) &&
           !is.na(df$horizon_exch_mg[i]) &&
           !is.na(df$horizon_exch_k[i]) &&
@@ -334,7 +356,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
 
 
-  # Inconsistencies
+  # Inconsistencies ----
 
   # The intention is to create a list_layer_inconsistencies of this format:
   list_derived_inconsistencies <-
@@ -359,7 +381,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
                change_date = NULL,
                download_date = NULL)
 
-  # FSCC_20: Is the reported organic_layer_weight possible,
+  # FSCC_20: Is the reported organic_layer_weight possible, ----
   # i.e. is the derived bulk density within a possible range (0-2650 kg m-3)?
 
   if ("bulk_density_layer_weight" %in% names(df)) {
@@ -473,7 +495,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_16: Is the sum of the texture particle size fractions 100 %?
+  # FSCC_16: Is the sum of the texture particle size fractions 100 %? ----
 
   if ("sum_texture" %in% names(df)) {
 
@@ -597,7 +619,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_23: Is the C/N ratio plausible?
+  # FSCC_23: Is the C/N ratio plausible? ----
 
   if ("c_to_n_ratio" %in% names(df)) {
 
@@ -697,7 +719,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_44: Is the sum of the base cations smaller or equal to CEC (exch_cec)
+  # FSCC_44: Is the sum of the base cations smaller or equal to CEC ----
+  # (exch_cec)
 
   if ("sum_base_cations" %in% names(df)) {
 
@@ -894,7 +917,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
 
 
-  # FSCC_45: Does the sum of the acid cations approximate the exchangeable
+  # FSCC_45: Does the sum of the acid cations approximate the exchangeable ----
   # acidity (exch_acidiy)?
 
   if ("sum_acid_cations" %in% names(df)) {
@@ -1082,16 +1105,16 @@ get_derived_variable_inconsistencies <- function(survey_form,
     }
     }
 
-
+  # Save the survey form and inconsistency list ----
+  # for the given survey
+  # form to the global environment
+  
   if (save_to_env == TRUE) {
-
-  # Save dataframe to global environment
-
-  assign_env(survey_form, df)
-
-  # Save list of inconsistencies to global environment
-
-  assign_env(paste0("list_derived_inconsistencies_", survey_form),
-             list_derived_inconsistencies)
+    assign_env(survey_form, df)
+    assign_env(paste0("list_derived_inconsistencies_", survey_form),
+               list_derived_inconsistencies)
+  } else {
+    return(df)
   }
+  
 }
