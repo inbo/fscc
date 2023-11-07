@@ -19,9 +19,11 @@ stopifnot(require("sf"),
 
 # Import "layer 1" data for soil (Level II) ----
 
+if (!exists("so_som")) {
 source("./src/functions/read_processed.R")
 read_processed(survey_forms = c("si", "so"),
                save_to_env = TRUE)
+}
 
 so_som_working <- so_som %>%
   # Filter for records starting from 1996
@@ -112,6 +114,7 @@ for (i in seq_len(nrow(plots_vegetation))) {
                                      w = bulk_density,
                                      na.rm = TRUE),
                        mean(ph_h2o, na.rm = TRUE)),
+              # max LOQs
               .groups = "drop")
   })
   
