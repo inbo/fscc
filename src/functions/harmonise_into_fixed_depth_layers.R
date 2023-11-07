@@ -92,7 +92,10 @@ harmonise_into_fixed_depth_layers <-
     vec_prof <- which(df_fixed$unique_survey_profile == profile_id)
     
     vec_prof_df <- which(df$unique_survey_profile == profile_id)
-    df_sub <- df[vec_prof_df, ]
+    df_sub <- df[vec_prof_df, ] %>%
+      ungroup() %>%
+      as.data.frame %>%
+      as_tibble
     
     ind_to_remove <- NULL
     extra_rows <- NULL
@@ -473,26 +476,29 @@ harmonise_into_fixed_depth_layers <-
               
               # if all layer limits are NA
               
+              if (all(is.na(df_sub$horizon_limit_up[ind_match])) &&
+                  all(is.na(df_sub$horizon_limit_low[ind_match]))) {
+                
               df_fixed[j, col_fixed] <-
                 ifelse((parameters[k] %in% parameters_numeric),
                        # mean
                        mean(as.numeric(unlist(df_sub[ind_match, col_df])),
                             na.rm = TRUE),
                        # most abundant
-                       df_sub %>%
+                       df_sub[ind_match, ] %>%
                          select(all_of(parameter_name)) %>%
-                         slice(ind_match) %>%
+                         #slice(ind_match) %>%
                          na.omit() %>%
                          count(.data[[parameter_name]]) %>%
                          arrange(desc(n)) %>%
                          head(1) %>%
                          pull(.data[[parameter_name]]))
-              
+              } else {
               
               # if not all layer limits are NA
               
-              df_sub_selected <- df_sub %>%
-                slice(ind_match) %>%
+              df_sub_selected <- df_sub[ind_match, ] %>%
+                #slice(ind_match) %>%
                 filter(!is.na(horizon_limit_up) &
                          !is.na(horizon_limit_low))
               
@@ -522,7 +528,7 @@ harmonise_into_fixed_depth_layers <-
                                   parameter_name = parameters[k],
                                   mode = "categorical")
               }
-              
+              }
               
               }
             }
