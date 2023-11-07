@@ -1841,7 +1841,7 @@ vec_empty_layer_limit_inferior <-
 
   # Get the index of the plot survey in pfh
 
-vec_pfh <- which(df$plot_id[vec[1]] == pfh$plot_id) # In pfh
+vec_pfh <- which(df$unique_survey[vec[1]] == pfh$unique_survey) # In pfh
 
   # Fill empty cells in layer_limit_superior
 
@@ -1861,7 +1861,11 @@ for (j in vec_empty_layer_limit_superior) {
 
   # Check if code_layer is in pfh
   
-  if (!is.na(match(vec_code_layer, pfh$horizon_master[vec_pfh]))) {
+  vec_pfh_match <- which(vec_code_layer == pfh$horizon_master[vec_pfh])
+  
+  if (!identical(vec_pfh_match, integer(0)) &&
+      length(vec_pfh_match) == 1) {
+  
     df$layer_limit_superior[j] <-
       pfh$horizon_limit_up[vec_pfh[
         match(vec_code_layer, pfh$horizon_master[vec_pfh])]]
@@ -1910,10 +1914,16 @@ for (j in vec_empty_layer_limit_superior) {
        vec_code_layer <- as.character(df$code_layer[j])
    }
 
-    if (!is.na(match(vec_code_layer, pfh$horizon_master[vec_pfh]))) {
-    df$layer_limit_inferior[j] <-
-      pfh$horizon_limit_low[vec_pfh[match(vec_code_layer,
-                                          pfh$horizon_master[vec_pfh])]]
+   # Check if code_layer is in pfh
+   
+   vec_pfh_match <- which(vec_code_layer == pfh$horizon_master[vec_pfh])
+   
+   if (!identical(vec_pfh_match, integer(0)) &&
+       length(vec_pfh_match) == 1) {
+     
+     df$layer_limit_inferior[j] <-
+       pfh$horizon_limit_low[vec_pfh[
+         match(vec_code_layer, pfh$horizon_master[vec_pfh])]]
 
     } else
 
@@ -1921,8 +1931,8 @@ for (j in vec_empty_layer_limit_superior) {
           # match the code_layer with OL-OF and OF-OH in pfh respectively
 
           if (vec_code_layer == "OLF" &&
-              !is.na(match("OL",pfh$horizon_master[vec_pfh])) &&
-              !is.na(match("OF",pfh$horizon_master[vec_pfh]))) {
+              !is.na(match("OL", pfh$horizon_master[vec_pfh])) &&
+              !is.na(match("OF", pfh$horizon_master[vec_pfh]))) {
 
               df$layer_limit_inferior[j] <-
                pfh$horizon_limit_low[vec_pfh[
@@ -1930,8 +1940,8 @@ for (j in vec_empty_layer_limit_superior) {
 
               } else
           if (vec_code_layer == "OFH" &&
-              !is.na(match("OF",pfh$horizon_master[vec_pfh])) &&
-              !is.na(match("OH",pfh$horizon_master[vec_pfh]))) {
+              !is.na(match("OF", pfh$horizon_master[vec_pfh])) &&
+              !is.na(match("OH", pfh$horizon_master[vec_pfh]))) {
 
               df$layer_limit_inferior[j] <-
                 pfh$horizon_limit_low[vec_pfh[
@@ -2004,7 +2014,7 @@ if (!identical(vec_empty_layer_limit_inferior, integer(0))) {
   }
 }
 }
-}
+
 
 
 
@@ -2012,7 +2022,7 @@ if (!identical(vec_empty_layer_limit_inferior, integer(0))) {
 
   # One value in the given profile seems to have the wrong sign
 
-if (unique(df$unique_survey_repetition)[i] == "3204_2009_503_1") {
+if (unique(df$unique_survey_repetition)[i] == "4_2009_503_1") {
 
   if (df$layer_limit_inferior_orig[vec[
     which(df$code_layer[vec] == "OF")]] == 3) {
@@ -2065,6 +2075,10 @@ if ("code_layer_original" %in% names(df)) {
     }
 }
 }
+
+}
+
+
 
 
 
@@ -2707,11 +2721,96 @@ vec_layer_number <- vec_nonempty[order(df$layer_number[vec_nonempty])]
     }
     }
 
+
+# Is the zero line located between the forest floor versus mineral/peat? ----
+
+vec_non_redundant <- vec[which(!is.na(df$layer_number[vec]))]
+
+vec_inconsistency <-
+  vec_non_redundant[which(
+    # Forest floor with positive layer limits
+    (df$layer_type[vec_non_redundant] == "forest_floor" &
+       (df$layer_limit_inferior[vec_non_redundant] > 0 |
+          df$layer_limit_superior[vec_non_redundant] > 0)) |
+      # Mineral/peat with negative layer limits
+      (df$layer_type[vec_non_redundant] != "forest_floor" &
+         (df$layer_limit_inferior[vec_non_redundant] < 0 |
+            df$layer_limit_superior[vec_non_redundant] < 0)))]
+
+if (!identical(vec_inconsistency, integer(0)) &&
+    # TO DO _ FIND A SOLUTION FOR THIS SPECIFIC PROFILE
+    unique(df$unique_survey[vec]) != "6_2017_517") {
+  
+  if (all(df$layer_type[vec_inconsistency] == "forest_floor") &&
+      (all(df$layer_limit_inferior[vec_inconsistency] > 0) ||
+       all(df$layer_limit_superior[vec_inconsistency] > 0))) {
+    
+    diff_to_move <- max(df$layer_limit_inferior[vec_inconsistency])
+    
+    # Assert that the layer with a higher layer number is mineral or peat
+    # Since this should be at the transition between above- and below-ground
+    # (null line)
+    
+    lay_num_inconsistency <-
+      df$layer_number[vec_inconsistency[which(
+        df$layer_limit_inferior[vec_inconsistency] == diff_to_move)]]
+    
+    assertthat::assert_that(!identical(lay_num_inconsistency, integer(0)) &&
+                              (df$layer_type[vec_non_redundant[which(
+                                df$layer_number[vec_non_redundant] ==
+                                  (lay_num_inconsistency + 1))]] !=
+                                 "forest_floor"))
+    
+  }
+  
+  if (all(df$layer_type[vec_inconsistency] != "forest_floor") &&
+      (all(df$layer_limit_inferior[vec_inconsistency] < 0) ||
+       all(df$layer_limit_superior[vec_inconsistency] < 0))) {
+    
+    diff_to_move <- min(df$layer_limit_superior[vec_inconsistency])
+    
+    # Assert that the layer with a lower layer number is forest_floor
+    # Since this should be at the transition between above- and below-ground
+    # (null line)
+    # (Unless there is no forest floor, then the layer number should be 1)
+    
+    lay_num_inconsistency <-
+      df$layer_number[vec_inconsistency[which(
+        df$layer_limit_superior[vec_inconsistency] == diff_to_move)]]
+    
+    assertthat::assert_that(!identical(lay_num_inconsistency, integer(0)) &&
+                              ((lay_num_inconsistency == 1) ||
+                                 (df$layer_type[vec_non_redundant[which(
+                                df$layer_number[vec_non_redundant] ==
+                                  (lay_num_inconsistency - 1))]] ==
+                                 "forest_floor")))
+    
+  }
+  
+  if (solve == TRUE) {
+    
+    # Regardless of whether it should be moved up or down
+    df$layer_limit_inferior[vec] <- df$layer_limit_inferior[vec] - diff_to_move
+    df$layer_limit_superior[vec] <- df$layer_limit_superior[vec] - diff_to_move
+    
+    # df$moved[vec] <- TRUE
+    
+  }
+  
+  
+  
+  
+}
+
+
+
+
+
  # Update the progress bar
 if (!isTRUE(getOption("knitr.in.progress"))) {
 setTxtProgressBar(progress_bar, i)
 }
-}
+} # End of for loop over different profiles
 
 if (!isTRUE(getOption("knitr.in.progress"))) {
 close(progress_bar)
