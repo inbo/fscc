@@ -18,8 +18,8 @@
  
  ##### correcties aan so.som file 
  
- so.som<-read.csv2("./data/so_20230915/so/so_som.csv", header=TRUE); dim(so.som)
- names(so.som)
+# so.som<-read.csv2("./data/so_20230915/so/so_som.csv", header=TRUE); dim(so.som)
+# names(so.som)
  
  
  

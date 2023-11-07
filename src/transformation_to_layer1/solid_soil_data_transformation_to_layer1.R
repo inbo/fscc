@@ -79,7 +79,9 @@ merge_duplicate_records("so_som",
 
 
 
+# 4. Gap-filling from external data sources ----
 
+<<<<<<< HEAD
 # 4. Remove impossible values + replace -1 by 0.5 * LOQ ----
 #    TO DO!!!!!!!
 
@@ -99,6 +101,9 @@ merge_duplicate_records("so_som",
 # 5. Gap-filling ----
 
 ## 5.1. Gap-fill using new data from PIRs ----
+=======
+## 4.1. Gap-fill using new data from PIRs ----
+>>>>>>> dd32f242bcd358c4d666bce92082624a56c4f497
 
 # Apply gapfill_from_pir scripts
 
@@ -138,7 +143,8 @@ freezePane(wb, 1, firstActiveRow = 2, firstActiveCol = 1)
 addCreator(wb, "ICP Forests - FSCC")
 openxlsx::saveWorkbook(wb,
                        file = paste0("./output/gap_filling_details/",
-                                     "20230302_applied_pirs.xlsx"))
+                                     "20230302_applied_pirs.xlsx"),
+                       overwrite = TRUE)
 
 
 
@@ -146,8 +152,10 @@ openxlsx::saveWorkbook(wb,
 
 
 
-## 5.2. Gap-fill using additional data sources (e.g. AFSCDB.LII) ----
+## 4.2. Gap-fill using old database sources (e.g. AFSCDB.LII) ----
 # Note: only focussing on parameters for C stock calculations
+
+### 4.2.1. Gap-filling existing records ----
 
 # Import afscdb so_som data
 
@@ -165,6 +173,13 @@ so_som_afscdb <- read.csv(file_path,
                                       survey_year, "_",
                                       code_plot, "_",
                                       code_layer)) %>%
+  # unique_survey
+  mutate(unique_survey = paste0(code_country, "_",
+                                survey_year, "_",
+                                code_plot)) %>%
+  # plot_id
+  mutate(plot_id = paste0(code_country, "_",
+                          code_plot)) %>%
   # Convert coarse_fragment_mass to "coarse_fragment_vol_from_mass"
   mutate(coarse_fragment_aid =
            ifelse(!is.na(bulk_density) & !is.na(coarse_fragment_mass),
@@ -262,100 +277,409 @@ so_som <- so_som %>%
   
 
 
+### 4.2.2. Adding missing records ----
 
 
+# Check whether there are any "unique_survey" data in so_som_afscdb
+# that are absent in so_som
 
+# Make a vector with the unique surveys in so_som, and also the three years
+# before and after, for in case only the survey year was corrected in so_som
+# versus so_som_afscdb
 
+unique_surveys_so_som <- unique(so_som$unique_survey)
 
+# Extract the year
+years <- gsub(".*_(\\d{4}).*", "\\1", unique_surveys_so_som)
 
-
-
-## 5.3. Gap-fill "so_prf" using manually harmonised profile data Nathalie ----
-
-  assertthat::assert_that(file.exists(paste0("./data/additional_data/",
-                                             "SO_PRF_ADDS.xlsx")),
-                          msg = paste0("'./data/additional_data/",
-                                       "SO_PRF_ADDS.xlsx' ",
-                                       "does not exist."))
+# Replace each year one by one
+unique_surveys <- NULL
+for (i in 1:length(unique_surveys_so_som)) {
   
-  so_prf_adds <-
-    openxlsx::read.xlsx(paste0("./data/additional_data/",
-                               "SO_PRF_ADDS.xlsx"),
-                        sheet = 2) %>%
-    mutate(unique_survey_profile =
-             paste0(code_country, "_",
-                    survey_year, "_",
-                    code_plot, "_",
-                    profile_pit_id)) %>%
-    mutate(unique_survey =
-             paste0(code_country, "_",
-                    survey_year, "_",
-                    code_plot)) %>%
-    mutate(unique_profile =
-             paste0(code_country, "_",
-                    code_plot, "_",
-                    profile_pit_id)) %>%
-    rename(bs_class = "BS.(high/low)",
-           plot_id = PLOT_ID)
-  
-  so_prf_adds_agg <- so_prf_adds %>%
-    mutate(soil_wrb = paste0(RSGu, "_",
-                             QUALu, "_",
-                             SPECu, "_",
-                             METHOD_RSGu, "_",
-                             DEPTHSTOCK, "_",
-                             bs_class, "_",
-                             remark)) %>%
-    group_by(plot_id) %>%
-    # Sometimes there are different options, e.g. plot_id 60_9
-    # No good way to solve this - we just have to pick one
-    summarise(soil_wrb =
-                names(which.max(table(soil_wrb[!is.na(soil_wrb)])))) %>%
-    # Split the data back into the original columns
-    separate(soil_wrb,
-             into = c("code_wrb_soil_group",
-                      "code_wrb_qualifier_1",
-                      "code_wrb_spezifier_1",
-                      "method_wrb_harmonisation_fscc",
-                      "eff_soil_depth",
-                      "bs_class",
-                      "remark_harmonisation_fscc"),
-             sep = "_") %>%
-    mutate(eff_soil_depth = as.numeric(eff_soil_depth))
-  
-  so_prf_adds_agg[so_prf_adds_agg == "NA"] <- NA
-  so_prf_adds_agg[so_prf_adds_agg == ""] <- NA
-  
-    
-  so_prf <- so_prf %>%
-    rename(code_wrb_soil_group_orig = code_wrb_soil_group,
-           code_wrb_qualifier_1_orig = code_wrb_qualifier_1,
-           code_wrb_spezifier_1_orig = code_wrb_spezifier_1,
-           eff_soil_depth_orig = eff_soil_depth) %>%
-    left_join(so_prf_adds_agg,
-              by = "plot_id")
-  
-  
+  unique_surveys <- c(
+    unique_surveys,
+    # Add unique_survey
+    unique_surveys_so_som[i],
+    # Add survey_year - 1
+    gsub("_(\\d{4})_",
+         paste0("_", as.character(as.numeric(years) - 1)[i], "_"),
+         unique_surveys_so_som[i]),
+    # Add survey_year - 2
+    gsub("_(\\d{4})_",
+         paste0("_", as.character(as.numeric(years) - 2)[i], "_"),
+         unique_surveys_so_som[i]),
+    # Add survey_year - 3
+    gsub("_(\\d{4})_",
+         paste0("_", as.character(as.numeric(years) - 3)[i], "_"),
+         unique_surveys_so_som[i]),
+    # Add survey_year + 1
+    gsub("_(\\d{4})_",
+         paste0("_", as.character(as.numeric(years) + 1)[i], "_"),
+         unique_surveys_so_som[i]),
+    # Add survey_year + 2
+    gsub("_(\\d{4})_",
+         paste0("_", as.character(as.numeric(years) + 2)[i], "_"),
+         unique_surveys_so_som[i]),
+    # Add survey_year + 3
+    gsub("_(\\d{4})_",
+         paste0("_", as.character(as.numeric(years) + 3)[i], "_"),
+         unique_surveys_so_som[i]))
+}
 
 
-  ## Gap-fill effective soil depth Bruno?
-  
+# Identify which unique surveys are missing in so_som
 
+unique_surveys_missing <-
+  unique(so_som_afscdb$unique_survey[which(!so_som_afscdb$unique_survey %in%
+                                             unique_surveys)])
+
+# If there are any unique surveys in afscdb which are missing in so_som
+
+if (!identical(unique_surveys_missing, character(0))) {
+
+# Create a list of tables with the partner codes for each plot_id
+
+diff_partner_codes <- so_som %>%
+  distinct(partner_code, .keep_all = TRUE) %>%
+  filter(.data$partner_code != .data$code_country) %>%
+  distinct(code_country) %>%
+  pull(code_country)
+
+partner_codes <- so_som %>%
+  filter(!partner_code %in% diff_partner_codes) %>%
+  filter(code_country %in% diff_partner_codes) %>%
+  distinct(plot_id, .keep_all = TRUE) %>%
+  select(plot_id, partner_code)
+
+# Harmonise the data
+
+so_som_afscdb_to_add <- so_som_afscdb %>%
+  # Filter the missing unique surveys
+  filter(.data$unique_survey %in% unique_surveys_missing) %>%
+  mutate(date_labor_analyses =
+           as.character(as.Date(.data$date_labor_analyses)),
+         download_date = NA,
+         layer_type = ifelse(.data$laytype == "Min",
+                             "mineral",
+                             ifelse(.data$laytype == "FF",
+                                    "forest_floor",
+                                    ifelse(.data$laytype == "Pea",
+                                           "peat",
+                                           NA))),
+         repetition = 1,
+         plot_id = paste0(code_country, "_",
+                          code_plot),
+         unique_survey = paste0(code_country, "_",
+                                survey_year, "_",
+                                code_plot),
+         unique_survey_repetition = paste0(code_country, "_",
+                                           survey_year, "_",
+                                           code_plot, "_",
+                                           repetition),
+         unique_survey_layer = paste0(code_country, "_",
+                                      survey_year, "_",
+                                      code_plot, "_",
+                                      code_layer),
+         unique_layer_repetition = paste0(code_country, "_",
+                                          survey_year, "_",
+                                          code_plot, "_",
+                                          code_layer, "_",
+                                          repetition),
+         unique_layer = paste0(code_country, "_",
+                               code_plot, "_",
+                               code_layer),
+         change_date = as.character(as.Date("2008-05-15")),
+         code_line = NA,
+         code_plot_orig = code_plot,
+         bulk_density_orig = bulk_density,
+         organic_carbon_total_orig = organic_carbon_total,
+         organic_layer_weight_orig = organic_layer_weight,
+         coarse_fragment_vol_orig = coarse_fragment_vol,
+         part_size_clay_orig = part_size_clay,
+         code_soil_horizon_sample_c = NA,
+         elec_cond = NA,
+         line_nr = NA,
+         ni = NA,
+         origin = NA,
+         origin_merge_info = NA,
+         origin_merged = NA,
+         p_ox = NA,
+         q_flag = NA,
+         qif_key = NA,
+         subsamples = NA) %>%
+  left_join(partner_codes,
+            by = "plot_id") %>%
+  mutate(partner_code = ifelse(!is.na(.data$partner_code),
+                               .data$partner_code,
+                               .data$code_country)) %>%
+  left_join(d_country[, c("code", "lib_country")],
+            by = join_by(code_country == code)) %>%
+  rename(country = lib_country) %>%
+  left_join(d_partner[, c("code", "desc_short", "description")],
+            by = join_by(partner_code == code)) %>%
+  rename(partner_short = desc_short) %>%
+  rename(partner = description) %>%
+  mutate(country = as.factor(country)) %>%
+  mutate(partner_short = as.factor(partner_short)) %>%
+  mutate(partner = as.factor(partner)) %>%
+  rename(base_saturation = bs) %>%
+  # Replace empty strings with NA
+  mutate_all(~ replace(., . == "", NA)) %>%
+  select(
+    country, partner_short, partner, survey_year, code_country,
+    code_plot, code_layer, repetition,
+    layer_limit_superior, layer_limit_inferior, subsamples,
+    date_labor_analyses, moisture_content,
+    part_size_clay, part_size_silt, part_size_sand,
+    code_texture_class, bulk_density, coarse_fragment_vol,
+    organic_layer_weight, ph_cacl2, ph_h2o, organic_carbon_total,
+    n_total, carbonates, exch_acidiy,
+    exch_al, exch_ca, exch_fe, exch_k, exch_mg, exch_mn,
+    exch_na, free_h, extrac_al, extrac_ca,
+    extrac_cd, extrac_cr, extrac_cu, extrac_fe, extrac_hg,
+    extrac_k, extrac_mg, extrac_mn, extrac_na,
+    extrac_ni, extrac_p, extrac_pb, extrac_s, extrac_zn,
+    tot_al, tot_ca, tot_fe, tot_k, tot_mg,
+    tot_mn, tot_na, rea_al, rea_fe, exch_bce, exch_ace,
+    exch_cec, elec_cond, ni, base_saturation,
+    origin, code_soil_horizon_sample_c, p_ox, other_obs,
+    partner_code, q_flag, change_date, code_line,
+    line_nr, qif_key, download_date, layer_type,
+    code_plot_orig, plot_id, unique_survey, unique_survey_repetition,
+    unique_survey_layer, unique_layer_repetition, unique_layer,
+    origin_merged, origin_merge_info, bulk_density_orig,
+    organic_carbon_total_orig, organic_layer_weight_orig,
+    coarse_fragment_vol_orig, part_size_clay_orig)
+
+assertthat::assert_that(all(names(so_som) == names(so_som_afscdb_to_add)))
+
+so_som <- rbind(so_som,
+                so_som_afscdb_to_add)
+
+} # End of adding afscdb records
+
+
+
+
+## 4.3. Gap-fill "so_prf" using manually harmonised profile data Nathalie ----
+
+assertthat::assert_that(file.exists(paste0("./data/additional_data/",
+                                           "SO_PRF_ADDS.xlsx")),
+                        msg = paste0("'./data/additional_data/",
+                                     "SO_PRF_ADDS.xlsx' ",
+                                     "does not exist."))
+
+so_prf_adds <-
+  openxlsx::read.xlsx(paste0("./data/additional_data/",
+                             "SO_PRF_ADDS.xlsx"),
+                      sheet = 2) %>%
+  mutate(unique_survey_profile =
+           paste0(code_country, "_",
+                  survey_year, "_",
+                  code_plot, "_",
+                  profile_pit_id)) %>%
+  mutate(unique_survey =
+           paste0(code_country, "_",
+                  survey_year, "_",
+                  code_plot)) %>%
+  mutate(unique_profile =
+           paste0(code_country, "_",
+                  code_plot, "_",
+                  profile_pit_id)) %>%
+  rename(bs_class = "BS.(high/low)",
+         plot_id = PLOT_ID)
+
+so_prf_adds_agg <- so_prf_adds %>%
+  mutate(soil_wrb = paste0(RSGu, "_",
+                           QUALu, "_",
+                           SPECu, "_",
+                           METHOD_RSGu, "_",
+                           DEPTHSTOCK, "_",
+                           bs_class, "_",
+                           remark)) %>%
+  group_by(plot_id) %>%
+  # Sometimes there are different options, e.g. plot_id 60_9
+  # No good way to solve this - we just have to pick one
+  summarise(soil_wrb =
+              names(which.max(table(soil_wrb[!is.na(soil_wrb)])))) %>%
+  # Split the data back into the original columns
+  separate(soil_wrb,
+           into = c("code_wrb_soil_group",
+                    "code_wrb_qualifier_1",
+                    "code_wrb_spezifier_1",
+                    "method_wrb_harmonisation_fscc",
+                    "eff_soil_depth",
+                    "bs_class",
+                    "remark_harmonisation_fscc"),
+           sep = "_") %>%
+  mutate(eff_soil_depth = as.numeric(eff_soil_depth))
+
+so_prf_adds_agg[so_prf_adds_agg == "NA"] <- NA
+so_prf_adds_agg[so_prf_adds_agg == ""] <- NA
+
+
+so_prf <- so_prf %>%
+  rename(code_wrb_soil_group_orig = code_wrb_soil_group,
+         code_wrb_qualifier_1_orig = code_wrb_qualifier_1,
+         code_wrb_spezifier_1_orig = code_wrb_spezifier_1,
+         eff_soil_depth_orig = eff_soil_depth) %>%
+  left_join(so_prf_adds_agg,
+            by = "plot_id")
+
+
+
+
+
+
+
+# 5. Automated data corrections using inconsistency-generating functions ----
+
+# Note: at the moment, these functions also generate PIRs, but this is not
+# relevant to the current aim of this script, i.e. data processing to layer 1.
+
+
+
+## 5.1. Inconsistencies in primary keys (survey_year, code_layer) ----
+
+# The argument "solve = TRUE" tells
+# the function to rename "code_layer" in "s1_som"
+# in case of ambiguous (non-unique) code_layers
+
+source("./src/functions/get_primary_inconsistencies.R")
+get_primary_inconsistencies("y1", save_to_env = TRUE)
+get_primary_inconsistencies("s1", solve = TRUE, save_to_env = TRUE)
+get_primary_inconsistencies("si", save_to_env = TRUE)
+get_primary_inconsistencies("so", solve = TRUE, save_to_env = TRUE)
+get_primary_inconsistencies("sw", save_to_env = TRUE)
+
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_primary_inconsistencies", save_to_env = TRUE)
+View(list_primary_inconsistencies)
+
+
+
+
+## 5.2. Inconsistencies in coordinates ----
+
+# Surveys with coordinates:
+# "y1_pl1" "s1_pls" "s1_prf" "si_plt" "so_pls" "so_prf"
+
+
+# Get inconsistencies
+
+source("./src/functions/get_coordinate_inconsistencies.R")
+
+get_coordinate_inconsistencies(boundary_buffer_meter = 3000,
+                               save_to_env = TRUE)
+View(list_coordinate_inconsistencies)
+
+
+
+
+## 5.3. Inconsistencies in soil layers ----
+# "solve" indicates whether the obvious mistakes can be solved
+
+source("./src/functions/get_layer_inconsistencies.R")
+so_som <- get_layer_inconsistencies("so_som", so_som,
+                                    solve = TRUE, save_to_env = FALSE)
+s1_som <- get_layer_inconsistencies("s1_som", s1_som,
+                                    solve = TRUE, save_to_env = FALSE)
+so_pfh <- get_layer_inconsistencies("so_pfh", so_pfh,
+                                    solve = TRUE, save_to_env = FALSE)
+s1_pfh <- get_layer_inconsistencies("s1_pfh", s1_pfh,
+                                    solve = TRUE, save_to_env = FALSE)
+
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
+View(list_layer_inconsistencies)
+
+# TO DO: adjust layer depths in profiles that contain peat/mineral layers
+# with negative depths!!!
+
+
+
+
+## 5.4. Inconsistencies in range/presence of data ----
+# "solve = TRUE" converts data in the wrong units to the correct units
+
+source("./src/functions/get_range_inconsistencies.R")
+
+s1_som <- get_range_inconsistencies("s1_som", s1_som,
+                                    solve = TRUE, save_to_env = FALSE)
+s1_pfh <- get_range_inconsistencies("s1_pfh", s1_pfh,
+                                    solve = TRUE, save_to_env = FALSE)
+so_som <- get_range_inconsistencies("so_som", so_som,
+                                    solve = TRUE, save_to_env = FALSE)
+so_pfh <- get_range_inconsistencies("so_pfh", so_pfh,
+                                    solve = TRUE, save_to_env = FALSE)
+sw_swc <- get_range_inconsistencies("sw_swc", sw_swc,
+                                    solve = TRUE, save_to_env = FALSE)
+so_prf <- get_range_inconsistencies("so_prf", so_prf,
+                                    save_to_env = FALSE)
+s1_prf <- get_range_inconsistencies("s1_prf", s1_prf,
+                                    save_to_env = FALSE)
+so_pls <- get_range_inconsistencies("so_pls", so_pls,
+                                    save_to_env = FALSE)
+s1_pls <- get_range_inconsistencies("s1_pls", s1_pls,
+                                    save_to_env = FALSE)
+si_sta <- get_range_inconsistencies("si_sta", si_sta,
+                                    save_to_env = FALSE)
+y1_st1 <- get_range_inconsistencies("y1_st1", y1_st1,
+                                    save_to_env = FALSE)
+
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
+View(list_range_inconsistencies)
+
+
+## 5.5. Harmonise data below LOQ ----
+
+source("./src/functions/harmonise_below_loqs.R")
+
+so_som <- harmonise_below_loqs(survey_form = "so_som",
+                               data_frame = so_som)
+
+so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
+                               data_frame = so_pfh,
+                               parameters = c("horizon_clay",
+                                              "horizon_silt",
+                                              "horizon_sand",
+                                              "horizon_c_organic_total",
+                                              "horizon_n_total"))
+
+
+
+## 5.6. Inconsistencies in derived variables ----
+
+source("./src/functions/get_derived_variable_inconsistencies.R")
+
+get_derived_variable_inconsistencies("so_som", save_to_env = TRUE)
+get_derived_variable_inconsistencies("so_pfh", save_to_env = TRUE)
+get_derived_variable_inconsistencies("s1_som", save_to_env = TRUE)
+get_derived_variable_inconsistencies("s1_pfh", save_to_env = TRUE)
+
+source("./src/functions/bind_objects_starting_with.R")
+bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
+View(list_derived_inconsistencies)
+
+
+
+
+# 6. Internal gap-filling ----
+
+  ## To do: Gap-fill effective soil depth Bruno?
   
-  
-  
-  
-## 5.4. Gap-fill "som": parameters for C stock calculations ----
+# Gap-fill "som": parameters for C stock calculations
 # Note: At the moment, focus on parameters for C stock calculations only
   
   # Firstly apply the "get_layer_inconsistencies" function
   # which already gap-fills layer limits
   
-  source("./src/functions/get_layer_inconsistencies.R")
-  so_som <- get_layer_inconsistencies("so_som", so_som,
-                                      solve = TRUE, save_to_env = FALSE)
+  # source("./src/functions/get_layer_inconsistencies.R")
+  # so_som <- get_layer_inconsistencies("so_som", so_som,
+  #                                     solve = TRUE, save_to_env = FALSE)
   
-  ### Source 1: "sw_swc" ----
+## 6.1. Source 1: "sw_swc" ----
   
   # Import additional sw_swc file with corresponding fixed-depth layers
   # by Nathalie (manually created)
@@ -411,23 +735,25 @@ so_som <- so_som %>%
   
   
   
-  ### Source 2: "so_pfh" ----
+## 6.2. Source 2: "so_pfh" ----
   
   # Redundant layers do already need to be removed from so_pfh before
   # being able to harmonise the layers into pre-defined depth intervals
   
-  source("./src/functions/get_layer_inconsistencies.R")
-  so_pfh_harmonised_layers <- get_layer_inconsistencies("so_pfh", so_pfh,
-                                                        solve = TRUE,
-                                                        save_to_env = FALSE)
+  # source("./src/functions/get_layer_inconsistencies.R")
+  # so_pfh_harmonised_layers <- get_layer_inconsistencies("so_pfh", so_pfh,
+  #                                                       solve = TRUE,
+  #                                                       save_to_env = FALSE)
   
   # This function converts random (e.g. pedogenic) depth layers
   # into a dataframe with pre-defined fixed-depth layers
   
+  assertthat::assert_that("layer_number" %in% names(so_pfh))
+  
   source("./src/functions/harmonise_into_fixed_depth_layers.R")
   
   so_pfh_fixed <-
-    harmonise_into_fixed_depth_layers(survey_form = so_pfh_harmonised_layers)
+    harmonise_into_fixed_depth_layers(survey_form = so_pfh)
   
   # The function harmonise_into_fixed_depth_layers automatically makes a
   # column "bulk_density" which contains values for "horizon_bulk_dens_measure"
@@ -533,7 +859,10 @@ so_som <- so_som %>%
   # Aggregate different survey years per unique layer (plot_id x code_layer)
   # To gap-fill data not from the same survey_year
   
-  so_pfh_fixed_otheryear <- so_pfh_fixed2 %>%
+  so_pfh_fixed_otheryear <- so_pfh_fixed %>%
+    mutate(unique_layer = paste0(code_country, "_",
+                                 code_plot, "_",
+                                 code_layer)) %>%
     group_by(unique_layer,
              code_country, code_plot, code_layer) %>%
     summarise(layer_limit_superior =
@@ -570,7 +899,7 @@ so_som <- so_som %>%
   
  
   
-  ### Source 3: "so_som" (other survey years) ----
+## 6.3. Source 3: "so_som" (other survey years) ----
   
   so_som_otheryear <- so_som %>%
     group_by(unique_layer,
@@ -608,7 +937,7 @@ so_som <- so_som %>%
   
   
   
-  ### Compile ----
+## 6.4. Compile ----
   
   # Add data to so_som
   
@@ -839,153 +1168,6 @@ so_som <- so_som %>%
   
   
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-# 6. Automated data corrections using inconsistency-generating functions ----
-
-# Note: at the moment, these functions also generate PIRs, but this is not
-# relevant to the current aim of this script, i.e. data processing to layer 1.
-  
-  
-  
-## 6.1. Inconsistencies in primary keys (survey_year, code_layer) ----
-
-  # The argument "solve = TRUE" tells
-  # the function to rename "code_layer" in "s1_som"
-  # in case of ambiguous (non-unique) code_layers
-
-source("./src/functions/get_primary_inconsistencies.R")
-get_primary_inconsistencies("y1", save_to_env = TRUE)
-get_primary_inconsistencies("s1", solve = TRUE, save_to_env = TRUE)
-get_primary_inconsistencies("si", save_to_env = TRUE)
-get_primary_inconsistencies("so", solve = TRUE, save_to_env = TRUE)
-get_primary_inconsistencies("sw", save_to_env = TRUE)
-
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_primary_inconsistencies", save_to_env = TRUE)
-View(list_primary_inconsistencies)
-
-
-
-
-## 6.2. Inconsistencies in coordinates ----
-
-# Surveys with coordinates:
-# "y1_pl1" "s1_pls" "s1_prf" "si_plt" "so_pls" "so_prf"
-
-
-# Get inconsistencies
-
-source("./src/functions/get_coordinate_inconsistencies.R")
-
-get_coordinate_inconsistencies(boundary_buffer_meter = 3000,
-                               save_to_env = TRUE)
-View(list_coordinate_inconsistencies)
-
-
-
-
-## 6.3. Inconsistencies in soil layers ----
-# "solve" indicates whether the obvious mistakes can be solved
-
-source("./src/functions/get_layer_inconsistencies.R")
-so_som <- get_layer_inconsistencies("so_som", so_som,
-                                    solve = TRUE, save_to_env = FALSE)
-s1_som <- get_layer_inconsistencies("s1_som", s1_som,
-                                    solve = TRUE, save_to_env = FALSE)
-so_pfh <- get_layer_inconsistencies("so_pfh", so_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
-s1_pfh <- get_layer_inconsistencies("s1_pfh", s1_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
-
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
-View(list_layer_inconsistencies)
-
-# TO DO: adjust layer depths in profiles that contain peat/mineral layers
-# with negative depths!!!
-
-
-
-
-## 6.4. Inconsistencies in range/presence of data ----
-# "solve = TRUE" converts data in the wrong units to the correct units
-
-source("./src/functions/get_range_inconsistencies.R")
-
-s1_som <- get_range_inconsistencies("s1_som", s1_som,
-                                    solve = TRUE, save_to_env = FALSE)
-s1_pfh <- get_range_inconsistencies("s1_pfh", s1_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
-so_som <- get_range_inconsistencies("so_som", so_som,
-                                    solve = TRUE, save_to_env = FALSE)
-so_pfh <- get_range_inconsistencies("so_pfh", so_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
-sw_swc <- get_range_inconsistencies("sw_swc", sw_swc,
-                                    solve = TRUE, save_to_env = FALSE)
-so_prf <- get_range_inconsistencies("so_prf", so_prf,
-                                    save_to_env = FALSE)
-s1_prf <- get_range_inconsistencies("s1_prf", s1_prf,
-                                    save_to_env = FALSE)
-so_pls <- get_range_inconsistencies("so_pls", so_pls,
-                                    save_to_env = FALSE)
-s1_pls <- get_range_inconsistencies("s1_pls", s1_pls,
-                                    save_to_env = FALSE)
-si_sta <- get_range_inconsistencies("si_sta", si_sta,
-                                    save_to_env = FALSE)
-y1_st1 <- get_range_inconsistencies("y1_st1", y1_st1,
-                                    save_to_env = FALSE)
-
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
-View(list_range_inconsistencies)
-
-
-
-## 6.5. Inconsistencies in derived variables ----
-
-source("./src/functions/get_derived_variable_inconsistencies.R")
-
-get_derived_variable_inconsistencies("so_som", save_to_env = TRUE)
-get_derived_variable_inconsistencies("so_pfh", save_to_env = TRUE)
-get_derived_variable_inconsistencies("s1_som", save_to_env = TRUE)
-get_derived_variable_inconsistencies("s1_pfh", save_to_env = TRUE)
-
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
-View(list_derived_inconsistencies)
-
-
-
-
-
 
 # 7. Export the processed survey forms ----
 
@@ -993,6 +1175,9 @@ View(list_derived_inconsistencies)
 
 source("./src/functions/save_to_google_drive.R")
 save_to_google_drive(path_name = "layer1_data")
+save_to_google_drive(objects_to_save = c("si", "so"),
+                     path_name = "layer1_data")
+
 
 ## 7.2. Sync local data with Google Drive ----
 
@@ -1004,7 +1189,8 @@ sync_local_data(list_subfolders_data = "layer1_data",
 
 source("./src/functions/read_processed.R")
 read_processed(save_to_env = TRUE)
-
+read_processed(survey_forms = c("si", "so"),
+               save_to_env = TRUE)
 
 
 
