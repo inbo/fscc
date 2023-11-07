@@ -571,6 +571,8 @@ source("./src/functions/bind_objects_starting_with.R")
 bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
 View(list_layer_inconsistencies)
 
+
+
 # TO DO: adjust layer depths in profiles that contain peat/mineral layers
 # with negative depths!!!
 
@@ -629,12 +631,17 @@ so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
 
 ## 5.6. Inconsistencies in derived variables ----
 
+# TO DO: update to integrate LOQs better
 source("./src/functions/get_derived_variable_inconsistencies.R")
 
-get_derived_variable_inconsistencies("so_som", save_to_env = TRUE)
-get_derived_variable_inconsistencies("so_pfh", save_to_env = TRUE)
-get_derived_variable_inconsistencies("s1_som", save_to_env = TRUE)
-get_derived_variable_inconsistencies("s1_pfh", save_to_env = TRUE)
+so_som <- get_derived_variable_inconsistencies("so_som", so_som,
+                                               save_to_env = FALSE)
+so_pfh <- get_derived_variable_inconsistencies("so_pfh", so_pfh,
+                                               save_to_env = FALSE)
+s1_som <- get_derived_variable_inconsistencies("s1_som", s1_som,
+                                               save_to_env = FALSE)
+s1_pfh <- get_derived_variable_inconsistencies("s1_pfh", s1_pfh,
+                                               save_to_env = FALSE)
 
 source("./src/functions/bind_objects_starting_with.R")
 bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
