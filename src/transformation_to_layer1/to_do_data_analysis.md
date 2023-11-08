@@ -15,11 +15,11 @@ Please add any observed data issues to this file
   + Add column with data source for different variables (Note: partly completed)
   + ~~Apply further internal gap-filling possibilities (e.g. constant bulk density) + list assumptions (see presentation Bruno Vienna)~~
   + ~~"som" survey forms gap-filling for C stocks:~~
-        -   ~~bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density");~~ pedotransfer functions/machine learning
-        -   ~~organic_carbon_total: from "pfh" ("horizon_c_organic_total")~~
-        -   ~~coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol");~~ machine learning?
-        -   ~~effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm? This was manually harmonised by Nathalie (data form "./data/additional_data/SO_PRF_ADDS.csv")~~
-        -   profiles with data until 20 cm or 40 cm: monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
+    - ~~bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density");~~ pedotransfer functions/machine learning
+    - ~~organic_carbon_total: from "pfh" ("horizon_c_organic_total")~~
+    - ~~coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol");~~ machine learning?
+    - ~~effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm? This was manually harmonised by Nathalie (data form "./data/additional_data/SO_PRF_ADDS.csv")~~
+    - profiles with data until 20 cm or 40 cm: monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
 * Check whether vertical shifting of layer limits is needed, e.g. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Rule for organic H layers:
   + if code_layer is H and no layer limits, the layer should be in the forest floor. Change layer_type to forest_floor.
   + if organic H layers are < 40 cm thick in total (and below any forest floor or above any mineral soil), this layer(s) should be considered as the forest floor. Change layer_type to forest_floor.
@@ -42,10 +42,10 @@ Please add any observed data issues to this file
 * ~~Replace impossible data (e.g. bulk density above 2650 kg m-3) by NA~~
 * ~~Regarding implausible values of "organic_layer_weight":~~
   + ~~Are Slovakian organic_layer_weight values for code_plot 211 and 212 reported in the wrong units?~~
-        -  ~~Other Slovakian plots: organic layer weights give a bulk density of 13.74 - 170 kg m-3 (95 % quantile)~~
-        -  ~~Plot 211: organic layer weights give a bulk density of 7056.38 - 47071.00 kg m-3 (95 % quantile), i.e. a factor 280 higher~~
-        -  ~~Plot 212: organic layer weights give a bulk density of 19212.08 - 88668.75 kg m-3 (95 % quantile), i.e. a factor 455 higher~~
-        -  ~~Conclusion there are two options: (i) either the data are wrongly reported in tonnes per ha (factor 100 higher); of (ii) the data are wrongly reported in g per m2 (factor 1000 higher). Assumption: they were reported in g per m2.~~
+    - ~~Other Slovakian plots: organic layer weights give a bulk density of 13.74 - 170 kg m-3 (95 % quantile)~~
+    - ~~Plot 211: organic layer weights give a bulk density of 7056.38 - 47071.00 kg m-3 (95 % quantile), i.e. a factor 280 higher~~
+    - ~~Plot 212: organic layer weights give a bulk density of 19212.08 - 88668.75 kg m-3 (95 % quantile), i.e. a factor 455 higher~~
+    - ~~Conclusion there are two options: (i) either the data are wrongly reported in tonnes per ha (factor 100 higher); of (ii) the data are wrongly reported in g per m2 (factor 1000 higher). Assumption: they were reported in g per m2.~~
   + ~~Values of organic_layer_weight for which the derived bulk density is higher than 1400 kg m-3 (density of organic matter) are impossible and replaced by NA.~~
 * ~~LOQ: harmonise and list assumptions~~
 * Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.
