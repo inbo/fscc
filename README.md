@@ -147,6 +147,7 @@ We use Git and GitHub to facilitate collaboration and version control. The main 
 All individual steps of the data (pre)processing for a certain output type are compiled, documented and applied using one Rmarkdown document per output type, such as `./src/solid_soil_data_transformation_to_layer1.R` for the transformation of "layer 0" to "layer 1".
 
 (Note: the information below is crossed out because intermediate breakpoints are no longer used. The information is not deleted because these breakpoints are still implemented in some of the code, e.g. to identify the most recent version of the data when synchronising or reading processed data.)
+
 ~~The two data preprocessing scripts for the transformation to "layer 1" and for the transformation to "layer 2" contain several so-called **breakpoints**: these are important intermediate points in the Rmarkdown script in which intermediate versions of the data forms (processed with the steps preceding this breakpoint) are stored (in the folder `./output/intermediate_data/`). As such, these breakpoints allow to divide the data transformation process into manageable steps and save the data at specific points to avoid re-running the entire script from the beginning (this way saving processing time). Each breakpoint and the related intermediate data form versions are named as follows: *"[X]_[YY]_intermediate_data"* (e.g. "0_01_intermediate_data"), with:~~
 ~~* *[X]*: one number which refers to the preceding layer of the data, i.e. "0" for intermediate data between "layer 0" and "layer 1", and "1" for intermediate data between "layer 1" and "layer 2"~~
 ~~* *[YY]*: two numbers which refer to the breakpoint, e.g. "01" for the first breakpoint. Per "layer" (i.e. per unique *[X]*), numbers always start from 01 and go up.~~
@@ -235,7 +236,6 @@ root_drive <- "1Txxxxxxxe7"
 * **Pull** changes from the repository before starting your work to ensure you have the latest code and datasets from other team members.
 * Synchronise your local data with the up-to-date Google Drive folder using the `sync_local_data()` function.
 * Import the data from your local folder in R using the `read_processed()` function.
-* Remove any local branches which were merged with the main branch on GitHub
 
 
 #### Downloading raw data (layer 0) from PCC database
@@ -247,15 +247,15 @@ root_drive <- "1Txxxxxxxe7"
 
 
 #### Adjust the data transformation code
+* Remove any local branches which were merged with the main branch on GitHub.
+* Checkout the correct branch or create a **new branch**. Every collaborator should have his/her own side branch.
 * Open the main R Markdown script for the given output type (e.g. `./src/solid_soil_data_transformation_to_layer1.R`) to access the data transformation workflow.
 * Review the code to understand the different stages of the data transformation process.
-* Create a **new branch**. Every collaborator should have his/her own side branch.
 * Adjust the data transformation code as needed in a clear way.
 * Save the updated data forms on Google Drive when needed.
 * Regularly stage and **commit** changes to the correct branch, including the new or updated intermediate data forms, using clear and concise commit messages (to describe the modifications made to the code and datasets), and **push** them to the correct branch in the remote GitHub repository.
 * When edits on the branch are ready to move to the stable "reference" main branch: create a **pull request** on GitHub to merge the branch with the main branch
 * Communicate with collaborators to agree on the final stable version after any pull requests, and merge the adaptation into the main branch.
-
 
 
 #### Rules for collaboration (based on INBO)
