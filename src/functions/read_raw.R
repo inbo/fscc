@@ -876,7 +876,7 @@ for (i in seq_along(survey_forms)) {
   assign_env(paste0(code_survey, "_",
                 list_data_tables[[which(names(list_data_tables) ==
                                           code_survey)]][i]),
-             df)
+             as.tibble(df))
 
   }
   }
@@ -918,8 +918,8 @@ survey_forms_with_coordinates <- NULL
 
 for (i in seq_along(surveys)) {
   if (surveys[i] %in% ls(envir = .GlobalEnv)) {
-    if (!identical(get_env(surveys[i])$latitude_dec, NULL) &&
-        !identical(get_env(surveys[i])$longitude_dec, NULL)) {
+    if (exists("latitude_dec", where = get_env(surveys[i])) &&
+        exists("longitude_dec", where = get_env(surveys[i]))) {
 
       if (is.null(survey_forms_with_coordinates)) {
         survey_forms_with_coordinates <- surveys[i]} else
@@ -996,14 +996,15 @@ if (save_to_env == TRUE) {
   source("./src/functions/assign_env.R")
 
   if (exists("data_availability", envir = environment())) {
-    assign_env(paste0("data_availability_", code_survey), data_availability)
+    assign_env(paste0("data_availability_", code_survey),
+               as.tibble(data_availability))
   }
 
-assign_env(paste0("coordinates_", code_survey), coordinates)
+assign_env(paste0("coordinates_", code_survey), as.tibble(coordinates))
 
-assign_env("d_country", d_country)
+assign_env("d_country", as.tibble(d_country))
 
-assign_env("d_partner", d_partner)
+assign_env("d_partner", as.tibble(d_partner))
 
 }
 }

@@ -406,24 +406,24 @@ get_primary_inconsistencies <- function(code_survey,
 
     if ("code_layer_original" %in% names(df)) {
       column_code_layer_horizon_master <-
-        df[, which(names(df) == "code_layer_original")]
+        pull(df[, which(names(df) == "code_layer_original")])
       } else
     if ("code_layer" %in% names(df)) {
       column_code_layer_horizon_master <-
-        df[, which(names(df) == "code_layer")]
+        pull(df[, which(names(df) == "code_layer")])
       } else
     if ("horizon_master" %in% names(df)) {
       column_code_layer_horizon_master <-
-        df[, which(names(df) == "horizon_master")]
+        pull(df[, which(names(df) == "horizon_master")])
       }
 
     if ("repetition" %in% names(df)) {
       column_repetition_profile_pit_id <-
-        df[, which(names(df) == "repetition")]
+        pull(df[, which(names(df) == "repetition")])
       } else
     if ("profile_pit_id" %in% names(df)) {
       column_repetition_profile_pit_id <-
-        df[, which(names(df) == "profile_pit_id")]
+        pull(df[, which(names(df) == "profile_pit_id")])
       }
 
 

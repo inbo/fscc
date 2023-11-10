@@ -364,7 +364,7 @@ cat(paste0("Most recent data were found in the '",
 
     # Assign survey form to global environment
 
-    assign_env(survey_forms_code[j], df)
+    assign_env(survey_forms_code[j], as.tibble(df))
 
     }
 
@@ -378,7 +378,7 @@ cat(paste0("Most recent data were found in the '",
                      sep = ";")
 
       assign_env(paste0("coordinates_", survey_codes[i]),
-                 df)
+                 as.tibble(df))
 
       cat(paste0("Data form '",
                  paste0("coordinates_", survey_codes[i]),
@@ -395,7 +395,7 @@ cat(paste0("Most recent data were found in the '",
                      sep = ";")
 
       assign_env(paste0("data_availability_", survey_codes[i]),
-                 df)
+                 as.tibble(df))
 
       cat(paste0("Data form '",
                  paste0("data_availability_", survey_codes[i]),
@@ -430,7 +430,7 @@ cat(paste0("Most recent data were found in the '",
                    sep = ";")
 
     assign_env(list_additional[i],
-               df)
+               as.tibble(df))
 
     cat(paste0("Data form '",
                list_additional[i],

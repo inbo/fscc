@@ -8,12 +8,12 @@
 #' and updates the data accordingly if this has not yet been updated by
 #' the partners in layer 0.
 #'
-#' @param survey_form A data frame representing the survey form data.
-#' @param name_survey_form The name or code of the survey form.
+#' @param code_survey The name or code of the survey form.
 #'   If \code{survey_form} is provided, \code{name_survey_form} should
 #'   be a character. If \code{survey_form} is not provided,
 #'   \code{name_survey_form} should be a character vector representing
 #'   the names or codes of the survey forms.
+#' @param data_frame A data frame representing the survey form data.
 #' @param save_to_env Logical, indicating whether to save the resulting data
 #'   frames to the environment. Default is \code{FALSE}.
 #'
@@ -34,8 +34,8 @@
 #'                  save_to_env = TRUE)
 #'
 
-gapfill_from_pir <- function(survey_form = NA,
-                             name_survey_form,
+gapfill_from_pir <- function(code_survey,
+                             data_frame = NULL,
                              save_to_env = FALSE) {
 
   source("./src/functions/get_env.R")
@@ -45,21 +45,23 @@ gapfill_from_pir <- function(survey_form = NA,
 
   # Assert that input arguments are in correct classes
   
-  assertthat::assert_that("character" %in% class(name_survey_form),
-                          msg = paste0("Input variable 'name_survey_form' ",
+  assertthat::assert_that("character" %in% class(code_survey),
+                          msg = paste0("Input variable 'code_survey' ",
                                        "should be a character."))
   
   # if survey_form is not NA,
-  # assert that name_survey_form is not a code (e.g. "so")
+  # assert that code_survey is not a code (e.g. "so")
 
-  if (!is.na(survey_form)) {
+  if (!is.null(data_frame)) {
+    
+    survey_forms <- code_survey
 
-    assertthat::assert_that("data.frame" %in% class(survey_form),
-                            msg = paste0("Input variable 'survey_form' ",
+    assertthat::assert_that("data.frame" %in% class(data_frame),
+                            msg = paste0("Input variable 'data_frame' ",
                                          "should be a dataframe."))
 
-    assertthat::assert_that(length(name_survey_form) == 1 &&
-                            length(unlist(strsplit(name_survey_form, "_"))) >
+    assertthat::assert_that(length(code_survey) == 1 &&
+                            length(unlist(strsplit(code_survey, "_"))) >
                               1,
                             msg = paste0("The name of the input survey form ",
                                          "should consist of two parts, e.g. ",
@@ -74,20 +76,18 @@ gapfill_from_pir <- function(survey_form = NA,
                            y1 = c("pl1", "st1", "ev1"),
                            sw = c("swa", "swc"))
   
-  if (length(name_survey_form) == 1 &&
-      length(unlist(strsplit(name_survey_form, "_"))) == 1 &&
-      name_survey_form %in% names(list_data_tables)) {
+  if (length(code_survey) == 1 &&
+      length(unlist(strsplit(code_survey, "_"))) == 1 &&
+      code_survey %in% names(list_data_tables)) {
 
-    code_survey <- name_survey_form
-
-    name_survey_form <- paste0(code_survey, "_", 
-                               list_data_tables[[code_survey]])
+    survey_forms <- paste0(code_survey, "_", 
+                           list_data_tables[[code_survey]])
     
   }
   
   
 
-  for (j in seq_along(name_survey_form)) {
+  for (j in seq_along(survey_forms)) {
 
     if (!is.na(survey_form)) {
 
@@ -95,12 +95,19 @@ gapfill_from_pir <- function(survey_form = NA,
       
     } else {
       
-      df <- get_env(name_survey_form[j])
+      df <- get_env(survey_forms[j])
       
     }
-  
-  
 
+
+  # Gap-fill change_date if missing (e.g. in "so_prf")
+  # Assumption: 2009-12-06 (date on which database was established at PCC)
+    
+  df <- df %>%
+    mutate(change_date = ifelse(is.na(.data$change_date),
+                                as.character(as.Date("2009-12-06")),
+                                .data$change_date))
+  
   
   # Import original pir ----
   
@@ -226,7 +233,7 @@ gapfill_from_pir <- function(survey_form = NA,
   pir_checked_survey_form <-
     pir_checked %>%
     # Filter for inconsistencies of the given survey form
-    filter(.data$survey_form == name_survey_form[j]) %>%
+    filter(.data$survey_form == survey_forms[j]) %>%
     # Create column "unique_inconsistency_id"
     mutate(unique_inconsistency_id =
                paste0(survey_form, "_",
@@ -444,15 +451,15 @@ gapfill_from_pir <- function(survey_form = NA,
   for (i in seq_len(nrow(pir_checked_survey_form))) {
 
     col_ind <- which(colnames(df) == pir_checked_survey_form$parameter[i])
-    row_ind <- which(df$unique_layer_repetition ==
-                       pir_checked_survey_form$unique_layer_repetition[i])
+    row_ind <- which(df$code_line ==
+                       pir_checked_survey_form$code_line[i])
 
-    if (!identical(row_ind, integer(0))) {
-    if (length(row_ind) > 1) {
-      row_ind <- row_ind[which(df$code_line[row_ind] ==
-                                 pir_checked_survey_form$code_line[i])]
-    }
-    }
+    # if (!identical(row_ind, integer(0))) {
+    # if (length(row_ind) > 1) {
+    #   row_ind <- row_ind[which(df$code_line[row_ind] ==
+    #                              pir_checked_survey_form$code_line[i])]
+    # }
+    # }
 
     # If the records haven't been deleted meanwhile
 
@@ -498,14 +505,16 @@ gapfill_from_pir <- function(survey_form = NA,
       } else
 
       # If updated_value is not the same like the original value
-      if (!is_the_same(df[row_ind, col_ind],
+      if (!is_the_same(df[row_ind, col_ind] %>% pull,
                        pir_checked_survey_form$updated_value[i])) {
 
         if (pir_checked_survey_form$parameter[i] %in% numeric_columns) {
+          
           df[row_ind, col_ind] <-
             as.numeric(pir_checked_survey_form$updated_value[i])
         } else {
-        df[row_ind, col_ind] <- pir_checked_survey_form$updated_value[i]
+        df[row_ind, col_ind] <-
+          type.convert(pir_checked_survey_form$updated_value[i], as.is = TRUE)
         }
 
         pir_checked_survey_form$fscc_action[i] <- "updated"
@@ -531,7 +540,7 @@ gapfill_from_pir <- function(survey_form = NA,
             !str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
           
           df[row_ind, which(names(df) == "other_obs")] <-
-            paste0(df[row_ind, which(names(df) == "other_obs")], "; ",
+            paste0(pull(df[row_ind, which(names(df) == "other_obs")]), "; ",
                    pir_checked_survey_form$updated_value[i])
           
           pir_checked_survey_form$fscc_action[i] <- "updated"
@@ -549,16 +558,16 @@ gapfill_from_pir <- function(survey_form = NA,
     
     return(df)
     
-    assign_env(paste0("pir_applied_", name_survey_form[j]),
+    assign_env(paste0("pir_applied_", survey_forms[j]),
                pir_checked_survey_form)
     
   } else {
     
     if (save_to_env == TRUE) {
-      assign_env(name_survey_form[j],
+      assign_env(survey_forms[j],
                  df)
     }
-    assign_env(paste0("pir_applied_", name_survey_form[j]),
+    assign_env(paste0("pir_applied_", survey_forms[j]),
                pir_checked_survey_form)
   }
   

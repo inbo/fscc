@@ -34,20 +34,27 @@
 #' merge_duplicate_records("so_som", merge = TRUE)
 
 merge_duplicate_records <- function(survey_form,
+                                    data_frame = NULL,
                                     merge = FALSE,
                                     save_to_env = FALSE) {
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
+  
+  # Retrieve the survey_form data ----
+  
+  if (is.null(data_frame)) {
+    df <- get_env(survey_form)
+  } else {
+    df <- data_frame
+  }
 
-  # Retrieve data form from the global environment
 
-df <- get_env(survey_form)
-
-  # Store the number of initial rows
+# Store the number of initial rows
 
 nrow_initial <- nrow(df)
 
+# Issue with Latvian records ----
 # Four Latvian records (survey_year 2004; code_plot 5) do not have
 # code_layer nor layer limit information, and therefore have the same
 # unique_layer_repetition. However, based on "code_line", the records can
@@ -70,6 +77,8 @@ if (length(which(duplicated(df$unique_layer_repetition[ind_latvia]))) == 3) {
   df$unique_layer_repetition[ind_latvia[ind_latvia_002]] <- "64_2004_5_002_1"
   }
 
+
+# Evaluate for each of the duplicated unique_layer_repetition ----
 
 # List of unique_layer_repetition for which the combination of
 # unique_layer_repetition and the layer limits are duplicated
@@ -196,7 +205,7 @@ for (i in seq_along(vec_dupl)) {
 
     par_j <- df_pars_to_merge[j]
     col_ind_j <- which(names(df) == par_j)
-    values_j <- df[ind_dupl, col_ind_j]
+    values_j <- df[ind_dupl, col_ind_j] %>% pull
 
     # Parameters for which data in "MAN" row should be taken
 
@@ -266,6 +275,7 @@ if (identical(which(!is.na(df$to_remove)), integer(0))) {
            nrow_final, " rows (range survey years: ",
            min(years), " - ", max(years), ")")
 
+  
   # If the duplicate rows have to be removed
   if (merge == TRUE) {
 
@@ -276,6 +286,8 @@ if (identical(which(!is.na(df$to_remove)), integer(0))) {
     if (save_to_env == TRUE) {
     # Save dataframe in global environment
     assign_env(survey_form, df)
+    } else {
+      return(df)
     }
     
     # Print the following:
@@ -292,6 +304,8 @@ if (identical(which(!is.na(df$to_remove)), integer(0))) {
   if (save_to_env == TRUE) {
   # Save dataframe in global environment
   assign_env(survey_form, df)
+  } else {
+    return(df)
   }
 
   # Print the following:
