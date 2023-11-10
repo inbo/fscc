@@ -70,6 +70,7 @@ Please add any observed data issues to this file
 
 * "som" files: harmonisation of layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths (e.g. to (“OL”, “OFH”,) “M01”, “M12”, “M24”…) using C content and bulk density where needed, e.g. Estonia. Note that some of the fixed-depth profiles do contain gaps, i.e. impossible to harmonise (except through mass-preserving splines?)
 * Summarise over different replicate profiles (“repetition” or “profile_pit_id”) per survey per plot (for each layer): average and standard deviation/confidence interval? (only possible for “som” survey forms)
+* Remove profiles without below-ground data? (i.e. only forest floor)
 * "prf" and "pfh" files: retain one observation over time (data in these survey forms are assumed to be constant)
 * "prf": retain one record per plot
 * Selection of "useful" plots to be retained for further processing?
