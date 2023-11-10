@@ -954,7 +954,7 @@ get_range_inconsistencies <- function(survey_form,
                                              length(vec_inconsistency))),
                    parameter_unit = rep(parameter_unit,
                                         length(vec_inconsistency)),
-                   parameter_value = df[vec_inconsistency, col_ind],
+                   parameter_value = pull(df[vec_inconsistency, col_ind]),
                    inconsistency_reason = inconsistency_reason,
                    inconsistency_type = inconsistency_type,
                    rule_id = rule_id,
@@ -2451,7 +2451,10 @@ get_range_inconsistencies <- function(survey_form,
                                     "rea_fe_any_survey",
                                     "non_stony",
                                     "calcareous_pH5",
-                                    "calcareous_pH6"))]
+                                    "calcareous_pH6",
+                                    "ni",
+                                    "code_soil_horizon_sample_c",
+                                    "elec_cond"))]
   }
 
   # Save the survey form and list_range_inconsistencies for the given survey
