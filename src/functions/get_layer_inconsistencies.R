@@ -118,6 +118,10 @@ get_layer_inconsistencies <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  # Monitor how long it takes to run this function
+  
+  start_time_r <- Sys.time()
+  
   # Import the inconsistency catalogue ----
   
   assertthat::assert_that(
@@ -196,7 +200,8 @@ layer_number_two_forest_floor_layers <-
              combi_5 = c("OL", "OF"),
              combi_6 = c("OL", "OFH"),
              combi_7 = c("OL", "OH"),
-             combi_8 = c("OLF", "OH"))
+             combi_8 = c("OLF", "OH"),
+             combi_9 = c("O", "H"))
 
 layer_number_three_forest_floor_layers <-
   data.frame(layer_number = c(1, 2, 3),
@@ -213,10 +218,12 @@ d_depth_level_soil <- read.csv("./data/additional_data/d_depth_level_soil.csv",
                                sep = ";")
 
 
+
+
   # Initialise variables to store layer numbers and limits
 
-df$layer_number_superior <- NA # Layer numbers by ranking layer_limit_superior
-df$layer_number_inferior <- NA # Layer numbers by ranking layer_limit_superior
+# df$layer_number_superior <- NA # Layer numbers by ranking layer_limit_superior
+# df$layer_number_inferior <- NA # Layer numbers by ranking layer_limit_superior
 df$layer_number <- NA # Final layer numbers
                       # If there are overlapping layers
                       # between 0 and 10 cm depth
@@ -224,11 +231,11 @@ df$layer_number <- NA # Final layer numbers
                       # layer numbers are not given for the "redundant layer(s)"
                       # (in this case: least detailed redundant layer(s),
                       # i.e. M01)
-df$layer_number_combined_layers <- NA # If there are overlapping layers
-                                      # (e.g. M05 & M51 & M01),
-                                      # layer numbers of the least detailed
-                                      # profile (i.e. with M01)
-                                      # are represented here
+# df$layer_number_combined_layers <- NA # If there are overlapping layers
+#                                       # (e.g. M05 & M51 & M01),
+#                                       # layer numbers of the least detailed
+#                                       # profile (i.e. with M01)
+#                                       # are represented here
 
   # In the end, only "layer_number" is retained in the saved survey form
   # TO DO: adjust script so that the other three layer number versions are
@@ -327,9 +334,10 @@ if (unlist(strsplit(survey_form, "_"))[1] == "so") {
 
 
 
-# Evaluate soil profiles per unique_survey_repetition
+# Evaluate soil profiles per unique_survey_repetition ----
 
 for (i in seq_along(unique(df$unique_survey_repetition))) {
+#for (i in 1259) {
 
 # Determine index of layers with the given unique_survey_repetition in df
 vec <- which(unique(df$unique_survey_repetition)[i] ==
@@ -348,6 +356,70 @@ if (unique(df$unique_survey_repetition[vec]) == "64_2004_5_1") {
     vec_ff <- vec[which(is.na(df$code_layer[vec]))]
   }
 }
+
+
+
+
+# Special case: Latvian records without code_layer
+# There are two Latvian records without code_layer, layer_limits,
+# and with only one organic_carbon_total value
+# Assumption: since the other records of the same
+# unique_survey_repetition are M01, M12, M24, M48, and
+# organic_layer_weight is reported, we will assume that these are
+# forest floor layers.
+# Because of the organic_layer_weight information, these records
+# are still valuable for C stock calculations.
+# Deriving which of the records is on top
+# and which is below can only happen based on
+# analysis of the organic_layer_weight in so_som profiles
+# with at least two forest floor layers. This teaches us that
+# it is the most likely that the inferior layer usually has a
+# higher organic_layer_weight than the superior layer.
+# As such, we will name the code_layer of these records so that
+# they will be sorted accordingly.
+# This also matches with the values in the columns "code_line" and
+# "line_nr".
+
+if (!identical(vec_ff, integer(0))) {
+if (unique(df$unique_survey_repetition[vec_ff]) == "64_2004_5_1") {
+  if (all(is.na(df$code_layer[vec_ff]))) {
+    
+    ind_superior <-
+      vec_ff[which(df$organic_layer_weight[vec_ff] ==
+                     min(df$organic_layer_weight[vec_ff]))]
+    
+    ind_inferior <-
+      vec_ff[which(df$organic_layer_weight[vec_ff] ==
+                     max(df$organic_layer_weight[vec_ff]))]
+    
+    df$code_layer[ind_superior] <- "OL"
+    df$code_layer[ind_inferior] <- "OFH"
+    
+    df$unique_survey_layer[vec_ff] <-
+      paste0(df$code_country[vec_ff], "_",
+             df$survey_year[vec_ff], "_",
+             df$code_plot[vec_ff], "_",
+             df$code_layer[vec_ff])
+    
+    df$unique_layer_repetition[vec_ff] <-
+      paste0(df$code_country[vec_ff], "_",
+             df$survey_year[vec_ff], "_",
+             df$code_plot[vec_ff], "_",
+             df$code_layer[vec_ff], "_",
+             df$repetition[vec_ff])
+    
+    df$unique_layer[vec_ff] <-
+      paste0(df$code_country[vec_ff], "_",
+             df$code_plot[vec_ff], "_",
+             df$code_layer[vec_ff])
+    
+    df$layer_type[vec_ff] <- "forest_floor"
+  }
+}
+}
+
+
+
 
 
 ## FSCC_48: Inconsistent presence/absence forest floor layers ----
@@ -1877,7 +1949,7 @@ if (!identical(vec_inconsistency, integer(0))) {
 
 # Firstly, a specific case for H-layers of specific partners
 # that belong to the forest floor
-# (manually checked)
+# (manually checked and asserted in the beginning of this script)
 
 if (unlist(strsplit(survey_form, "_"))[1] == "so") {
   
@@ -1929,48 +2001,8 @@ if (any(df$layer_type[vec] == "peat")) {
   
   source("./src/functions/summarise_profile_per_depth_layer_type.R")
   
-  df_sub <- summarise_profile_per_depth_layer_type(df[vec, ])
+  df_sub <- summarise_profile_per_depth_layer_type(df_profile = df[vec, ])
   
-  # df_sub <- df[vec, ] %>%
-  #   ungroup() %>%
-  #   # A quick preliminary way to sort the available layers
-  #   mutate(layer_number_prelim =
-  #            rank(ifelse(.data$layer_type ==
-  #                          "forest_floor" &
-  #                          (is.na(.data$layer_limit_inferior) |
-  #                             is.na(.data$layer_limit_superior)),
-  #                        -1,
-  #                        .data$layer_limit_inferior))) %>%
-  #   mutate(layer_thickness = ifelse(!is.na(layer_limit_superior) &
-  #                                     !is.na(layer_limit_inferior),
-  #                                   abs(.data$layer_limit_superior -
-  #                                         .data$layer_limit_inferior),
-  #                                   NA)) %>%
-  #   arrange(layer_number_prelim) %>%
-  #   select(layer_number_prelim,
-  #          code_layer,
-  #          layer_limit_superior,
-  #          layer_limit_inferior,
-  #          layer_thickness,
-  #          layer_type) %>%
-  #   # Summarise the data based on the layer_type column and calculate the
-  #   # total layer_thickness for contiguous rows having the same layer_type.
-  #   mutate(grp =
-  #            cumsum(layer_type != lag(layer_type,
-  #                                     default = first(layer_type)))) %>%
-  #   group_by(grp) %>%
-  #   summarise(layer_type = first(layer_type),
-  #             total_thickness =
-  #               if(all(is.na(layer_thickness))) NA_real_ else
-  #                 sum(layer_thickness, na.rm = TRUE),
-  #             layer_limit_superior =
-  #               if(all(is.na(layer_limit_superior))) NA_real_ else
-  #                 min(layer_limit_superior, na.rm = TRUE),
-  #             layer_limit_inferior =
-  #               if(all(is.na(layer_limit_inferior))) NA_real_ else
-  #                 max(layer_limit_inferior, na.rm = TRUE)) %>%
-  #   ungroup() %>%
-  #   select(-grp)
   
     vec_df_sub_peat <- which(df_sub$layer_type == "peat")
     
@@ -2009,51 +2041,15 @@ if (any(df$layer_type[vec] == "forest_floor")) {
   
   source("./src/functions/summarise_profile_per_depth_layer_type.R")
   
-  df_sub <- summarise_profile_per_depth_layer_type(df[vec, ])
+  df_sub <- summarise_profile_per_depth_layer_type(df_profile = df[vec, ])
   
-  # df_sub <- df[vec, ] %>%
-  #   ungroup() %>%
-  #   # A quick preliminary way to sort the available layers
-  #   mutate(layer_number_prelim =
-  #            rank(ifelse(.data$layer_type ==
-  #                          "forest_floor" &
-  #                          (is.na(.data$layer_limit_inferior) |
-  #                          is.na(.data$layer_limit_superior)),
-  #                        -1,
-  #                        .data$layer_limit_inferior))) %>%
-  #   mutate(layer_thickness = ifelse(!is.na(layer_limit_superior) &
-  #                                     !is.na(layer_limit_inferior),
-  #                                   abs(.data$layer_limit_superior -
-  #                                         .data$layer_limit_inferior),
-  #                                   NA)) %>%
-  #   arrange(layer_number_prelim) %>%
-  #   select(layer_number_prelim,
-  #          code_layer,
-  #          layer_limit_superior,
-  #          layer_limit_inferior,
-  #          layer_thickness,
-  #          layer_type) %>%
-  #   # Summarise the data based on the layer_type column and calculate the
-  #   # total layer_thickness for contiguous rows having the same layer_type.
-  #   mutate(grp =
-  #            cumsum(layer_type != lag(layer_type,
-  #                                     default = first(layer_type)))) %>%
-  #   group_by(grp) %>%
-  #   summarise(layer_type = first(layer_type),
-  #             total_thickness =
-  #               if(all(is.na(layer_thickness))) NA_real_ else
-  #                 sum(layer_thickness, na.rm = TRUE),
-  #             layer_limit_superior =
-  #               if(all(is.na(layer_limit_superior))) NA_real_ else
-  #                 min(layer_limit_superior, na.rm = TRUE),
-  #             layer_limit_inferior =
-  #               if(all(is.na(layer_limit_inferior))) NA_real_ else
-  #                 max(layer_limit_inferior, na.rm = TRUE)) %>%
-  #   ungroup() %>%
-  #   select(-grp)
+  # Take the first forest floor layer only,
+  # because there may be buried forest floor layers
   
+  if ("forest_floor" %in% df_sub$layer_type) {
   assertthat::assert_that(
-    df_sub$total_thickness[which(df_sub$layer_type == "forest_floor")] <= 40)
+    df_sub$total_thickness[which(df_sub$layer_type == "forest_floor")][1] <= 40)
+  }
 }
 
 
@@ -2078,7 +2074,7 @@ vec_empty_layer_limit_inferior <-
   vec[which(is.na(df$layer_limit_inferior[vec]))]
 
 
-# Option 2.1: Can we fill these layers based on pfh? ----
+# TO DO Option 2.1: Can we fill these layers based on pfh? ----
 # (only for forest floor layers)
 
 vec_ff_empty_superior <- vec[which(
@@ -2114,13 +2110,13 @@ if (!identical(vec_pfh, integer(0))) { # If this plot survey is in pfh
 
   # If any
   
-  match_key_forest_floors  <- rbind(
-    match_key_forest_floors ,
-    data.frame(unique_survey_repetition = NULL,
-               code_layer = NULL,
-               code_layers_pfh = NULL,
-               layer_limit_superior = NULL,
-               layer_limit_inferior = NULL))
+  # match_key_forest_floors  <- rbind(
+  #   match_key_forest_floors ,
+  #   data.frame(unique_survey_repetition = NULL,
+  #              code_layer = NULL,
+  #              code_layers_pfh = NULL,
+  #              layer_limit_superior = NULL,
+  #              layer_limit_inferior = NULL))
   
   
   
@@ -2257,7 +2253,15 @@ for (j in vec_empty_layer_limit_superior) {
           } else {
             vec_code_layer <- as.character(df$code_layer[j])
           }
+  
+  # Fill with theoretical layer limits of ICP Forests
+  
+  if (!is.na(match(vec_code_layer, d_depth_level_soil$code))) {
 
+    df$layer_limit_superior[j] <-
+        d_depth_level_soil$layer_limit_superior[match(vec_code_layer,
+                                                      d_depth_level_soil$code)]
+  }
   
   # Special case: German plots from 1995/1996 with non-conform code_layers
   # with layer limits different from the theoretical ones
@@ -2266,15 +2270,6 @@ for (j in vec_empty_layer_limit_superior) {
       df$survey_year[j] < 2000 &&
       vec_code_layer == "M25") {
     df$layer_limit_superior[j] <- 2
-  }
-  
-  # Else: Fill with theoretical layer limits of ICP Forests
-  
-  else if (!is.na(match(vec_code_layer, d_depth_level_soil$code))) {
-
-    df$layer_limit_superior[j] <-
-        d_depth_level_soil$layer_limit_superior[match(vec_code_layer,
-                                                      d_depth_level_soil$code)]
   }
   
   
@@ -2296,35 +2291,35 @@ if (!identical(vec_empty_layer_limit_inferior, integer(0))) {
         } else {
           vec_code_layer <- as.character(df$code_layer[j])
         }
+
     
+    # Fill with theoretical layer limits of ICP Forests
+
+    if (!is.na(match(vec_code_layer, d_depth_level_soil$code))) {
+
+      df$layer_limit_inferior[j] <-
+        d_depth_level_soil$layer_limit_inferior[match(vec_code_layer,
+                                                      d_depth_level_soil$code)]
+
+    }
     
     # Special case: German plots from 1995/1996 with non-conform code_layers
     # with layer limits different from the theoretical ones
     
     if (df$partner_code[j] == 3204 &&
         df$survey_year[j] < 2000) {
-        
+      
       if (vec_code_layer == "M02") {
-      df$layer_limit_inferior[j] <- 2
+        df$layer_limit_inferior[j] <- 2
       }
       
       if (vec_code_layer == "M25") {
-      df$layer_limit_inferior[j] <- 5
+        df$layer_limit_inferior[j] <- 5
       }
     }
-    
-    # Else: Fill with theoretical layer limits of ICP Forests
-
-    else if (!is.na(match(vec_code_layer, d_depth_level_soil$code))) {
-
-      df$layer_limit_inferior[j] <-
-        d_depth_level_soil$layer_limit_inferior[match(vec_code_layer,
-                                                      d_depth_level_soil$code)]
-
-  }
 }
 }
-
+}
 
 
 
@@ -2386,7 +2381,42 @@ if ("code_layer_original" %in% names(df)) {
 }
 }
 
+
+
+
+
+
+## FSCC_2 Error reason: Typo observed ----
+
+# Typo observed: This layer has to be moved individually
+
+if (unique(df$unique_survey_repetition)[i] == "9_2007_4_2") {
+  
+  ind_error <- vec[which(df$code_layer[vec] == "OFH")]
+  
+  if (df$layer_limit_inferior_orig[ind_error] == -1) {
+    
+    # If "solve" is set to TRUE, correct the layer limit
+    
+    if (solve == TRUE) {
+      df$layer_limit_inferior[ind_error] <- 0
+    }
+  }
+  
+  if (df$layer_limit_superior_orig[ind_error] == -4) {
+    
+    # If "solve" is set to TRUE, correct the layer limit
+    
+    if (solve == TRUE) {
+      df$layer_limit_inferior[ind_error] <- -3
+    }
+  }
+  
 }
+
+
+
+
 
 
 
@@ -2485,7 +2515,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
 
 
-# Step 3: The layers are ordered (layer_number) from top to bottom ----
+# Step 3: Rank the layers (layer_number) from top to bottom ----
    # based on their layer limits
 
 
@@ -2496,7 +2526,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
   # Which layers have layer limit information?
 
-  # If forest floor has no layer limit information ----
+  # Rank forest floors without layer limit information ----
 
     if (!identical(vec_ff, integer(0)) &&
         (all(is.na(df$layer_limit_inferior[vec_ff])) ||
@@ -2513,61 +2543,6 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
         if (length(vec_ff) == 2) {
 
-          # Special case: Latvian records without code_layer
-          # There are two Latvian records without code_layer, layer_limits,
-          # and with only one organic_carbon_total value
-          # Assumption: since the other records of the same
-          # unique_survey_repetition are M01, M12, M24, M48, and
-          # organic_layer_weight is reported, we will assume that these are
-          # forest floor layers.
-          # Because of the organic_layer_weight information, these records
-          # are still valuable for C stock calculations.
-          # Deriving which of the records is on top
-          # and which is below can only happen based on
-          # analysis of the organic_layer_weight in so_som profiles
-          # with at least two forest floor layers. This teaches us that
-          # it is the most likely that the inferior layer usually has a
-          # higher organic_layer_weight than the superior layer.
-          # As such, we will name the code_layer of these records so that
-          # they will be sorted accordingly.
-          # This also matches with the values in the columns "code_line" and
-          # "line_nr".
-
-          if (unique(df$unique_survey_repetition[vec_ff]) == "64_2004_5_1") {
-            if (all(is.na(df$code_layer[vec_ff]))) {
-
-              ind_superior <-
-                vec_ff[which(df$organic_layer_weight[vec_ff] ==
-                               min(df$organic_layer_weight[vec_ff]))]
-              
-              ind_inferior <-
-                vec_ff[which(df$organic_layer_weight[vec_ff] ==
-                               max(df$organic_layer_weight[vec_ff]))]
-              
-              df$code_layer[ind_superior] <- "OL"
-              df$code_layer[ind_inferior] <- "OFH"
-              
-              df$unique_survey_layer[vec_ff] <-
-                paste0(df$code_country[vec_ff], "_",
-                       df$survey_year[vec_ff], "_",
-                       df$code_plot[vec_ff], "_",
-                       df$code_layer[vec_ff])
-              
-              df$unique_layer_repetition[vec_ff] <-
-                paste0(df$code_country[vec_ff], "_",
-                       df$survey_year[vec_ff], "_",
-                       df$code_plot[vec_ff], "_",
-                       df$code_layer[vec_ff], "_",
-                       df$repetition[vec_ff])
-              
-              df$unique_layer[vec_ff] <-
-                paste0(df$code_country[vec_ff], "_",
-                       df$code_plot[vec_ff], "_",
-                       df$code_layer[vec_ff])
-              
-              df$layer_type[vec_ff] <- "forest_floor"
-            }
-          }
 
           layers <- df$code_layer[vec_ff]
 
@@ -2576,7 +2551,9 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
           # Generate all combinations of two unique values
           all_combinations <-
-            apply(layer_number_two_forest_floor_layers[, 3:11], 2,
+            apply(
+              layer_number_two_forest_floor_layers[, 
+                        3:ncol(layer_number_two_forest_floor_layers)], 2,
                   FUN = function(x) paste(x, collapse = "_"))
           
           # Combine the original combinations with their opposites
@@ -2637,7 +2614,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
         # If the forest floor layers are not called "O" and "O2"
 
-         for (j in c(5:11)) {
+         for (j in c(5:ncol(layer_number_two_forest_floor_layers))) {
 
                 if (!is.na(match(layers[1],
                                  layer_number_two_forest_floor_layers[, j])) &&
@@ -2670,7 +2647,8 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
         
         # Assert that the combination of three forest floor layers is known
         
-        # Test if all elements of layers are in either the second or third column
+        # Test if all elements of layers are in either the
+        # second or third column
         
         assertthat::assert_that(
           all(layers %in% layer_number_three_forest_floor_layers[, 2]) ||
@@ -2703,13 +2681,17 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
         }
       }
 
-    # Copy these layer numbers to the other columns that represent layer numbers
+    # Copy these layer numbers to the other columns that represent
+    # layer numbers
 
-        df$layer_number_inferior[vec] <- df$layer_number[vec]
-        df$layer_number_superior[vec] <- df$layer_number[vec]
-        df$layer_number_combined_layers[vec] <- df$layer_number[vec]
+        # df$layer_number_inferior[vec] <- df$layer_number[vec]
+        # df$layer_number_superior[vec] <- df$layer_number[vec]
+        # df$layer_number_combined_layers[vec] <- df$layer_number[vec]
 
 
+    
+    
+    
    # Rank the remaining layers that have layer limit information ----
 
    # Check which layers have layer limit information but no layer number yet
@@ -2736,8 +2718,8 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
              # Maximum layer number that has already been assigned
 
-          layer_number_max <- as.numeric(max(df$layer_number[vec[
-                                      which(!is.na(df$layer_number[vec]))]]))
+          layer_number_max <- as.numeric(max(df$layer_number[vec],
+                                             na.rm = TRUE))
           }
 
           vec_nonempty_remaining <- vec_nonempty
@@ -2748,9 +2730,6 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
           # - In "df$layer_number", "M01" is hence considered "redundant",
           #   Because of which it doesn't get a layer number in
           #   "df$layer_number"
-          # - In "df$layer_number_combined_layers", "M05" and "M51" are
-          #   considered redundant, because of which they don't get a layer
-          #   number in "df$layer_number_combined_layers"
 
           if (!identical(which(df$code_layer[vec_nonempty] == "M01"),
                          integer(0)) &&
@@ -2766,10 +2745,7 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
            df$layer_number[vec_nonempty[
              which(df$code_layer[vec_nonempty] == "M51")]] <-
              2 + layer_number_max
-
-           df$layer_number_combined_layers[vec_nonempty[
-             which(df$code_layer[vec_nonempty] == "M01")]] <-
-             1 + layer_number_max
+           
 
            # Update 'vec_nonempty_remaining' so that it no longer contains
            # the row indices of these layers
@@ -2783,10 +2759,12 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
            # Check if the ranking based on layer_limit_superior is the same
            # like the ranking based on layer_limit_inferior
 
-           if (all(rank(as.numeric(df$layer_limit_superior[
-             vec_nonempty_remaining])) ==
-               rank(as.numeric(df$layer_limit_inferior[
-                 vec_nonempty_remaining])))) {
+           if (identical(rank(as.numeric(df$layer_limit_superior[
+                                         vec_nonempty_remaining]),
+                              na.last = "keep"),
+                         rank(as.numeric(df$layer_limit_inferior[
+                                         vec_nonempty_remaining]),
+                              na.last = "keep"))) {
 
                # Update 'layer_number_max'
 
@@ -2796,64 +2774,28 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
 
                } else {
 
-                 layer_number_max <- as.numeric(max(df$layer_number[vec[
-                                          which(!is.na(df$layer_number[
-                                            vec]))]]))
+                 layer_number_max <- as.numeric(max(df$layer_number[vec],
+                                                    na.rm = TRUE))
                    }
 
                # Rank the remaining layers based on layer_limit_superior
 
                 df$layer_number[vec_nonempty_remaining] <-
-                  rank(as.numeric(
-                    df$layer_limit_superior[vec_nonempty_remaining])) +
+                  rank(as.numeric(df$layer_limit_superior[
+                                        vec_nonempty_remaining]),
+                       na.last = "keep") +
                   layer_number_max
-
-
-                # Also add a ranking to the column
-                # "df$layer_number_combined_layers"
-                # although this won't be saved at the end of the function
-
-                if (all(is.na(df$layer_number_combined_layers[vec]))) {
-
-                  layer_number_max_combined_layers <- 0
-
-                  } else {
-
-                layer_number_max_combined_layers <-
-                     as.numeric(max(df$layer_number_combined_layers[vec[
-                              which(!is.na(df$layer_number_combined_layers[
-                                vec]))]]))}
-
-                df$layer_number_combined_layers[vec_nonempty_remaining] <-
-                      rank(as.numeric(df$layer_limit_superior[
-                        vec_nonempty_remaining])) +
-                      layer_number_max_combined_layers
 
                 } else {
 
-            # If there is a difference between ranking layer_limit_superior
-            # vs ranking layer_limit_inferior:
-            # Fill the columns "layer_number_superior" and
-            # "layer_number_inferior"
-            # Do not fill the "layer_number" and
-            # "layer_number_combined_layers" columns
+        # If there is a difference between ranking layer_limit_superior
+        # vs ranking layer_limit_inferior:
 
-            # Note that only the column "layer_number" is saved at the end of
-            # the script, so that this column will be empty in this case
-
-           df$layer_number_superior[vec_nonempty_remaining] <-
-             rank(as.numeric(df$layer_limit_superior[vec_nonempty_remaining])) +
-             layer_number_max
-
-           df$layer_number_inferior[vec_nonempty_remaining] <-
-             rank(as.numeric(df$layer_limit_inferior[vec_nonempty_remaining])) +
-             layer_number_max
-           
            source("./src/functions/get_redundant_layers.R")
            
-           redundant_layers <-
-             get_redundant_layers(layers =
-                                    df$code_layer[vec_nonempty_remaining],
+           redundant_layers <- get_redundant_layers(
+                      layers =
+                        df$code_layer[vec_nonempty_remaining],
                       superior_layer_limits =
                         df$layer_limit_superior[vec_nonempty_remaining],
                       inferior_layer_limits =
@@ -2872,8 +2814,9 @@ if (all(is.na(df$layer_limit_inferior[vec]))) {
            # based on layer_limit_superior
            
            df$layer_number[vec_non_redundant] <-
-             rank(as.numeric(
-               df$layer_limit_superior[vec_non_redundant])) +
+             rank(as.numeric(df$layer_limit_superior[
+                                    vec_non_redundant]),
+                  na.last = "keep") +
              layer_number_max
            }
       }
@@ -3045,26 +2988,62 @@ vec_non_redundant <- vec[which(!is.na(df$layer_number[vec]))]
 
 source("./src/functions/summarise_profile_per_depth_layer_type.R")
 
+if (!identical(vec_non_redundant, integer(0))) {
+  
 df_sub <-
-  summarise_profile_per_depth_layer_type(df[vec_non_redundant, ])
+  summarise_profile_per_depth_layer_type(df_profile = df[vec_non_redundant, ])
 
 diff_to_move <- 0
 
-if (df_sub$layer_type[1] == "forest_floor") {
+if (df_sub$layer_type[1] == "forest_floor" &&
+    nrow(df_sub) > 1) {
   
-  # Assure that the lower limit of this first layer equals
-  # the upper limit of the second layer
+  # If there is no gap between the forest floor and first below-ground layer
+  # Ignore small gaps <= 0.1
   
-  assertthat::assert_that(
-    df_sub$layer_limit_low[1] == df_sub$layer_limit_up[2])
-  
-  diff_to_move <- df_sub$layer_limit_low[1]
-  
+  if (abs(df_sub$layer_limit_inferior[1] -
+          df_sub$layer_limit_superior[2]) <= 0.1) {
+    
+    diff_to_move <- ifelse((df_sub$layer_limit_inferior[1] == 0 ||
+                              df_sub$layer_limit_superior[2] == 0),
+                           0,
+                           mean(c(df_sub$layer_limit_inferior[1],
+                                  df_sub$layer_limit_superior[2])))
+  } else {
+    
+    # If there is a considerable gap, e.g. in "7_2007_10_2"
+    
+    # Consider the below-ground layer limit as reference
+    # and move the forest floor layers to the below-ground
+    
+    vec_to_move <-
+      vec_non_redundant[which(
+        (df$layer_limit_superior[vec_non_redundant] >=
+           df_sub$layer_limit_superior[1]) &
+          df$layer_limit_inferior[vec_non_redundant] <=
+          df_sub$layer_limit_inferior[1])]
+    
+    if (solve == TRUE) {
+      
+      # Regardless of whether it should be moved up or down
+      df$layer_limit_inferior[vec_to_move] <-
+        df$layer_limit_inferior[vec_to_move] - df_sub$layer_limit_inferior[1]
+      df$layer_limit_superior[vec_to_move] <-
+        df$layer_limit_superior[vec_to_move] - df_sub$layer_limit_inferior[1]
+      
+      df$moved[vec_to_move] <- TRUE
+      
+      diff_to_move <- df_sub$layer_limit_superior[2]
+      
+    }
+    
+  }
+    
 } else
   
   if (df_sub$layer_type[1] %in% c("peat", "mineral")) {
     
-    diff_to_move <- df_sub$layer_limit_up[2]
+    diff_to_move <- df_sub$layer_limit_superior[1]
     
   }
 
@@ -3073,15 +3052,15 @@ if (diff_to_move != 0) {
   if (solve == TRUE) {
     
     # Regardless of whether it should be moved up or down
-    df$horizon_limit_low[vec] <- df$horizon_limit_low[vec] - diff_to_move
-    df$horizon_limit_up[vec] <- df$horizon_limit_up[vec] - diff_to_move
+    df$layer_limit_inferior[vec] <- df$layer_limit_inferior[vec] - diff_to_move
+    df$layer_limit_superior[vec] <- df$layer_limit_superior[vec] - diff_to_move
     
     df$moved[vec] <- TRUE
     
   }
 }
 
-
+}
 
 
 
@@ -3101,13 +3080,6 @@ close(progress_bar)
 # Final dataset preparations
 
 df <- df %>%
-  # Remove these columns:
-  # - layer_number_superior
-  # - layer_number_inferior
-  # - layer_number_combined_layers
-  select(-layer_number_superior,
-         -layer_number_inferior,
-         -layer_number_combined_layers) %>%
   # Add layer numbers for below-ground and above-ground only
   group_by(unique_survey_repetition) %>%
   mutate(
@@ -3125,6 +3097,8 @@ df <- df %>%
           survey_year,
           repetition,
           layer_number) %>%
+  relocate(repetition, .after = code_plot) %>%
+  relocate(code_layer, .after = repetition) %>%
   relocate(layer_type, .after = code_layer) %>%
   relocate(layer_number, .after = layer_type) %>%
   ungroup()
@@ -3192,8 +3166,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
 
 
-
-  ### Part 2: processing "pfh" survey forms (with pedogenic layers) ----
+  # . ----
+  # Part 2: processing "pfh" survey forms (with pedogenic layers) ----
 
   # Check if the given survey form is "pfh"
 
@@ -3208,11 +3182,11 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
     
     
-    df$moved <- NA
+    
     
     # Convert missing horizon masters to ""
     # This is necessary for the "get_redundant_layers()" function
-    # This occurs in "55_1988_4_04a"
+    # This occurs for example in "55_1988_4_04a"
 
     df$horizon_master <- as.character(df$horizon_master)
 
@@ -4469,38 +4443,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       df_sub <-
         summarise_profile_per_depth_layer_type(df[vec_non_redundant, ])
       
-      # df_sub <- df[vec_non_redundant, ] %>%
-      #   ungroup() %>%
-      #   mutate(layer_thickness = ifelse(!is.na(horizon_limit_up) &
-      #                                     !is.na(horizon_limit_low),
-      #                                   abs(.data$horizon_limit_up -
-      #                                         .data$horizon_limit_low),
-      #                                   NA)) %>%
-      #   arrange(layer_number) %>%
-      #   select(layer_number,
-      #          horizon_master,
-      #          horizon_limit_up,
-      #          horizon_limit_low,
-      #          layer_thickness,
-      #          layer_type) %>%
-      #   # Summarise the data based on the layer_type column and calculate the
-      #   # total layer_thickness for contiguous rows having the same layer_type.
-      #   mutate(grp =
-      #            cumsum(layer_type != lag(layer_type,
-      #                                     default = first(layer_type)))) %>%
-      #   group_by(grp) %>%
-      #   summarise(layer_type = first(layer_type),
-      #             total_thickness =
-      #               if(all(is.na(layer_thickness))) NA_real_ else
-      #                 sum(layer_thickness, na.rm = TRUE),
-      #             horizon_limit_up =
-      #               if(all(is.na(horizon_limit_up))) NA_real_ else
-      #                 min(horizon_limit_up, na.rm = TRUE),
-      #             horizon_limit_low =
-      #               if(all(is.na(horizon_limit_low))) NA_real_ else
-      #                 max(horizon_limit_low, na.rm = TRUE)) %>%
-      #   ungroup() %>%
-      #   select(-grp)
+    
       
       vec_df_sub_peat <- which(df_sub$layer_type == "peat")
       
@@ -4542,38 +4485,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       df_sub <-
         summarise_profile_per_depth_layer_type(df[vec_non_redundant, ])
       
-      # df_sub <- df[vec_non_redundant, ] %>%
-      #   ungroup() %>%
-      #   mutate(layer_thickness = ifelse(!is.na(horizon_limit_up) &
-      #                                     !is.na(horizon_limit_low),
-      #                                   abs(.data$horizon_limit_up -
-      #                                         .data$horizon_limit_low),
-      #                                   NA)) %>%
-      #   arrange(layer_number) %>%
-      #   select(layer_number,
-      #          horizon_master,
-      #          horizon_limit_up,
-      #          horizon_limit_low,
-      #          layer_thickness,
-      #          layer_type) %>%
-      #   # Summarise the data based on the layer_type column and calculate the
-      #   # total layer_thickness for contiguous rows having the same layer_type.
-      #   mutate(grp =
-      #            cumsum(layer_type != lag(layer_type,
-      #                                     default = first(layer_type)))) %>%
-      #   group_by(grp) %>%
-      #   summarise(layer_type = first(layer_type),
-      #             total_thickness =
-      #               if(all(is.na(layer_thickness))) NA_real_ else
-      #                 sum(layer_thickness, na.rm = TRUE),
-      #             horizon_limit_up =
-      #               if(all(is.na(horizon_limit_up))) NA_real_ else
-      #                 min(horizon_limit_up, na.rm = TRUE),
-      #             horizon_limit_low =
-      #               if(all(is.na(horizon_limit_low))) NA_real_ else
-      #                 max(horizon_limit_low, na.rm = TRUE)) %>%
-      #   ungroup() %>%
-      #   select(-grp)
+     if ("forest_floor" %in% df_sub$layer_type) {
       
       # Take the first forest floor layer only,
       # because there may be buried forest floor layers
@@ -4581,6 +4493,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       assertthat::assert_that(
         df_sub$total_thickness[which(
           df_sub$layer_type == "forest_floor")][1] <= 40)
+     }
     }
     
     
@@ -4602,29 +4515,72 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     
     vec_non_redundant <- vec[which(!is.na(df$layer_number[vec]))]
     
+    if (!identical(vec_non_redundant, integer(0))) {
+      
     source("./src/functions/summarise_profile_per_depth_layer_type.R")
 
     df_sub <-
       summarise_profile_per_depth_layer_type(df[vec_non_redundant, ])
     
-    if (nrow(df_sub) > 1) {
-    
     diff_to_move <- 0
     
-    if (df_sub$layer_type[1] == "forest_floor") {
+    if (df_sub$layer_type[1] == "forest_floor" &&
+        nrow(df_sub) > 1) {
+      
+      # If there is no gap between the forest floor and first below-ground layer
+      # Ignore small gaps <= 0.1
+      
+      if (abs(df_sub$horizon_limit_low[1] -
+              df_sub$horizon_limit_up[2]) <= 0.1) {
+        
+        diff_to_move <- ifelse((df_sub$horizon_limit_low[1] == 0 ||
+                                  df_sub$horizon_limit_up[2] == 0),
+                               0,
+                               mean(c(df_sub$horizon_limit_low[1],
+                                      df_sub$horizon_limit_up[2])))
+      } else {
+        
+        # If there is a considerable gap, e.g. in "7_2007_10_2"
+        
+        # Consider the below-ground layer limit as reference
+        # and move the forest floor layers to the below-ground
+        
+        vec_to_move <-
+          vec_non_redundant[which(
+            (df$horizon_limit_up[vec_non_redundant] >=
+               df_sub$horizon_limit_up[1]) &
+              df$horizon_limit_low[vec_non_redundant] <=
+              df_sub$horizon_limit_low[1])]
+        
+        if (solve == TRUE) {
+          
+          # Regardless of whether it should be moved up or down
+          df$horizon_limit_low[vec_to_move] <-
+            df$horizon_limit_low[vec_to_move] - df_sub$horizon_limit_low[1]
+          df$horizon_limit_up[vec_to_move] <-
+            df$horizon_limit_up[vec_to_move] - df_sub$horizon_limit_low[1]
+          
+          df$moved[vec_to_move] <- TRUE
+          
+          diff_to_move <- df_sub$horizon_limit_up[2]
+          
+        }
+        
+      }
+      
       
       # Assure that the lower limit of this first layer equals
       # the upper limit of the second layer
       # Note: sometimes there is a small gap, e.g. 0.1 cm
       
-      assertthat::assert_that(
-        abs(df_sub$horizon_limit_low[1] - df_sub$horizon_limit_up[2]) <= 0.5)
-      
-      diff_to_move <- ifelse((df_sub$horizon_limit_low[1] == 0 ||
-                               df_sub$horizon_limit_up[2] == 0),
-                             0,
-                             mean(c(df_sub$horizon_limit_low[1],
-                                    df_sub$horizon_limit_up[2])))
+      # assertthat::assert_that(
+      #   abs(df_sub$horizon_limit_low[1] - df_sub$horizon_limit_up[2]) <= 0.5)
+      # 
+      # diff_to_move <- ifelse((df_sub$horizon_limit_low[1] == 0 ||
+      #                          df_sub$horizon_limit_up[2] == 0),
+      #                        0,
+      #                        mean(c(df_sub$horizon_limit_low[1],
+      #                               df_sub$horizon_limit_up[2])))
       
     } else
     
@@ -4642,12 +4598,9 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       df$horizon_limit_low[vec] <- df$horizon_limit_low[vec] - diff_to_move
       df$horizon_limit_up[vec] <- df$horizon_limit_up[vec] - diff_to_move
 
-         df$moved[vec] <- TRUE
-   
     }
     }
     }
-  
     
     
     
@@ -4720,4 +4673,12 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
     } # End of "pfh" part
 
+  
+  
+  # Return the duration of this function run
+  
+  duration_run_r <- Sys.time() - start_time_r
+  cat(paste0("\n",
+             duration_run_r)
+  
 }
