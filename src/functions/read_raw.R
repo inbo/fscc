@@ -522,7 +522,7 @@ for (i in seq_along(survey_forms)) {
         }
         }
 
-     df$layer_type <- as.factor(df$layer_type)
+     df$layer_type <- as.character(df$layer_type)
      }
 
 
