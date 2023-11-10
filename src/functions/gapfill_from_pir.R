@@ -89,9 +89,9 @@ gapfill_from_pir <- function(code_survey,
 
   for (j in seq_along(survey_forms)) {
 
-    if (!is.na(survey_form)) {
+    if (!is.null(data_frame)) {
 
-      df <- survey_form
+      df <- data_frame
       
     } else {
       
@@ -102,6 +102,10 @@ gapfill_from_pir <- function(code_survey,
 
   # Gap-fill change_date if missing (e.g. in "so_prf")
   # Assumption: 2009-12-06 (date on which database was established at PCC)
+  
+    # if (!"change_date" %in% names(df)) {
+    #   df$change_date 
+    # }
     
   df <- df %>%
     mutate(change_date = ifelse(is.na(.data$change_date),
@@ -554,22 +558,19 @@ gapfill_from_pir <- function(code_survey,
   
   # Export ----
   
-  if (!is.na(survey_form)) {
-    
-    return(df)
-    
+  if (save_to_env == TRUE) {
+    assign_env(survey_forms[j],
+               df)
     assign_env(paste0("pir_applied_", survey_forms[j]),
                pir_checked_survey_form)
     
   } else {
-    
-    if (save_to_env == TRUE) {
-      assign_env(survey_forms[j],
-                 df)
-    }
+    return(df)
     assign_env(paste0("pir_applied_", survey_forms[j]),
                pir_checked_survey_form)
+    
   }
+
   
   } # End of loop over survey forms
   
