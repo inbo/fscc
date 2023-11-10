@@ -284,6 +284,123 @@ if (!identical(profiles_h_to_remove_poland, character(0))) {
 }
 
 
+
+
+
+# Norway ----
+
+surveys_to_check <- df %>%
+  ungroup %>%
+  filter(code_country == 55) %>%
+  group_by(unique_survey_repetition, unique_survey) %>%
+  summarise(contains_o =
+              any(.data$code_layer == "O"),
+            count_layers = n(),
+            .groups = "drop") %>%
+  filter(.data$contains_o == TRUE &
+           .data$count_layers == 1) %>%
+  pull(unique_survey)
+
+df %>%
+  filter(unique_survey %in% surveys_to_check) %>%
+  filter(code_layer == "O")
+
+
+if (!identical(surveys_to_check, character(0))) {
+  
+  for (i in seq_along(surveys_to_check)) {
+      
+      df_sub <- df %>%
+        filter(unique_survey == surveys_to_check[i]) %>%
+        filter(code_layer == "O")
+      
+      if (nrow(df_sub) > 1) {
+        result_columns <- sapply(df_sub[, numeric_column_names],
+                                 function(col) length(unique(col)) > 1)
+        
+        columns_with_different_content <- names(result_columns[result_columns])
+        
+        assertthat::assert_that(!identical(columns_with_different_content,
+                                           character(0)))
+      }
+    }
+  }
+
+
+
+
+# There are differences between the layers, so keep this data
+
+
+
+
+
+
+# BE_Flanders ----
+
+surveys_to_check <- df %>%
+  ungroup %>%
+  filter(partner_code == 102) %>%
+  group_by(unique_survey_repetition, unique_survey) %>%
+  summarise(contains_only_ff =
+              !(any(.data$layer_type %in% c("peat", "mineral"))),
+            .groups = "drop") %>%
+  filter(contains_only_ff == TRUE) %>%
+  distinct(unique_survey) %>%
+  pull(unique_survey)
+
+if (!identical(surveys_to_check, character(0))) {
+
+for (i in seq_along(surveys_to_check)) {
+  
+  ff_layers <- df %>%
+    filter(unique_survey == surveys_to_check[i]) %>%
+    filter(layer_type == "forest_floor") %>%
+    distinct(code_layer) %>%
+    pull
+  
+  for (j in seq_along(ff_layers)) {
+    
+    df_sub <- df %>%
+      filter(unique_survey == surveys_to_check[i]) %>%
+      filter(code_layer == ff_layers[1])
+    
+    if (nrow(df_sub) > 1) {
+    result_columns <- sapply(df_sub[, numeric_column_names],
+                             function(col) length(unique(col)) > 1)
+    
+    columns_with_different_content <- names(result_columns[result_columns])
+    
+    assertthat::assert_that(!identical(columns_with_different_content,
+                                       character(0)))
+    }
+  }
+}
+}
+
+
+
+
+
+
+
+
+# Change layer_type to "forest_floor"
+
+if (solve == TRUE) {
+df <- df %>%
+  mutate(layer_type = as.character(.data$layer_type)) %>%
+  mutate(layer_type = ifelse(.data$code_layer == "H",
+                             "forest_floor",
+                             .data$layer_type))
+  
+}
+
+
+
+
+
+
 if (solve == TRUE) {
   nrow <- length(which(df$to_remove == TRUE))
   
