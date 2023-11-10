@@ -73,9 +73,24 @@ read_raw("sw", save_to_env = TRUE)
 ## 3.2. Merge duplicate records in "so_som" ----
 
 source("./src/functions/merge_duplicate_records.R")
-merge_duplicate_records("so_som",
-                        merge = TRUE,
-                        save_to_env = TRUE)
+so_som <- merge_duplicate_records(survey_form = "so_som",
+                                  data_frame = so_som,
+                                  merge = TRUE,
+                                  save_to_env = FALSE)
+
+
+source("./src/functions/solve_record_inconsistencies.R")
+so_som <- solve_record_inconsistencies(survey_form = "so_som",
+                                     data_frame = so_som,
+                                     solve = TRUE,
+                                     save_to_env = FALSE)
+
+
+
+
+
+
+
 
 
 
@@ -86,15 +101,15 @@ merge_duplicate_records("so_som",
 # Apply gapfill_from_pir scripts
 
 source("./src/functions/gapfill_from_pir.R")
-gapfill_from_pir(name_survey_form = "y1",
+gapfill_from_pir(code_survey = "y1",
                  save_to_env = TRUE)
-gapfill_from_pir(name_survey_form = "si",
+gapfill_from_pir(code_survey = "si",
                  save_to_env = TRUE)
-gapfill_from_pir(name_survey_form = "s1",
+gapfill_from_pir(code_survey = "s1",
                  save_to_env = TRUE)
-gapfill_from_pir(name_survey_form = "so",
+gapfill_from_pir(code_survey = "so",
                  save_to_env = TRUE)
-gapfill_from_pir(name_survey_form = "sw",
+gapfill_from_pir(code_survey = "sw",
                  save_to_env = TRUE)
 
 # TO DO: initiate a column for each parameter to indicate the sources of the
@@ -267,42 +282,13 @@ so_som <- so_som %>%
 
 unique_surveys_so_som <- unique(so_som$unique_survey)
 
-# Extract the year
-years <- gsub(".*_(\\d{4}).*", "\\1", unique_surveys_so_som)
+source("./src/functions/expand_unique_survey_vec_adjacent_years.R")
 
-# Replace each year one by one
-unique_surveys <- NULL
-for (i in 1:length(unique_surveys_so_som)) {
-  
-  unique_surveys <- c(
-    unique_surveys,
-    # Add unique_survey
-    unique_surveys_so_som[i],
-    # Add survey_year - 1
-    gsub("_(\\d{4})_",
-         paste0("_", as.character(as.numeric(years) - 1)[i], "_"),
-         unique_surveys_so_som[i]),
-    # Add survey_year - 2
-    gsub("_(\\d{4})_",
-         paste0("_", as.character(as.numeric(years) - 2)[i], "_"),
-         unique_surveys_so_som[i]),
-    # Add survey_year - 3
-    gsub("_(\\d{4})_",
-         paste0("_", as.character(as.numeric(years) - 3)[i], "_"),
-         unique_surveys_so_som[i]),
-    # Add survey_year + 1
-    gsub("_(\\d{4})_",
-         paste0("_", as.character(as.numeric(years) + 1)[i], "_"),
-         unique_surveys_so_som[i]),
-    # Add survey_year + 2
-    gsub("_(\\d{4})_",
-         paste0("_", as.character(as.numeric(years) + 2)[i], "_"),
-         unique_surveys_so_som[i]),
-    # Add survey_year + 3
-    gsub("_(\\d{4})_",
-         paste0("_", as.character(as.numeric(years) + 3)[i], "_"),
-         unique_surveys_so_som[i]))
-}
+unique_surveys <-
+  expand_unique_survey_vec_adjacent_years(unique_survey_vec =
+                                            unique_surveys_so_som,
+                                          number_of_years = 3)
+
 
 
 # Identify which unique surveys are missing in so_som
@@ -524,11 +510,16 @@ so_prf <- so_prf %>%
 # in case of ambiguous (non-unique) code_layers
 
 source("./src/functions/get_primary_inconsistencies.R")
-get_primary_inconsistencies("y1", save_to_env = TRUE)
-get_primary_inconsistencies("s1", solve = TRUE, save_to_env = TRUE)
-get_primary_inconsistencies("si", save_to_env = TRUE)
-get_primary_inconsistencies("so", solve = TRUE, save_to_env = TRUE)
-get_primary_inconsistencies("sw", save_to_env = TRUE)
+get_primary_inconsistencies(code_survey = "y1",
+                            save_to_env = TRUE)
+get_primary_inconsistencies(code_survey = "s1", solve = TRUE,
+                            save_to_env = TRUE)
+get_primary_inconsistencies(code_survey = "si",
+                            save_to_env = TRUE)
+get_primary_inconsistencies(code_survey = "so", solve = TRUE,
+                            save_to_env = TRUE)
+get_primary_inconsistencies(code_survey = "sw",
+                            save_to_env = TRUE)
 
 source("./src/functions/bind_objects_starting_with.R")
 bind_objects_starting_with("list_primary_inconsistencies", save_to_env = TRUE)
@@ -545,11 +536,11 @@ View(list_primary_inconsistencies)
 
 # Get inconsistencies
 
-source("./src/functions/get_coordinate_inconsistencies.R")
+# source("./src/functions/get_coordinate_inconsistencies.R")
 
-get_coordinate_inconsistencies(boundary_buffer_meter = 3000,
-                               save_to_env = TRUE)
-View(list_coordinate_inconsistencies)
+# get_coordinate_inconsistencies(boundary_buffer_meter = 3000,
+#                                save_to_env = TRUE)
+# View(list_coordinate_inconsistencies)
 
 
 
@@ -557,15 +548,24 @@ View(list_coordinate_inconsistencies)
 ## 5.3. Inconsistencies in soil layers ----
 # "solve" indicates whether the obvious mistakes can be solved
 
+# Attention: make sure that "pfh" survey forms are processed first
+# to facilitate gap-filling of "som" based on "pfh"
+# (e.g. layer limits forest floor)
+
 source("./src/functions/get_layer_inconsistencies.R")
-so_som <- get_layer_inconsistencies("so_som", so_som,
+so_pfh <- get_layer_inconsistencies(survey_form = "so_pfh",
+                                    data_frame = so_pfh,
                                     solve = TRUE, save_to_env = FALSE)
-s1_som <- get_layer_inconsistencies("s1_som", s1_som,
+s1_pfh <- get_layer_inconsistencies(survey_form = "s1_pfh",
+                                    data_frame = s1_pfh,
                                     solve = TRUE, save_to_env = FALSE)
-so_pfh <- get_layer_inconsistencies("so_pfh", so_pfh,
+so_som <- get_layer_inconsistencies(survey_form = "so_som",
+                                    data_frame = so_som,
                                     solve = TRUE, save_to_env = FALSE)
-s1_pfh <- get_layer_inconsistencies("s1_pfh", s1_pfh,
+s1_som <- get_layer_inconsistencies(survey_form = "s1_som",
+                                    data_frame = s1_som,
                                     solve = TRUE, save_to_env = FALSE)
+
 
 source("./src/functions/bind_objects_starting_with.R")
 bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
