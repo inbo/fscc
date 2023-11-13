@@ -2408,7 +2408,7 @@ if (unique(df$unique_survey_repetition)[i] == "9_2007_4_2") {
     # If "solve" is set to TRUE, correct the layer limit
     
     if (solve == TRUE) {
-      df$layer_limit_inferior[ind_error] <- -3
+      df$layer_limit_superior[ind_error] <- -3
     }
   }
   
@@ -4679,6 +4679,6 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
   
   duration_run_r <- Sys.time() - start_time_r
   cat(paste0("\n",
-             duration_run_r)
+             duration_run_r))
   
 }
