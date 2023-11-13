@@ -293,9 +293,11 @@ unique_surveys <-
 
 # Identify which unique surveys are missing in so_som
 
-unique_surveys_missing <-
-  unique(so_som_afscdb$unique_survey[which(!so_som_afscdb$unique_survey %in%
-                                             unique_surveys)])
+unique_surveys_missing <- so_som_afscdb %>%
+  # Manually verified: no need to add Swiss data anymore
+  filter(code_country != 50) %>%
+  filter(!(unique_survey %in% unique_surveys)) %>%
+  pull(unique_survey)
 
 # If there are any unique surveys in afscdb which are missing in so_som
 
@@ -556,11 +558,11 @@ source("./src/functions/get_layer_inconsistencies.R")
 so_pfh <- get_layer_inconsistencies(survey_form = "so_pfh",
                                     data_frame = so_pfh,
                                     solve = TRUE, save_to_env = FALSE)
-s1_pfh <- get_layer_inconsistencies(survey_form = "s1_pfh",
-                                    data_frame = s1_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
 so_som <- get_layer_inconsistencies(survey_form = "so_som",
                                     data_frame = so_som,
+                                    solve = TRUE, save_to_env = FALSE)
+s1_pfh <- get_layer_inconsistencies(survey_form = "s1_pfh",
+                                    data_frame = s1_pfh,
                                     solve = TRUE, save_to_env = FALSE)
 s1_som <- get_layer_inconsistencies(survey_form = "s1_som",
                                     data_frame = s1_som,
