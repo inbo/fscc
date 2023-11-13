@@ -12,6 +12,17 @@
 # Show "document outline" window of this script in R Studio
 # using Ctrl + Shift + O
 
+# Attention: in order to be able to run the script, a number of
+# additional data forms (which are not part of this GitHub repository
+# or the raw "layer 0" data) are required.
+# These can be requested from FSCC.
+
+# Status:
+# - Almost complete for Level II (so) (complete for variables required
+#   for carbon stock calculations)
+# - Not yet complete for Level I (s1), but the steps should be roughly
+#   the same
+
 
 
 # 1. Prepare packages ----
