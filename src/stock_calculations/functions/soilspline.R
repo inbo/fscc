@@ -30,6 +30,7 @@ soilspline <- function(id,
                        depth_bottom,
                        variab,
                        max_soil_depth,
+                       survey_form = NULL,
                        graph = TRUE) {
   
   # Prepare packages
@@ -42,6 +43,10 @@ soilspline <- function(id,
   # Set directory where graphs should be saved
   
   path <- c("./output/stocks/splines/")
+  
+  if (!is.null(survey_form)) {
+    path <- paste0(path, survey_form, "/")
+  }
   
   # Create directory if it doesn't exist
   
