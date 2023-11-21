@@ -7,20 +7,23 @@
 #' Initiated by Bruno
 #' 
 #' @param prof Dataframe of a single soil profile (below-ground) with a column
-#' plot_id, profile_id, code_layer, depth_top, depth_bottom, carbon_density,
+#' plot_id, profile_id, code_layer, depth_top, depth_bottom, c_density,
 #' eff_soil_depth for the different depth layers
+#' @param graph Logical indicating whether a graph of the spline fitting
+#' should be made for the given depth profile
 #'
 #' @return stocks
 #' @export
 #'
 #' @examples
 
-calculate_stocks <- function(prof) {
+calculate_stocks <- function(prof,
+                             graph = TRUE) {
   
   assertthat::assert_that(all(c("profile_id",
                                 "depth_top",
                                 "depth_bottom",
-                                "carbon_density",
+                                "c_density",
                                 "eff_soil_depth") %in% names(prof)))
   
   source("./src/stock_calculations/functions/soilspline.R")
@@ -41,9 +44,9 @@ calculate_stocks <- function(prof) {
     soilspline(id = unique(prof$profile_id),
                depth_top = prof$depth_top,
                depth_bottom = prof$depth_bottom,
-               variab = prof$carbon_density,
+               variab = prof$c_density,
                max_soil_depth = max_soil_depth,
-               graph = TRUE)
+               graph = graph)
   
   spline_output_per_cm <- spline_output$spline_output
   
@@ -53,49 +56,49 @@ calculate_stocks <- function(prof) {
   # at a depth of i cm)
   
   stocks <- data.frame(
-    nlay = length(prof$carbon_density),
+    nlay = length(prof$c_density),
     # Cumulative carbon stocks from 0 until x cm
-    carbon_stock_cum_10 = ifelse(10 <= max_soil_depth,
+    c_stock_10 = ifelse(10 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(10)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_20 = ifelse(20 <= max_soil_depth,
+    c_stock_20 = ifelse(20 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(20)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_30 = ifelse(30 <= max_soil_depth,
+    c_stock_30 = ifelse(30 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(30)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_40 = ifelse(40 <= max_soil_depth,
+    c_stock_40 = ifelse(40 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(40)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_50 = ifelse(50 <= max_soil_depth,
+    c_stock_50 = ifelse(50 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(50)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_60 = ifelse(60 <= max_soil_depth,
+    c_stock_60 = ifelse(60 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(60)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_70 = ifelse(70 <= max_soil_depth,
+    c_stock_70 = ifelse(70 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(70)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_80 = ifelse(80 <= max_soil_depth,
+    c_stock_80 = ifelse(80 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(80)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_90 = ifelse(90 <= max_soil_depth,
+    c_stock_90 = ifelse(90 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(90)]),
                                        2),
                                  as.numeric(NA)),
-    carbon_stock_cum_100 = ifelse(100 <= max_soil_depth,
+    c_stock_100 = ifelse(100 <= max_soil_depth,
                                   round(sum(spline_output_per_cm[seq_len(100)]),
                                         2),
                                   as.numeric(NA)),
-    carbon_stock_below_ground =
+    c_stock_below_ground =
       ifelse(max_soil_depth > 1,
              round(sum(spline_output_per_cm[seq_len(max_soil_depth)]), 2),
              as.numeric(NA)),

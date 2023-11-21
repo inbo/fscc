@@ -12,7 +12,7 @@
 # To do: convert into a function.
 # Possible origin data: s1_som, so_som, s1_pfh, so_pfh
 
-survey_form <- "so_som"
+survey_form <- "s1_som"
 
 code_survey <- unlist(strsplit(survey_form, "_"))[1]
 
@@ -90,10 +90,10 @@ df_working <- df_working %>%
   # If coarse fragments is unknown:
   # Assume it is 0
   # To do: the uncertainty associated with this assumption needs to be assessed
-  mutate(coarse_fragment_vol =
+  mutate(coarse_fragment_vol_frac =
            ifelse(is.na(.data$coarse_fragment_vol),
                   0,
-                  .data$coarse_fragment_vol)) %>%
+                  .data$coarse_fragment_vol / 100)) %>%
   # plot_id (code_country and code_plot) already exists
   # profile_id is basically the same like unique_survey_repetition
   # (to do: harmonise names across project)
@@ -106,6 +106,10 @@ df_working <- df_working %>%
          depth_avg = ifelse(!is.na(depth_top) & !is.na(depth_bottom),
                             rowMeans(cbind(depth_top, depth_bottom)),
                             NA))
+
+
+
+
 
 
 # 3. Below-ground layers ----
@@ -136,41 +140,40 @@ df_below_ground <- df_working %>%
          bulk_density,
          organic_layer_weight,
          coarse_fragment_vol,
+         coarse_fragment_vol_frac,
          organic_carbon_total) %>%
-  # Calculate volume proportion of coarse fractions
-  mutate(coarse_fragments_vol_fraction =
-           .data$coarse_fragment_vol / 100) %>%
   # Calculate carbon density per cm (t C ha-1 cm-1)
   # Units: (g C/kg fine earth) * (kg fine earth/m3 soil) = g C/m3 soil
   # 1 ha * 1 cm = 100 m * 100 m * 0.01 m = 100 m3
   # 1 ton C = 1E6 g C
   # Unit conversion factor: * 100 / 1000000
-  mutate(carbon_density =
+  mutate(c_density =
            (.data$organic_carbon_total * .data$bulk_density *
-              (1 - .data$coarse_fragments_vol_fraction)) / 10000) %>%
+              (1 - .data$coarse_fragment_vol_frac)) / 10000) %>%
   # Carbon stock per layer (instead of per cm)
   # Units: t C ha-1 (per layer)
-  mutate(carbon_stock_layer =
-           .data$carbon_density * .data$layer_thickness) %>%
+  mutate(c_stock_layer =
+           .data$c_density * .data$layer_thickness) %>%
   # In peat layers, organic layer weight may have been reported
   # instead of bulk density etc
   # In that case, use the formula for forest floor
-  mutate(carbon_stock_layer =
-           ifelse(is.na(.data$carbon_stock_layer) &
+  mutate(c_stock_layer =
+           ifelse(is.na(.data$c_stock_layer) &
                     !is.na(.data$organic_layer_weight),
                   (.data$organic_carbon_total * .data$organic_layer_weight) /
                     100,
-                  .data$carbon_stock_layer)) %>%
-  mutate(carbon_density =
-           ifelse(is.na(.data$carbon_density) &
-                    !is.na(.data$carbon_stock_layer),
-                  .data$carbon_stock_layer / .data$layer_thickness,
-                  .data$carbon_density)) %>%
+                  .data$c_stock_layer)) %>%
+  mutate(c_density =
+           ifelse(is.na(.data$c_density) &
+                    !is.na(.data$c_stock_layer),
+                  .data$c_stock_layer / .data$layer_thickness,
+                  .data$c_density)) %>%
   # Add data availability index
   mutate(avail_thick = ifelse(is.na(.data$layer_thickness), 0, 1),
          avail_toc = ifelse(is.na(.data$organic_carbon_total), 0, 1),
          avail_bd = ifelse(is.na(.data$bulk_density), 0, 1),
-         avail_cf = ifelse(is.na(.data$coarse_fragment_vol), 0, 1))
+         avail_cf = ifelse(is.na(.data$coarse_fragment_vol), 0, 1)) %>%
+  select(-coarse_fragment_vol)
 
 
 # Save the df_below_ground dataset (all data, also missing data)
@@ -182,9 +185,12 @@ write.csv2(df_below_ground,
 
 
 
+
+
+
 ## 3.2. Calculate below-ground carbon stocks ----
 
-profile_carbon_stocks_below_ground <- NULL
+profile_c_stocks_below_ground <- NULL
 profile_list <- unique(df_below_ground$profile_id)
 
 # Set progress bar
@@ -216,23 +222,54 @@ for (i in seq_along(profile_list)) {
            code_layer,
            depth_top,
            depth_bottom,
-           carbon_density,
+           c_density,
            eff_soil_depth) %>%
     # Only calculate carbon stocks based on layers
     # for which the carbon density is known
-    filter(!is.na(.data$carbon_density)) %>%
+    filter(!is.na(.data$c_density)) %>%
     # and for which their layer limits are known
     filter(!is.na(.data$depth_top) &
              !is.na(.data$depth_bottom))
   
   # Assert that all the depth layers are below-ground
   
+  if (!prof_id_i %in% c("1995_7_139_1",
+                        "1995_7_208_1",
+                        "2008_13_164_1",
+                        "2008_13_1161_1")) {
+    
   assertthat::assert_that(
     all(prof$depth_top >= 0) &&
       all(prof$depth_bottom >= 0),
     msg = paste0("Not all layer limits are below-ground ",
                  "(i.e. not below 0) for the profile '",
                  prof_id_i, "'."))
+  }
+  
+  # Issue:
+  # Not possible to calculate splines in case of overlapping layers in
+  # the profile
+  # Solution: take average of the adjacent overlapping depth limits
+  
+  prof <- prof %>%
+    mutate(prev_depth_bottom = lag(depth_bottom),
+           next_depth_top = lead(depth_top)) %>%
+    rowwise() %>%
+    mutate(depth_bottom = ifelse(!is.na(.data$depth_bottom) &
+                                !is.na(.data$next_depth_top) &
+                                (.data$next_depth_top < .data$depth_bottom),
+                              mean(c(.data$depth_bottom,
+                                     .data$next_depth_top)),
+                              .data$depth_bottom),
+           depth_top = ifelse(!is.na(.data$depth_top) &
+                                    !is.na(.data$prev_depth_bottom) &
+                                    (.data$prev_depth_bottom > .data$depth_top),
+                                  mean(c(.data$depth_top,
+                                         .data$prev_depth_bottom)),
+                                  .data$depth_top)) %>%
+    select(-prev_depth_bottom,
+           -next_depth_top)
+    
   
   # Apply calculate_stocks and soilspline functions on profile
   
@@ -246,11 +283,17 @@ for (i in seq_along(profile_list)) {
   # are simply too unreliable
   
   if ((nrow(prof) >= 2) &&
-      (min(prof$depth_top) == 0)) {
+      (min(prof$depth_top) == 0) &&
+      # The issue with this profile needs to be solved
+      (!prof_id_i %in% c("1995_7_139_1",
+                         "1995_7_208_1",
+                         "2008_13_164_1",
+                         "2008_13_1161_1"))) {
     
-    profile_stock_output_i <- calculate_stocks(prof)
+    profile_stock_output_i <- calculate_stocks(prof = prof,
+                                               graph = FALSE)
     
-    profile_carbon_stocks_i <-
+    profile_c_stocks_i <-
        data.frame(partner_short = unique(df_profile_i$partner_short),
                   plot_id = plot_id_i,
                   profile_id = prof_id_i,
@@ -264,9 +307,9 @@ for (i in seq_along(profile_list)) {
                   soil_depth = soil_depth_i,
                   profile_stock_output_i)
     
-    profile_carbon_stocks_below_ground <-
-      rbind(profile_carbon_stocks_below_ground,
-            profile_carbon_stocks_i)
+    profile_c_stocks_below_ground <-
+      rbind(profile_c_stocks_below_ground,
+            profile_c_stocks_i)
 
   }
   
@@ -276,32 +319,36 @@ for (i in seq_along(profile_list)) {
 } # End of for loop along profiles
 
 close(progress_bar)
-View(profile_carbon_stocks_below_ground)
+View(profile_c_stocks_below_ground)
 
 # Save output
 
-write.csv2(profile_carbon_stocks_below_ground %>%
-             filter(carbon_stock_cum_10 > 0),
+write.csv2(profile_c_stocks_below_ground %>%
+             filter(c_stock_10 > 0),
            file = paste0("./output/stocks/",
                          survey_form,
                          "_profile_carbon_stocks_below_ground.csv"),
            row.names = FALSE,
            na = "")
 
+
+
+
+
 ## 3.3. Aggregate below-ground per plot ----
 
-plot_carbon_stocks_below_ground <- profile_carbon_stocks_below_ground %>%
-  filter(carbon_stock_cum_10 > 0) %>%
+plot_c_stocks_below_ground <- profile_c_stocks_below_ground %>%
+  filter(c_stock_10 > 0) %>%
   group_by(partner_short, partner_code, code_country, code_plot,
            plot_id, survey_year) %>%
-  summarise(carbon_stock_below_ground_avg =
-              round(mean(carbon_stock_below_ground, na.rm = TRUE), 2),
+  summarise(c_stock_below_ground_avg =
+              round(mean(c_stock_below_ground, na.rm = TRUE), 2),
             # Standard deviation across spatial repetitions
             # (this also accounts for some sample preprocessing and
             # lab analytical uncertainty)
-            carbon_stock_below_ground_stdev =
-              ifelse(length(carbon_stock_below_ground) > 1,
-                     round(sd(carbon_stock_below_ground, na.rm = TRUE), 2),
+            c_stock_below_ground_stdev =
+              ifelse(length(c_stock_below_ground) > 1,
+                     round(sd(c_stock_below_ground, na.rm = TRUE), 2),
                      NA),
             nlay_min =
               min(nlay, na.rm = TRUE),
@@ -316,16 +363,17 @@ plot_carbon_stocks_below_ground <- profile_carbon_stocks_below_ground %>%
             rmse_mpspline_max =
               max(rmse_mpspline, na.rm = TRUE),
             .groups = "drop") %>%
-  rename(carbon_stock_below_ground = carbon_stock_below_ground_avg) %>%
+  rename(c_stock_below_ground = c_stock_below_ground_avg) %>%
   arrange(partner_short,
           code_plot,
-          survey_year)
+          survey_year) %>%
+  mutate_all(function(x) ifelse(is.nan(x), NA, x))
 
-View(plot_carbon_stocks_below_ground)
+View(plot_c_stocks_below_ground)
 
 # Save output
 
-write.csv2(plot_carbon_stocks_below_ground,
+write.csv2(plot_c_stocks_below_ground,
            file = paste0("./output/stocks/",
                          survey_form,
                          "_plot_carbon_stocks_below_ground.csv"),
@@ -334,17 +382,23 @@ write.csv2(plot_carbon_stocks_below_ground,
 
 # Number of plots
 
-plot_carbon_stocks_below_ground %>%
+plot_c_stocks_below_ground %>%
   distinct(plot_id) %>%
   nrow
 
 # Number of plots with more than two surveys
 
-plot_carbon_stocks_below_ground %>%
+plot_c_stocks_below_ground %>%
   group_by(plot_id) %>%
   summarise(n = n()) %>%
   filter(n > 1) %>%
   nrow
+
+
+
+
+
+
 
 # 4. Forest floor layers ----
 ## 4.1. Derive layer-based dataset for forest floors ----
@@ -381,20 +435,22 @@ df_forest_floor <- df_working %>%
          bulk_density,
          organic_layer_weight,
          coarse_fragment_vol,
+         coarse_fragment_vol_frac,
          organic_carbon_total) %>%
   # Carbon stock per layer (t C ha-1 for each layer)
   # Units: g C/kg forest floor * kg forest floor/m2
-  mutate(carbon_stock_layer =
+  mutate(c_stock_layer =
            (.data$organic_carbon_total * .data$organic_layer_weight) / 100) %>%
   # Carbon density (t C ha-1 cm-1)
-  mutate(carbon_density =
-           .data$carbon_stock_layer / .data$layer_thickness) %>%
+  mutate(c_density =
+           .data$c_stock_layer / .data$layer_thickness) %>%
   # Add data availability index
   mutate(avail_thick = ifelse(is.na(.data$layer_thickness), 0, 1),
          avail_toc = ifelse(is.na(.data$organic_carbon_total), 0, 1),
          avail_bd = ifelse(is.na(.data$bulk_density), 0, 1),
          avail_org_layer_weight =
-           ifelse(is.na(.data$organic_layer_weight), 0, 1))
+           ifelse(is.na(.data$organic_layer_weight), 0, 1)) %>%
+  select(-coarse_fragment_vol)
 
 # Save the df_forest_floor dataset (all data, also missing data)
 
@@ -408,7 +464,7 @@ write.csv2(df_forest_floor,
 
 ## 4.2. Calculate forest floor carbon stocks ----
 
-profile_carbon_stocks_forest_floor <- NULL
+profile_c_stocks_forest_floor <- NULL
 profile_list <- unique(df_forest_floor$profile_id)
 
 # Set progress bar
@@ -421,13 +477,13 @@ for (i in seq_along(profile_list)) {
   
   df_profile_i <- df_forest_floor %>%
     filter(profile_id == profile_list[i]) %>%
-    filter(!is.na(carbon_stock_layer))
+    filter(!is.na(c_stock_layer))
   
   if (nrow(df_profile_i) > 0) {
   
   # Combine stocks in OL, OFH and O per profile
   
-  profile_carbon_stocks_i <-
+  profile_c_stocks_i <-
     data.frame(partner_short = unique(df_profile_i$partner_short),
                plot_id = as.character(unique(df_profile_i$plot_id)),
                profile_id = as.character(unique(df_profile_i$profile_id)),
@@ -443,20 +499,20 @@ for (i in seq_along(profile_list)) {
                nlay = length(df_profile_i$layer_number),
                forest_floor_layers = paste(c(df_profile_i$code_layer),
                                            collapse = "_"),
-               carbon_stock_ol =
+               c_stock_ol =
                  ifelse("OL" %in% df_profile_i$code_layer,
                         df_profile_i %>%
                           filter(code_layer == "OL") %>%
-                          pull(carbon_stock_layer) %>%
+                          pull(c_stock_layer) %>%
                           round(2),
                         NA),
-               carbon_stock_ofh =
+               c_stock_ofh =
                  ifelse(("OF" %in% df_profile_i$code_layer &&
                           "OH" %in% df_profile_i$code_layer) ||
                           ("OFH" %in% df_profile_i$code_layer),
                         df_profile_i %>%
                           filter(code_layer %in% c("OF", "OH", "OFH")) %>%
-                          pull(carbon_stock_layer) %>%
+                          pull(c_stock_layer) %>%
                           sum %>%
                           round(2),
                         NA),
@@ -467,12 +523,12 @@ for (i in seq_along(profile_list)) {
                # Since layer-specific carbon stocks in the forest floor can
                # sometimes not be assigned to any of both stocks
                # (e.g. "OLF", only "OF", only "OH", "O1", ...)
-               carbon_stock_forest_floor =
-                 round(sum(df_profile_i$carbon_stock_layer), 2))
+               c_stock_forest_floor =
+                 round(sum(df_profile_i$c_stock_layer), 2))
 
-  profile_carbon_stocks_forest_floor <-
-    rbind(profile_carbon_stocks_forest_floor,
-          profile_carbon_stocks_i)
+  profile_c_stocks_forest_floor <-
+    rbind(profile_c_stocks_forest_floor,
+          profile_c_stocks_i)
   
   }
   
@@ -481,31 +537,38 @@ for (i in seq_along(profile_list)) {
 }
 
 close(progress_bar)
-View(profile_carbon_stocks_forest_floor)
+View(profile_c_stocks_forest_floor)
 
 # Save output
 
-write.csv2(profile_carbon_stocks_forest_floor,
+write.csv2(profile_c_stocks_forest_floor %>%
+             filter(c_stock_forest_floor >= 0),
            file = paste0("./output/stocks/",
                          survey_form,
                          "_profile_carbon_stocks_forest_floor.csv"),
            row.names = FALSE,
            na = "")
 
+
+
+
+
+
 ## 4.3. Aggregate forest floor per plot ----
 
-plot_carbon_stocks_forest_floor <-
-  profile_carbon_stocks_forest_floor %>%
+plot_c_stocks_forest_floor <-
+  profile_c_stocks_forest_floor %>%
+  filter(c_stock_forest_floor >= 0) %>%
   group_by(partner_short, partner_code, code_country, code_plot,
            plot_id, survey_year) %>%
-  summarise(carbon_stock_forest_floor_avg =
-              round(mean(carbon_stock_forest_floor, na.rm = TRUE), 2),
+  summarise(c_stock_forest_floor_avg =
+              round(mean(c_stock_forest_floor, na.rm = TRUE), 2),
             # Standard deviation across spatial repetitions
             # (this also accounts for some sample preprocessing and
             # lab analytical uncertainty)
-            carbon_stock_forest_floor_stdev =
-              ifelse(length(carbon_stock_forest_floor) > 1,
-                     round(sd(carbon_stock_forest_floor, na.rm = TRUE), 2),
+            c_stock_forest_floor_stdev =
+              ifelse(length(c_stock_forest_floor) > 1,
+                     round(sd(c_stock_forest_floor, na.rm = TRUE), 2),
                      NA),
             nlay_min =
               min(nlay, na.rm = TRUE),
@@ -518,16 +581,17 @@ plot_carbon_stocks_forest_floor <-
                      unique(forest_floor_layers),
                      NA),
             .groups = "drop") %>%
-  rename(carbon_stock_forest_floor = carbon_stock_forest_floor_avg) %>%
+  rename(c_stock_forest_floor = c_stock_forest_floor_avg) %>%
   arrange(partner_short,
           code_plot,
-          survey_year)
+          survey_year) %>%
+  mutate_all(function(x) ifelse(is.nan(x), NA, x))
 
-View(plot_carbon_stocks_forest_floor)
+View(plot_c_stocks_forest_floor)
 
 # Save output
 
-write.csv2(plot_carbon_stocks_forest_floor,
+write.csv2(plot_c_stocks_forest_floor,
            file = paste0("./output/stocks/",
                          survey_form,
                          "_plot_carbon_stocks_forest_floor.csv"),
@@ -535,13 +599,17 @@ write.csv2(plot_carbon_stocks_forest_floor,
            na = "")
 
 
+
+
+
+
 # 5. Combine below-ground and forest floor ----
 ## 5.1. Join below-ground and forest floor ----
 
-profile_carbon_stocks <-
-  profile_carbon_stocks_below_ground %>%
+profile_c_stocks <-
+  profile_c_stocks_below_ground %>%
   rename(nlay_below_ground = nlay) %>%
-  left_join(profile_carbon_stocks_forest_floor %>%
+  left_join(profile_c_stocks_forest_floor %>%
               select(-partner_short,
                      -plot_id,
                      -survey_year,
@@ -551,14 +619,16 @@ profile_carbon_stocks <-
                      -repetition) %>%
               rename(nlay_forest_floor = nlay),
             by = "profile_id") %>%
-  mutate(carbon_stock = .data$carbon_stock_below_ground +
-           .data$carbon_stock_forest_floor,
+  mutate(c_stock =
+           rowSums(select(., c_stock_below_ground, c_stock_forest_floor),
+                          na.rm = TRUE),
          nlay = rowSums(select(., nlay_below_ground, nlay_forest_floor),
                          na.rm = TRUE))
 
 # Save output
 
-write.csv2(profile_carbon_stocks,
+write.csv2(profile_c_stocks %>%
+             filter(c_stock_10 > 0),
            file = paste0("./output/stocks/",
                          survey_form,
                          "_profile_carbon_stocks.csv"),
@@ -567,30 +637,30 @@ write.csv2(profile_carbon_stocks,
 
 ## 5.2. Aggregate per plot ----
 
-plot_carbon_stocks <- profile_carbon_stocks %>%
-  filter(carbon_stock_cum_10 > 0) %>%
+plot_c_stocks <- profile_c_stocks %>%
+  filter(c_stock_10 > 0) %>%
   group_by(partner_short, partner_code, code_country, code_plot,
            plot_id, survey_year) %>%
-  summarise(carbon_stock_avg =
-              round(mean(carbon_stock, na.rm = TRUE), 2),
+  summarise(c_stock_avg =
+              round(mean(c_stock, na.rm = TRUE), 2),
             # Standard deviation across spatial repetitions
             # (this also accounts for some sample preprocessing and
             # lab analytical uncertainty)
-            carbon_stock_stdev =
-              ifelse(length(carbon_stock) > 1,
-                     round(sd(carbon_stock, na.rm = TRUE), 2),
+            c_stock_stdev =
+              ifelse(length(c_stock) > 1,
+                     round(sd(c_stock, na.rm = TRUE), 2),
                      NA),
-            carbon_stock_below_ground_avg =
-              round(mean(carbon_stock_below_ground, na.rm = TRUE), 2),
-            carbon_stock_below_ground_stdev =
-              ifelse(length(carbon_stock_below_ground) > 1,
-                     round(sd(carbon_stock_below_ground, na.rm = TRUE), 2),
+            c_stock_below_ground_avg =
+              round(mean(c_stock_below_ground, na.rm = TRUE), 2),
+            c_stock_below_ground_stdev =
+              ifelse(length(c_stock_below_ground) > 1,
+                     round(sd(c_stock_below_ground, na.rm = TRUE), 2),
                      NA),
-            carbon_stock_forest_floor_avg =
-              round(mean(carbon_stock_forest_floor, na.rm = TRUE), 2),
-            carbon_stock_forest_floor_stdev =
-              ifelse(length(carbon_stock_forest_floor) > 1,
-                     round(sd(carbon_stock_forest_floor, na.rm = TRUE), 2),
+            c_stock_forest_floor_avg =
+              round(mean(c_stock_forest_floor, na.rm = TRUE), 2),
+            c_stock_forest_floor_stdev =
+              ifelse(length(c_stock_forest_floor) > 1,
+                     round(sd(c_stock_forest_floor, na.rm = TRUE), 2),
                      NA),
             nlay_min = min(nlay,
                            na.rm = TRUE),
@@ -615,23 +685,32 @@ plot_carbon_stocks <- profile_carbon_stocks %>%
             rmse_mpspline_max =
               max(rmse_mpspline, na.rm = TRUE),
             .groups = "drop") %>%
-  rename(carbon_stock = carbon_stock_avg) %>%
-  rename(carbon_stock_forest_floor = carbon_stock_forest_floor_avg) %>%
-  rename(carbon_stock_below_ground = carbon_stock_below_ground_avg) %>%
+  rename(c_stock = c_stock_avg) %>%
+  rename(c_stock_forest_floor = c_stock_forest_floor_avg) %>%
+  rename(c_stock_below_ground = c_stock_below_ground_avg) %>%
   # Some columns contain "NaN" instead of NA: replace
   mutate_all(function(x) ifelse(is.nan(x), NA, x)) %>%
   arrange(partner_short,
           code_plot,
           survey_year)
 
-View(plot_carbon_stocks)
+View(plot_c_stocks)
 
 # Save output
 
-write.csv2(plot_carbon_stocks,
+write.csv2(plot_c_stocks,
            file = paste0("./output/stocks/",
                          survey_form,
                          "_plot_carbon_stocks.csv"),
            row.names = FALSE,
            na = "")
+
+
+
+
+# 6. Visual check per plot
+
+
+
+
 
