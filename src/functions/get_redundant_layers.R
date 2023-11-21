@@ -608,7 +608,7 @@ if ((nrow(redundant_layers[
 # ...redundant two combined layers and spans a bigger depth range,
 # ...because of which it is less informative than two more detailed layers
 # The objective is to exclude such a layer from the analysis.
-# redundancy_type = 0
+# redundancy_type is 0 ----
 
 if ((!identical(which(redundant_layers$redundancy_type == 1 |
                      redundant_layers$redundancy_type == 2 |
@@ -641,6 +641,9 @@ redundant_layers_short <-
 redundant_layers_short$length <- NA
 redundant_layers_short$horizon_limit_up <- NA
 redundant_layers_short$horizon_limit_low <- NA
+
+
+# Determine the length of the combinations
 
 for (i in seq_len(nrow(redundant_layers_short))) {
   ind <- which(depth_layers$layer == redundant_layers_short$layer[i])
@@ -675,10 +678,22 @@ for (i in seq_len(nrow(redundant_layers_short))) {
   redundant_layers_short$horizon_limit_low[i] <- depth_layers$lower[ind]
   }
 
+
+# Identify which of the combinations can be considered redundant
+# (redundancy type 0)
+
 ind_max <- which(redundant_layers_short$length ==
-                   max(redundant_layers_short$length) &
-                 redundant_layers_short$redundancy_type ==
-                   min(redundant_layers_short$redundancy_type))
+                   max(redundant_layers_short$length))
+
+if (length(unique(redundant_layers_short$redundancy_type[ind_max])) > 1) {
+
+  ind_max <- which(redundant_layers_short$length ==
+                     max(redundant_layers_short$length) &
+                     redundant_layers_short$redundancy_type ==
+                     min(redundant_layers_short$redundancy_type))
+}
+
+
 
 if ((length(ind_max) == 1)) {
   redundant_layers <-
