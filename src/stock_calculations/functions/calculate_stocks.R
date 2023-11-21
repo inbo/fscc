@@ -8,7 +8,7 @@
 #' 
 #' @param prof Dataframe of a single soil profile (below-ground) with a column
 #' plot_id, profile_id, code_layer, depth_top, depth_bottom, c_density,
-#' eff_soil_depth for the different depth layers
+#' soil_depth for the different depth layers
 #' @param graph Logical indicating whether a graph of the spline fitting
 #' should be made for the given depth profile
 #'
@@ -18,13 +18,14 @@
 #' @examples
 
 calculate_stocks <- function(prof,
+                             survey_form = NULL,
                              graph = TRUE) {
   
   assertthat::assert_that(all(c("profile_id",
                                 "depth_top",
                                 "depth_bottom",
                                 "c_density",
-                                "eff_soil_depth") %in% names(prof)))
+                                "soil_depth") %in% names(prof)))
   
   source("./src/stock_calculations/functions/soilspline.R")
   
@@ -38,7 +39,7 @@ calculate_stocks <- function(prof,
   
   # Fit spline
   
-  max_soil_depth <- unique(prof$eff_soil_depth)
+  max_soil_depth <- unique(prof$soil_depth)
   
   spline_output <-
     soilspline(id = unique(prof$profile_id),
@@ -46,6 +47,7 @@ calculate_stocks <- function(prof,
                depth_bottom = prof$depth_bottom,
                variab = prof$c_density,
                max_soil_depth = max_soil_depth,
+               survey_form = survey_form,
                graph = graph)
   
   spline_output_per_cm <- spline_output$spline_output
@@ -56,7 +58,7 @@ calculate_stocks <- function(prof,
   # at a depth of i cm)
   
   stocks <- data.frame(
-    nlay = length(prof$c_density),
+    nlay_below_ground = length(prof$c_density),
     # Cumulative carbon stocks from 0 until x cm
     c_stock_10 = ifelse(10 <= max_soil_depth,
                                  round(sum(spline_output_per_cm[seq_len(10)]),

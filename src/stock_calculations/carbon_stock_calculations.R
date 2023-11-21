@@ -53,7 +53,7 @@ df_working <- df %>%
             by = "plot_id") %>%
   # If the effective soil depth is deeper than 100 cm or unknown (NA):
   # assume it is 100 cm (for stocks)
-  mutate(eff_soil_depth =
+  mutate(soil_depth =
            ifelse(is.na(.data$eff_soil_depth) |
                           (.data$eff_soil_depth > 100),
                   100,
@@ -75,9 +75,9 @@ df_working <- df %>%
          depth_max = suppressWarnings(max(.data$layer_limit_inferior,
                                           na.rm = TRUE)),
          layer_limit_inferior = ifelse(is.na(.data$layer_limit_inferior) &
-                                       !is.na(.data$eff_soil_depth) &
-                                       (.data$eff_soil_depth > .data$depth_max),
-                                       .data$eff_soil_depth,
+                                       !is.na(.data$soil_depth) &
+                                       (.data$soil_depth > .data$depth_max),
+                                       .data$soil_depth,
                                        .data$layer_limit_inferior)) %>%
   ungroup() %>%
   select(-layer_number_deepest,
@@ -136,7 +136,7 @@ df_below_ground <- df_working %>%
          depth_bottom,
          depth_avg,
          layer_thickness,
-         eff_soil_depth,
+         soil_depth,
          bulk_density,
          organic_layer_weight,
          coarse_fragment_vol,
@@ -211,8 +211,8 @@ for (i in seq_along(profile_list)) {
   prof_id_i <- as.character(unique(df_profile_i$profile_id))
   plot_id_i <- as.character(unique(df_profile_i$plot_id))
   
-  assertthat::assert_that(length(unique(df_profile_i$eff_soil_depth)) == 1)
-  soil_depth_i <- unique(df_profile_i$eff_soil_depth)
+  assertthat::assert_that(length(unique(df_profile_i$soil_depth)) == 1)
+  soil_depth_i <- unique(df_profile_i$soil_depth)
   
   # Prepare input for calculate_stocks function
   
@@ -223,7 +223,7 @@ for (i in seq_along(profile_list)) {
            depth_top,
            depth_bottom,
            c_density,
-           eff_soil_depth) %>%
+           soil_depth) %>%
     # Only calculate carbon stocks based on layers
     # for which the carbon density is known
     filter(!is.na(.data$c_density)) %>%
@@ -291,7 +291,8 @@ for (i in seq_along(profile_list)) {
                          "2008_13_1161_1"))) {
     
     profile_stock_output_i <- calculate_stocks(prof = prof,
-                                               graph = FALSE)
+                                               survey_form = survey_form,
+                                               graph = TRUE)
     
     profile_c_stocks_i <-
        data.frame(partner_short = unique(df_profile_i$partner_short),
@@ -319,7 +320,6 @@ for (i in seq_along(profile_list)) {
 } # End of for loop along profiles
 
 close(progress_bar)
-View(profile_c_stocks_below_ground)
 
 # Save output
 
@@ -350,10 +350,10 @@ plot_c_stocks_below_ground <- profile_c_stocks_below_ground %>%
               ifelse(length(c_stock_below_ground) > 1,
                      round(sd(c_stock_below_ground, na.rm = TRUE), 2),
                      NA),
-            nlay_min =
-              min(nlay, na.rm = TRUE),
-            nlay_max =
-              max(nlay, na.rm = TRUE),
+            nlay_below_ground_min =
+              min(nlay_below_ground, na.rm = TRUE),
+            nlay_below_ground_max =
+              max(nlay_below_ground, na.rm = TRUE),
             obs_depth_avg =
               round(mean(obs_depth, na.rm = TRUE), 2),
             soil_depth_avg =
@@ -368,8 +368,6 @@ plot_c_stocks_below_ground <- profile_c_stocks_below_ground %>%
           code_plot,
           survey_year) %>%
   mutate_all(function(x) ifelse(is.nan(x), NA, x))
-
-View(plot_c_stocks_below_ground)
 
 # Save output
 
@@ -431,7 +429,7 @@ df_forest_floor <- df_working %>%
          depth_bottom,
          depth_avg,
          layer_thickness,
-         eff_soil_depth,
+         soil_depth,
          bulk_density,
          organic_layer_weight,
          coarse_fragment_vol,
@@ -496,7 +494,7 @@ for (i in seq_along(profile_list)) {
                  ifelse(any(is.na(df_profile_i$layer_thickness)),
                         NA,
                         sum(df_profile_i$layer_thickness)),
-               nlay = length(df_profile_i$layer_number),
+               nlay_forest_floor = length(df_profile_i$layer_number),
                forest_floor_layers = paste(c(df_profile_i$code_layer),
                                            collapse = "_"),
                c_stock_ol =
@@ -537,7 +535,6 @@ for (i in seq_along(profile_list)) {
 }
 
 close(progress_bar)
-View(profile_c_stocks_forest_floor)
 
 # Save output
 
@@ -570,10 +567,10 @@ plot_c_stocks_forest_floor <-
               ifelse(length(c_stock_forest_floor) > 1,
                      round(sd(c_stock_forest_floor, na.rm = TRUE), 2),
                      NA),
-            nlay_min =
-              min(nlay, na.rm = TRUE),
-            nlay_max =
-              max(nlay, na.rm = TRUE),
+            nlay_forest_floor_min =
+              min(nlay_forest_floor, na.rm = TRUE),
+            nlay_forest_floor_max =
+              max(nlay_forest_floor, na.rm = TRUE),
             forest_floor_thickness_avg =
               round(mean(forest_floor_thickness, na.rm = TRUE), 2),
             forest_floor_layers_unique =
@@ -586,8 +583,6 @@ plot_c_stocks_forest_floor <-
           code_plot,
           survey_year) %>%
   mutate_all(function(x) ifelse(is.nan(x), NA, x))
-
-View(plot_c_stocks_forest_floor)
 
 # Save output
 
@@ -608,7 +603,6 @@ write.csv2(plot_c_stocks_forest_floor,
 
 profile_c_stocks <-
   profile_c_stocks_below_ground %>%
-  rename(nlay_below_ground = nlay) %>%
   left_join(profile_c_stocks_forest_floor %>%
               select(-partner_short,
                      -plot_id,
@@ -616,8 +610,7 @@ profile_c_stocks <-
                      -partner_code,
                      -code_country,
                      -code_plot,
-                     -repetition) %>%
-              rename(nlay_forest_floor = nlay),
+                     -repetition),
             by = "profile_id") %>%
   mutate(c_stock =
            rowSums(select(., c_stock_below_ground, c_stock_forest_floor),
@@ -634,6 +627,8 @@ write.csv2(profile_c_stocks %>%
                          "_profile_carbon_stocks.csv"),
            row.names = FALSE,
            na = "")
+
+
 
 ## 5.2. Aggregate per plot ----
 
@@ -694,8 +689,6 @@ plot_c_stocks <- profile_c_stocks %>%
           code_plot,
           survey_year)
 
-View(plot_c_stocks)
-
 # Save output
 
 write.csv2(plot_c_stocks,
@@ -712,5 +705,16 @@ write.csv2(plot_c_stocks,
 
 
 
+# Sample data
+names_list <- sort(unique(c(names(df_below_ground),
+                            names(profile_c_stocks_below_ground),
+                            names(plot_c_stocks_below_ground),
+                            names(df_forest_floor),
+                            names(profile_c_stocks_forest_floor),
+                            names(plot_c_stocks_forest_floor),
+                            names(profile_c_stocks),
+                            names(plot_c_stocks))))
 
+# Format and print the names
+cat(paste0("-   **", names_list, "** -"), sep = "\n")
 
