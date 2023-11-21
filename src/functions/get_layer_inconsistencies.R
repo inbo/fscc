@@ -2133,6 +2133,8 @@ if (any(df$layer_type[vec] == "peat")) {
 
 if (any(df$layer_type[vec] == "forest_floor")) {
   
+  vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
+  
   source("./src/functions/summarise_profile_per_depth_layer_type.R")
   
   df_sub <-
@@ -2185,6 +2187,9 @@ if (any(df$layer_type[vec] == "forest_floor")) {
       
     }
   }
+  
+  vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
+  
 }
 }
 
@@ -4692,6 +4697,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     
     if (any(df$layer_type[vec_non_redundant] == "forest_floor")) {
       
+      vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
+      
       source("./src/functions/summarise_profile_per_depth_layer_type.R")
       
       df_sub <-
@@ -4744,6 +4751,9 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
          
        }
      }
+      
+      vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
+      
     }
     }
     

@@ -311,8 +311,7 @@ gapfill_internally <- function(survey_form,
                        part_size_clay_pfh_sameyear),
               by = "unique_survey_layer") %>%
     # som other year
-    left_join(som_otheryear %>% #! 7773 of x; 10663 of y
-                # c(15, 15)_c(2007, 2007)_c(1620, 1620)_c("M4050", "M5060")_c(1, 1)
+    left_join(som_otheryear %>%
                 rename(bulk_density_som_otheryear =
                          bulk_density,
                        coarse_fragment_vol_som_otheryear =
