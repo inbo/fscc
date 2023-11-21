@@ -80,6 +80,15 @@ get_derived_variable_inconsistencies <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  # Specify date on which 'layer 0' data were downloaded ----
+  # from ICP Forests website
+  
+  source("./src/functions/get_date_local.R")
+  download_date <- get_date_local(path = "./data/raw_data/",
+                                  save_to_env = TRUE,
+                                  collapsed = TRUE)
+  download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
+  
   # Import the inconsistency catalogue ----
 
   assertthat::assert_that(
@@ -724,13 +733,19 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
   if ("sum_base_cations" %in% names(df)) {
 
-    if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+    cec <- NULL
+    
+    
+    if (unlist(strsplit(survey_form, "_"))[2] == "som" &&
+        ("exch_cec" %in% names(df))) {
       cec <- df$exch_cec
     }
 
     if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
       cec <- df$horizon_cec
     }
+
+    if (!is.null(cec)) {
 
     vec_inconsistency <- which(!is.na(df$sum_base_cations) &
                                !is.na(cec))
@@ -911,6 +926,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
       }
     }
+  }
     }
 
 
