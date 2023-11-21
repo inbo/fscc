@@ -375,8 +375,15 @@ gapfill_from_pir <- function(code_survey,
             !is.na(value_1) &&
             !is.na(value_2)) {
 
-          if (abs((as.numeric(value_1) / as.numeric(value_2)) - 1) <
-              tolerance) {
+          # If both values are 0 or
+          # if both values are approximately the same
+          # (not possible to divide by 0)
+
+          if ((abs(as.numeric(value_1)) < tolerance &&
+               abs(as.numeric(value_2)) < tolerance) ||
+            (abs((as.numeric(value_1) / as.numeric(value_2)) - 1) <
+              tolerance)) {
+            
             outcome <- TRUE
           }
         }
@@ -478,8 +485,11 @@ gapfill_from_pir <- function(code_survey,
       
       if (pir_checked_survey_form$rule_id[i] != "FSCC_12") {
         
+        assertthat::assert_that(
+          length(pull(df[row_ind, col_ind])) == 1)
+        
         pir_checked_survey_form$parameter_value_current[i] <-
-          df[row_ind, col_ind]
+          pull(df[row_ind, col_ind])
 
     # If the change_date was later than 2 March 2023 +
     # the value is different from parameter_value_orig:
@@ -487,7 +497,7 @@ gapfill_from_pir <- function(code_survey,
     # So no need to update data using "updated_value"
     
     if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
-        !is_the_same(df[row_ind, col_ind],
+        !is_the_same(pull(df[row_ind, col_ind]),
                      pir_checked_survey_form$parameter_value_orig[i])) {
       pir_checked_survey_form$fscc_action[i] <- "already updated in layer 0"
     }
@@ -495,7 +505,7 @@ gapfill_from_pir <- function(code_survey,
     # If the change_date is before 2 March 2023 OR
     if (as.Date(df$change_date[row_ind]) < as.Date("2023-03-02") ||
         # if the values haven't been updated
-        is_the_same(df[row_ind, col_ind],
+        is_the_same(pull(df[row_ind, col_ind]),
                     pir_checked_survey_form$parameter_value_orig[i])) {
       
       # If the updated_value says "record_to_be_removed",
@@ -509,7 +519,7 @@ gapfill_from_pir <- function(code_survey,
       } else
 
       # If updated_value is not the same like the original value
-      if (!is_the_same(df[row_ind, col_ind] %>% pull,
+      if (!is_the_same(pull(df[row_ind, col_ind]),
                        pir_checked_survey_form$updated_value[i])) {
 
         if (pir_checked_survey_form$parameter[i] %in% numeric_columns) {
@@ -528,9 +538,9 @@ gapfill_from_pir <- function(code_survey,
       } else {
       
         # If the inconcistency concerns FSCC_12: pH measurement method
-
+        
         pir_checked_survey_form$parameter_value_current[i] <-
-          df[row_ind, which(names(df) == "other_obs")]
+          pull(df[row_ind, which(names(df) == "other_obs")])
         
         
         if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
