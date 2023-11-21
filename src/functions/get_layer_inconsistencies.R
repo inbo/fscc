@@ -118,6 +118,15 @@ get_layer_inconsistencies <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  # Specify date on which 'layer 0' data were downloaded ----
+  # from ICP Forests website
+  
+  source("./src/functions/get_date_local.R")
+  download_date <- get_date_local(path = "./data/raw_data/",
+                                  save_to_env = TRUE,
+                                  collapsed = TRUE)
+  download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
+  
   # Monitor how long it takes to run this function
   
   start_time_r <- Sys.time()
@@ -132,6 +141,9 @@ get_layer_inconsistencies <- function(survey_form,
   inconsistency_catalogue <-
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
+  
+  
+# . ----
 # Part 1: processing "som" survey forms (with fixed depths) ----
 
   # Check if the given survey form is "som"
@@ -150,8 +162,7 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
   
   pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
 
-  df$moved <- NA
-  
+
   # If the input survey form is "so_som" (Level II):
   # retrieve the "som" and "pfh" data from Level I ("s1_som" and "s1_pfh")
   # to cross-check forest floor layers in all survey_forms (FSCC_48)
@@ -159,10 +170,74 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 if (unlist(strsplit(survey_form, "_"))[1] == "so") {
 
   survey_level <- "Level II"
-  som_other <- get_env("s1_som")
-  pfh_other <- get_env("s1_pfh")
+  # som_other <- get_env("s1_som")
+  # pfh_other <- get_env("s1_pfh")
   }
 
+  
+  # Specific issues ----
+  
+  if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+    
+    # Italian plot 5_52
+    # Based on "pfh", the TOC content, and the fact that this is a histosol,
+    # these layers should become peat layers.
+    
+    layers_to_check <- df %>%
+      filter(plot_id == "5_52") %>%
+      filter(layer_type == "mineral") %>%
+      filter(organic_carbon_total >= 200) %>%
+      pull(code_line)
+    
+    if (!identical(layers_to_check, character(0))) {
+      
+      df <- df %>%
+        mutate(across(c(code_layer,
+                        unique_survey_layer,
+                        unique_layer,
+                        unique_layer_repetition),
+                      ~ ifelse(code_line %in% layers_to_check,
+                               str_replace_all(., "M", "H"),
+                               .))) %>%
+       mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+                                  "peat",
+                                  .data$layer_type))
+      
+    }
+  }
+  
+  
+  if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+    
+    # Irish plot 7_712
+    # Based on the TOC content,
+    # this layer should become a mineral layer.
+    
+    layers_to_check <- df %>%
+      filter(plot_id == "7_712") %>%
+      filter(layer_type == "peat") %>%
+      filter(organic_carbon_total < 200) %>%
+      pull(code_line)
+    
+    if (!identical(layers_to_check, character(0))) {
+      
+      df <- df %>%
+        mutate(across(c(code_layer,
+                        unique_survey_layer,
+                        unique_layer,
+                        unique_layer_repetition),
+                      ~ ifelse(code_line %in% layers_to_check,
+                               str_replace_all(., "H", "M"),
+                               .))) %>%
+        mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+                                   "mineral",
+                                   .data$layer_type))
+      
+    }
+  }
+  
+  
+  
 
   # Set up a progress bar to track processing
 
@@ -426,7 +501,7 @@ if (unique(df$unique_survey_repetition[vec_ff]) == "64_2004_5_1") {
 
 # This is only tested in "so_som"
 
-if (survey_form == "so_som") {
+if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
 # Store the "unique_survey_repetition" and "plot_id" of i
 
@@ -449,36 +524,36 @@ if (which(survey_repetitions_som == unique_survey_repetition_i) == 1) {
 
 vec_som <- which(df$plot_id == plot_id_i)
 vec_pfh <- which(pfh$plot_id == plot_id_i)
-vec_som_other <- which(som_other$plot_id == plot_id_i)
-vec_pfh_other <- which(pfh_other$plot_id == plot_id_i)
+# vec_som_other <- which(som_other$plot_id == plot_id_i)
+# vec_pfh_other <- which(pfh_other$plot_id == plot_id_i)
 
 # Determine which unique_survey_repetitions exist for the given plot_id
 # in the three other survey_forms
 
 survey_repetitions_pfh <-
   unique(pfh$unique_survey_profile[which(pfh$plot_id == plot_id_i)])
-survey_repetitions_som_other <-
-  unique(som_other$unique_survey_repetition[
-    which(som_other$plot_id == plot_id_i)])
-survey_repetitions_pfh_other <-
-  unique(pfh_other$unique_survey_profile[
-    which(pfh_other$plot_id == plot_id_i)])
+# survey_repetitions_som_other <-
+#   unique(som_other$unique_survey_repetition[
+#     which(som_other$plot_id == plot_id_i)])
+# survey_repetitions_pfh_other <-
+#   unique(pfh_other$unique_survey_profile[
+#     which(pfh_other$plot_id == plot_id_i)])
 
 # Create a list with layer names of the forest floor layers
 # This step is not required to find out the inconsistencies
 
 forest_floor_layers_som <- NULL
 forest_floor_layers_pfh <- NULL
-forest_floor_layers_som_other <- NULL
-forest_floor_layers_pfh_other <- NULL
+# forest_floor_layers_som_other <- NULL
+# forest_floor_layers_pfh_other <- NULL
 
 # Create a data frame with metadata of the repetitions that exist for the
 # given plot_id
 
 if (survey_level == "Level II") {
   survey_2 <- "so_pfh"
-  survey_3 <- "s1_som"
-  survey_4 <- "s1_pfh"
+  # survey_3 <- "s1_som"
+  # survey_4 <- "s1_pfh"
   }
 
 
@@ -515,39 +590,39 @@ pfh_ff_i$repetition_profile_pit_id <-
 
 
 
-som_other_ff_i <- som_other[vec_som_other[
-  which(!duplicated(som_other$unique_survey_repetition[vec_som_other]))],
-        which(names(som_other) %in% c("partner_code", "survey_year",
-                                      "code_plot", "plot_id",
-                                      "repetition",
-                                      "unique_survey_repetition"))]
-
-names(som_other_ff_i)[
-  which(names(som_other_ff_i) == "repetition")] <-
-  "repetition_profile_pit_id"
-
-som_other_ff_i$repetition_profile_pit_id <-
-  as.integer(som_other_ff_i$repetition_profile_pit_id)
-
-
-
-pfh_other_ff_i <- pfh_other[vec_pfh_other[
-  which(!duplicated(pfh_other$unique_survey_profile[vec_pfh_other]))],
-          which(names(pfh_other) %in% c("partner_code", "survey_year",
-                                        "code_plot", "plot_id",
-                                        "profile_pit_id",
-                                        "unique_survey_profile"))]
-
-names(pfh_other_ff_i)[
-  which(names(pfh_other_ff_i) == "profile_pit_id")] <-
-  "repetition_profile_pit_id"
-
-names(pfh_other_ff_i)[
-  which(names(pfh_other_ff_i) == "unique_survey_profile")] <-
-  "unique_survey_repetition"
-
-pfh_other_ff_i$repetition_profile_pit_id <-
-  as.integer(pfh_other_ff_i$repetition_profile_pit_id)
+# som_other_ff_i <- som_other[vec_som_other[
+#   which(!duplicated(som_other$unique_survey_repetition[vec_som_other]))],
+#         which(names(som_other) %in% c("partner_code", "survey_year",
+#                                       "code_plot", "plot_id",
+#                                       "repetition",
+#                                       "unique_survey_repetition"))]
+# 
+# names(som_other_ff_i)[
+#   which(names(som_other_ff_i) == "repetition")] <-
+#   "repetition_profile_pit_id"
+# 
+# som_other_ff_i$repetition_profile_pit_id <-
+#   as.integer(som_other_ff_i$repetition_profile_pit_id)
+# 
+# 
+# 
+# pfh_other_ff_i <- pfh_other[vec_pfh_other[
+#   which(!duplicated(pfh_other$unique_survey_profile[vec_pfh_other]))],
+#           which(names(pfh_other) %in% c("partner_code", "survey_year",
+#                                         "code_plot", "plot_id",
+#                                         "profile_pit_id",
+#                                         "unique_survey_profile"))]
+# 
+# names(pfh_other_ff_i)[
+#   which(names(pfh_other_ff_i) == "profile_pit_id")] <-
+#   "repetition_profile_pit_id"
+# 
+# names(pfh_other_ff_i)[
+#   which(names(pfh_other_ff_i) == "unique_survey_profile")] <-
+#   "unique_survey_repetition"
+# 
+# pfh_other_ff_i$repetition_profile_pit_id <-
+#   as.integer(pfh_other_ff_i$repetition_profile_pit_id)
 
 
 # Merge these four dataframes to one data_frame "list_ff_meta_i"
@@ -555,20 +630,20 @@ pfh_other_ff_i$repetition_profile_pit_id <-
 list_ff_meta_i <-
    cbind(data.frame("survey_form" =
                     c(rep(survey_form, length(survey_repetitions_som)),
-                      rep(survey_2, length(survey_repetitions_pfh)),
-                      rep(survey_3, length(survey_repetitions_som_other)),
-                      rep(survey_4, length(survey_repetitions_pfh_other))),
+                      rep(survey_2, length(survey_repetitions_pfh))),
+                 # rep(survey_3, length(survey_repetitions_som_other)),
+                 # rep(survey_4, length(survey_repetitions_pfh_other))),
                    "survey_form_script" =
                      c(rep("df", length(survey_repetitions_som)),
-                       rep("pfh", length(survey_repetitions_pfh)),
-                       rep("som_other", length(survey_repetitions_som_other)),
-                       rep("pfh_other", length(survey_repetitions_pfh_other)))),
-        rbind(df_ff_i, pfh_ff_i, som_other_ff_i, pfh_other_ff_i),
+                       rep("pfh", length(survey_repetitions_pfh)))),
+                 # rep("som_other", length(survey_repetitions_som_other)),
+                 # rep("pfh_other", length(survey_repetitions_pfh_other)))),
+        rbind(df_ff_i, pfh_ff_i), # som_other_ff_i, pfh_other_ff_i),
         data.frame("number_ff_layers" =
                     rep(NA, (length(survey_repetitions_som) +
-                             length(survey_repetitions_pfh) +
-                             length(survey_repetitions_som_other) +
-                             length(survey_repetitions_pfh_other)))))
+                             length(survey_repetitions_pfh)))))
+                             # length(survey_repetitions_som_other) +
+                             # length(survey_repetitions_pfh_other)))))
 
 
 # For each of these unique_survey_repetitions:
@@ -576,9 +651,9 @@ list_ff_meta_i <-
 # in the given unique_survey_repetition
 
 for (j in 1:(length(survey_repetitions_som) +
-             length(survey_repetitions_pfh) +
-             length(survey_repetitions_som_other) +
-             length(survey_repetitions_pfh_other))) {
+             length(survey_repetitions_pfh))) {
+             # length(survey_repetitions_som_other) +
+             # length(survey_repetitions_pfh_other))) {
 
   # som
 
@@ -621,62 +696,62 @@ for (j in 1:(length(survey_repetitions_som) +
     names(forest_floor_layers_pfh)[j_pfh] <-
       as.character(survey_repetitions_pfh[j_pfh])
 
-    } else
+    } # else
 
-    # som_other
-
-    if ((length(survey_repetitions_som_other) > 0) &&
-        (j > (length(survey_repetitions_som) +
-              length(survey_repetitions_pfh))) &&
-        (j <= length(c(survey_repetitions_som, survey_repetitions_pfh,
-                       survey_repetitions_som_other)))) {
-
-      j_som_other <- (j - (length(survey_repetitions_som) +
-                             length(survey_repetitions_pfh)))
-
-      vec_som_other_j <- which(som_other$unique_survey_repetition ==
-                                 survey_repetitions_som_other[j_som_other])
-
-      forest_floor_j <- as.character(som_other$code_layer[vec_som_other_j[
-                  which(som_other$layer_type[vec_som_other_j] ==
-                          "forest_floor")]])
-
-      list_ff_meta_i$number_ff_layers[j] <- length(forest_floor_j)
-
-      forest_floor_layers_som_other <- append(forest_floor_layers_som_other,
-                                        list(forest_floor_j))
-
-      names(forest_floor_layers_som_other)[j_som_other] <-
-                as.character(survey_repetitions_som_other[j_som_other])
-
-    } else
-
-    # pfh_other
-
-    if ((length(survey_repetitions_pfh_other) > 0) &&
-        (j > (length(survey_repetitions_som) + length(survey_repetitions_pfh) +
-              length(survey_repetitions_som_other)))) {
-
-      j_pfh_other <- (j - (length(survey_repetitions_som) +
-                             length(survey_repetitions_pfh) +
-                             length(survey_repetitions_som_other)))
-
-      vec_pfh_other_j <- which(pfh_other$unique_survey_profile ==
-                                 survey_repetitions_pfh_other[j_pfh_other])
-
-      forest_floor_j <- as.character(pfh_other$horizon_master[vec_pfh_other_j[
-                  which(pfh_other$layer_type[vec_pfh_other_j] ==
-                          "forest_floor")]])
-
-      list_ff_meta_i$number_ff_layers[j] <- length(forest_floor_j)
-
-      forest_floor_layers_pfh_other <- append(forest_floor_layers_pfh_other,
-                                        list(forest_floor_j))
-
-      names(forest_floor_layers_pfh_other)[j_pfh_other] <-
-                as.character(survey_repetitions_pfh_other[j_pfh_other])
-
-    }
+    # # som_other
+    # 
+    # if ((length(survey_repetitions_som_other) > 0) &&
+    #     (j > (length(survey_repetitions_som) +
+    #           length(survey_repetitions_pfh))) &&
+    #     (j <= length(c(survey_repetitions_som, survey_repetitions_pfh,
+    #                    survey_repetitions_som_other)))) {
+    # 
+    #   j_som_other <- (j - (length(survey_repetitions_som) +
+    #                          length(survey_repetitions_pfh)))
+    # 
+    #   vec_som_other_j <- which(som_other$unique_survey_repetition ==
+    #                              survey_repetitions_som_other[j_som_other])
+    # 
+    #   forest_floor_j <- as.character(som_other$code_layer[vec_som_other_j[
+    #               which(som_other$layer_type[vec_som_other_j] ==
+    #                       "forest_floor")]])
+    # 
+    #   list_ff_meta_i$number_ff_layers[j] <- length(forest_floor_j)
+    # 
+    #   forest_floor_layers_som_other <- append(forest_floor_layers_som_other,
+    #                                     list(forest_floor_j))
+    # 
+    #   names(forest_floor_layers_som_other)[j_som_other] <-
+    #             as.character(survey_repetitions_som_other[j_som_other])
+    # 
+    # } else
+    # 
+    # # pfh_other
+    # 
+    # if ((length(survey_repetitions_pfh_other) > 0) &&
+    #     (j > (length(survey_repetitions_som) + length(survey_repetitions_pfh) +
+    #           length(survey_repetitions_som_other)))) {
+    # 
+    #   j_pfh_other <- (j - (length(survey_repetitions_som) +
+    #                          length(survey_repetitions_pfh) +
+    #                          length(survey_repetitions_som_other)))
+    # 
+    #   vec_pfh_other_j <- which(pfh_other$unique_survey_profile ==
+    #                              survey_repetitions_pfh_other[j_pfh_other])
+    # 
+    #   forest_floor_j <- as.character(pfh_other$horizon_master[vec_pfh_other_j[
+    #               which(pfh_other$layer_type[vec_pfh_other_j] ==
+    #                       "forest_floor")]])
+    # 
+    #   list_ff_meta_i$number_ff_layers[j] <- length(forest_floor_j)
+    # 
+    #   forest_floor_layers_pfh_other <- append(forest_floor_layers_pfh_other,
+    #                                     list(forest_floor_j))
+    # 
+    #   names(forest_floor_layers_pfh_other)[j_pfh_other] <-
+    #             as.character(survey_repetitions_pfh_other[j_pfh_other])
+    # 
+    # }
   }
 
 
@@ -886,10 +961,10 @@ for (j in 1:(length(survey_repetitions_som) +
 
    vec_ff_som <- vec_som[which(df$layer_type[vec_som] == "forest_floor")]
    vec_ff_pfh <- vec_pfh[which(pfh$layer_type[vec_pfh] == "forest_floor")]
-   vec_ff_som_other <-
-     vec_som_other[which(som_other$layer_type[vec_som_other] == "forest_floor")]
-   vec_ff_pfh_other <-
-     vec_pfh_other[which(pfh_other$layer_type[vec_pfh_other] == "forest_floor")]
+   # vec_ff_som_other <-
+   #   vec_som_other[which(som_other$layer_type[vec_som_other] == "forest_floor")]
+   # vec_ff_pfh_other <-
+   #   vec_pfh_other[which(pfh_other$layer_type[vec_pfh_other] == "forest_floor")]
 
    # Store information about the inconsistency in "list_layer_inconsistencies"
 
@@ -898,12 +973,12 @@ for (j in 1:(length(survey_repetitions_som) +
    # Report original code_layer if code_layer may have been changed
    # (possibly in "s1_som" due to FSCC_47)
 
-   if ("code_layer_original" %in% names(som_other)) {
-       vec_code_layer <-
-         as.character(som_other$code_layer_original[vec_ff_som_other])
-     } else {
-       vec_code_layer <- as.character(som_other$code_layer[vec_ff_som_other])
-     }
+   # if ("code_layer_original" %in% names(som_other)) {
+   #     vec_code_layer <-
+   #       as.character(som_other$code_layer_original[vec_ff_som_other])
+   #   } else {
+   #     vec_code_layer <- as.character(som_other$code_layer[vec_ff_som_other])
+   #   }
 
    # "so_som"
 
@@ -965,72 +1040,72 @@ for (j in 1:(length(survey_repetitions_som) +
 
    # "s1_som"
 
-   if (!identical(vec_ff_som_other, integer(0))) {
-   list_layer_inconsistencies <- rbind(
-     list_layer_inconsistencies,
-     data.frame(survey_form = (rep(survey_3, length(vec_ff_som_other))),
-                partner = som_other$partner[vec_ff_som_other],
-                partner_code = som_other$partner_code[vec_ff_som_other],
-                country = som_other$country[vec_ff_som_other],
-                code_country = som_other$code_country[vec_ff_som_other],
-                survey_year = som_other$survey_year[vec_ff_som_other],
-                code_plot = som_other$code_plot[vec_ff_som_other],
-                plot_id = som_other$plot_id[vec_ff_som_other],
-                code_layer_horizon_master = vec_code_layer,
-                repetition_profile_pit_id =
-                  som_other$repetition[vec_ff_som_other],
-                code_line = som_other$code_line[vec_ff_som_other],
-                parameter = (rep("code_layer", length(vec_ff_som_other))),
-                parameter_unit = (rep(NA, length(vec_ff_som_other))),
-                parameter_value =  vec_code_layer,
-                inconsistency_reason = inconsistency_reason,
-                inconsistency_type = inconsistency_type,
-                rule_id = rule_id,
-                non_duplicated_error_type_per_record =
-                  rep(FALSE, length(vec_ff_som_other)),
-                change_date = som_other$change_date[vec_ff_som_other],
-                download_date = rep(download_date_pir,
-                                    length(vec_ff_som_other))))
-   }
-
-   # "s1_pfh"
-
-   if (!identical(vec_ff_pfh_other, integer(0))) {
-
-   list_layer_inconsistencies <- rbind(
-     list_layer_inconsistencies,
-     data.frame(survey_form = (rep(survey_4, length(vec_ff_pfh_other))),
-                partner = pfh_other$partner[vec_ff_pfh_other],
-                partner_code = pfh_other$partner_code[vec_ff_pfh_other],
-                country = pfh_other$country[vec_ff_pfh_other],
-                code_country = pfh_other$code_country[vec_ff_pfh_other],
-                survey_year = pfh_other$survey_year[vec_ff_pfh_other],
-                code_plot = pfh_other$code_plot[vec_ff_pfh_other],
-                plot_id = pfh_other$plot_id[vec_ff_pfh_other],
-                code_layer_horizon_master =
-                  pfh_other$horizon_master[vec_ff_pfh_other],
-                repetition_profile_pit_id =
-                  pfh_other$profile_pit_id[vec_ff_pfh_other],
-                code_line = pfh_other$code_line[vec_ff_pfh_other],
-                parameter = (rep("horizon_master", length(vec_ff_pfh_other))),
-                parameter_unit = (rep(NA, length(vec_ff_pfh_other))),
-                parameter_value =
-                  as.character(pfh_other$horizon_master[vec_ff_pfh_other]),
-                inconsistency_reason = inconsistency_reason,
-                inconsistency_type = inconsistency_type,
-                rule_id = rule_id,
-                non_duplicated_error_type_per_record =
-                  rep(FALSE, length(vec_ff_pfh_other)),
-                change_date = pfh_other$change_date[vec_ff_pfh_other],
-                download_date = rep(download_date_pir,
-                                    length(vec_ff_pfh_other))))
-   }
+   # if (!identical(vec_ff_som_other, integer(0))) {
+   # list_layer_inconsistencies <- rbind(
+   #   list_layer_inconsistencies,
+   #   data.frame(survey_form = (rep(survey_3, length(vec_ff_som_other))),
+   #              partner = som_other$partner[vec_ff_som_other],
+   #              partner_code = som_other$partner_code[vec_ff_som_other],
+   #              country = som_other$country[vec_ff_som_other],
+   #              code_country = som_other$code_country[vec_ff_som_other],
+   #              survey_year = som_other$survey_year[vec_ff_som_other],
+   #              code_plot = som_other$code_plot[vec_ff_som_other],
+   #              plot_id = som_other$plot_id[vec_ff_som_other],
+   #              code_layer_horizon_master = vec_code_layer,
+   #              repetition_profile_pit_id =
+   #                som_other$repetition[vec_ff_som_other],
+   #              code_line = som_other$code_line[vec_ff_som_other],
+   #              parameter = (rep("code_layer", length(vec_ff_som_other))),
+   #              parameter_unit = (rep(NA, length(vec_ff_som_other))),
+   #              parameter_value =  vec_code_layer,
+   #              inconsistency_reason = inconsistency_reason,
+   #              inconsistency_type = inconsistency_type,
+   #              rule_id = rule_id,
+   #              non_duplicated_error_type_per_record =
+   #                rep(FALSE, length(vec_ff_som_other)),
+   #              change_date = som_other$change_date[vec_ff_som_other],
+   #              download_date = rep(download_date_pir,
+   #                                  length(vec_ff_som_other))))
+   # }
+   # 
+   # # "s1_pfh"
+   # 
+   # if (!identical(vec_ff_pfh_other, integer(0))) {
+   # 
+   # list_layer_inconsistencies <- rbind(
+   #   list_layer_inconsistencies,
+   #   data.frame(survey_form = (rep(survey_4, length(vec_ff_pfh_other))),
+   #              partner = pfh_other$partner[vec_ff_pfh_other],
+   #              partner_code = pfh_other$partner_code[vec_ff_pfh_other],
+   #              country = pfh_other$country[vec_ff_pfh_other],
+   #              code_country = pfh_other$code_country[vec_ff_pfh_other],
+   #              survey_year = pfh_other$survey_year[vec_ff_pfh_other],
+   #              code_plot = pfh_other$code_plot[vec_ff_pfh_other],
+   #              plot_id = pfh_other$plot_id[vec_ff_pfh_other],
+   #              code_layer_horizon_master =
+   #                pfh_other$horizon_master[vec_ff_pfh_other],
+   #              repetition_profile_pit_id =
+   #                pfh_other$profile_pit_id[vec_ff_pfh_other],
+   #              code_line = pfh_other$code_line[vec_ff_pfh_other],
+   #              parameter = (rep("horizon_master", length(vec_ff_pfh_other))),
+   #              parameter_unit = (rep(NA, length(vec_ff_pfh_other))),
+   #              parameter_value =
+   #                as.character(pfh_other$horizon_master[vec_ff_pfh_other]),
+   #              inconsistency_reason = inconsistency_reason,
+   #              inconsistency_type = inconsistency_type,
+   #              rule_id = rule_id,
+   #              non_duplicated_error_type_per_record =
+   #                rep(FALSE, length(vec_ff_pfh_other)),
+   #              change_date = pfh_other$change_date[vec_ff_pfh_other],
+   #              download_date = rep(download_date_pir,
+   #                                  length(vec_ff_pfh_other))))
+   # }
 
    # Change "non_duplicated_error_type_per_record" so that there is only one
    # unique inconsistency per plot_id
 
    length_inconsistency <-
-     length(c(vec_ff_som, vec_ff_pfh, vec_ff_som_other, vec_ff_pfh_other))
+     length(c(vec_ff_som, vec_ff_pfh)) #, vec_ff_som_other, vec_ff_pfh_other))
 
    list_layer_inconsistencies$non_duplicated_error_type_per_record[
      nrow(list_layer_inconsistencies) - length_inconsistency + 1] <- TRUE
@@ -1951,6 +2026,8 @@ if (!identical(vec_inconsistency, integer(0))) {
 # that belong to the forest floor
 # (manually checked and asserted in the beginning of this script)
 
+if (length(vec) >= 2) {
+
 if (unlist(strsplit(survey_form, "_"))[1] == "so") {
   
  if (any(df$layer_type[vec] == "peat")) {
@@ -2037,23 +2114,79 @@ if (any(df$layer_type[vec] == "peat")) {
 
 # Assure that no forest floors are thicker than 40 cm
 
+# if (any(df$layer_type[vec] == "forest_floor")) {
+#   
+#   source("./src/functions/summarise_profile_per_depth_layer_type.R")
+#   
+#   df_sub <- summarise_profile_per_depth_layer_type(df_profile = df[vec, ])
+#   
+#   # Take the first forest floor layer only,
+#   # because there may be buried forest floor layers
+#   
+#   if ("forest_floor" %in% df_sub$layer_type) {
+#   assertthat::assert_that(
+#     df_sub$total_thickness[which(df_sub$layer_type == "forest_floor")][1] <= 40)
+#   }
+# }
+
+# Forest floors thicker than 40 cm ----
+
 if (any(df$layer_type[vec] == "forest_floor")) {
   
   source("./src/functions/summarise_profile_per_depth_layer_type.R")
   
-  df_sub <- summarise_profile_per_depth_layer_type(df_profile = df[vec, ])
-  
-  # Take the first forest floor layer only,
-  # because there may be buried forest floor layers
+  df_sub <-
+    summarise_profile_per_depth_layer_type(df[vec, ])
   
   if ("forest_floor" %in% df_sub$layer_type) {
-  assertthat::assert_that(
-    df_sub$total_thickness[which(df_sub$layer_type == "forest_floor")][1] <= 40)
+    
+    # Take the first forest floor layer only,
+    # because there may be buried forest floor layers
+    
+    # assertthat::assert_that(
+    #   df_sub$total_thickness[which(
+    #     df_sub$layer_type == "forest_floor")][1] <= 40)
+    
+    if (df_sub$total_thickness[which(
+      df_sub$layer_type == "forest_floor")][1] > 40) {
+      
+      # Then it should be considered as peat?
+      # Manually confirmed for the profiles in s1_pfh
+      
+      if (abs(df_sub$layer_limit_superior[1]) < 40 &&
+          (df_sub$layer_limit_inferior[1] > 0)) {
+        
+        # In this case, the profile shouldn't move, but the
+        # below-ground layers should become peat
+        
+        vec_ff_to_peat <-
+          vec_ff[which(
+            (df$layer_limit_superior[vec_ff] >=
+               0) &
+              df$layer_limit_inferior[vec_ff] <=
+              df_sub$layer_limit_inferior[1])]
+        
+      } else {
+        
+        # Else, everything should become peat
+        
+        vec_ff_to_peat <-
+          vec_ff[which(
+            (df$layer_limit_superior[vec_ff] >=
+               df_sub$layer_limit_superior[1]) &
+              df$layer_limit_inferior[vec_ff] <=
+              df_sub$layer_limit_inferior[1])]
+      }
+      
+      df$layer_type[vec_ff_to_peat] <- "peat"
+      
+      # vec_profiles_thick_ff <- c(vec_profiles_thick_ff,
+      #                            unique(df$unique_survey_profile)[i])
+      
+    }
   }
 }
-
-
-
+}
 
 
 
@@ -3031,8 +3164,6 @@ if (df_sub$layer_type[1] == "forest_floor" &&
       df$layer_limit_superior[vec_to_move] <-
         df$layer_limit_superior[vec_to_move] - df_sub$layer_limit_inferior[1]
       
-      df$moved[vec_to_move] <- TRUE
-      
       diff_to_move <- df_sub$layer_limit_superior[2]
       
     }
@@ -3054,8 +3185,6 @@ if (diff_to_move != 0) {
     # Regardless of whether it should be moved up or down
     df$layer_limit_inferior[vec] <- df$layer_limit_inferior[vec] - diff_to_move
     df$layer_limit_superior[vec] <- df$layer_limit_superior[vec] - diff_to_move
-    
-    df$moved[vec] <- TRUE
     
   }
 }
@@ -3182,6 +3311,10 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
     
     
+    # To store profiles with a forest floor thicker than 40 cm
+    
+    # vec_profiles_thick_ff <- NULL
+    
     
     
     # Convert missing horizon masters to ""
@@ -3195,6 +3328,9 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
     
     
+    # Specific issues ----
+    
+    if (unlist(strsplit(survey_form, "_"))[1] == "so") {
     
     # Issue with Romanian profile_pit_ids:
     # Some of the plots have a different profile_pit_id for every layer
@@ -3210,7 +3346,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       filter(profile_count > 2) %>%
       pull(unique_survey)
     
-    if (!identical(layers_to_check, character(0))) {
+    if (!identical(surveys_to_check, character(0))) {
       
       df <- df %>%
         mutate(profile_pit_id = ifelse(unique_survey %in%
@@ -3230,6 +3366,76 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                         .data$unique_layer_repetition))
     }
       
+    }
+    
+    
+    if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+      
+      # For one of the Hungarian profiles, all of the horizon_master
+      # values are missing,
+      # but it is clear that they should be mineral layers
+      
+      layers_to_check <- df %>%
+        filter(code_country == 51) %>%
+        filter(code_plot == 1) %>%
+        filter(horizon_master == "") %>%
+        pull(code_line)
+      
+      if (!identical(layers_to_check, character(0))) {
+        
+        df <- df %>%
+          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+                                     "mineral",
+                                     .data$layer_type))
+        
+      }
+      
+      # Several of the Hungarian profiles also have just one horizon_master
+      # but the horizon limits are usually known.
+      # Assumption: if negative, layer type if forest floor,
+      # else mineral
+      
+      layers_to_check <- df %>%
+        filter(code_country == 51) %>%
+        filter(code_plot != 1) %>%
+        filter(horizon_master == "") %>%
+        pull(code_line)
+      
+      if (!identical(layers_to_check, character(0))) {
+        
+        df <- df %>%
+          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+                                     ifelse((.data$horizon_limit_up <= 0) &
+                                              (.data$horizon_limit_low <= 0),
+                                            "forest_floor",
+                                            "mineral"),
+                                     .data$layer_type))
+        
+      }
+    }
+    
+    if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+      
+      # Irish plot 7_243
+      # Based on the TOC content in "s1_som", 
+      # the layers below 10 cm should be mineral
+      
+      layers_to_check <- df %>%
+        filter(plot_id == "7_243") %>%
+        filter(horizon_limit_up >= 10) %>%
+        filter(layer_type != "mineral") %>%
+        pull(code_line)
+      
+      if (!identical(layers_to_check, character(0))) {
+        
+        df <- df %>%
+          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+                                     "mineral",
+                                     .data$layer_type))
+        
+      }
+    }
+    
     
     
 
@@ -3317,7 +3523,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       }
 
 
-    # Evaluate soil profiles per unique_survey_profile
+    # Evaluate soil profiles per unique_survey_profile ----
 
     for (i in seq_along(unique(df$unique_survey_profile))) {
 
@@ -4201,11 +4407,14 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                       change_date = df$change_date[vec],
                       download_date = rep(download_date_pir, length(vec))))
       }
-      }
+      } # End of "if there are redundant layers"
+    
 
       # If the column "layer_number" is still empty
       # (i.e. if there are no redundant layers):
 
+     if (length(vec) >= 2) {
+      
       if (all(is.na(df$layer_number[vec]))) {
 
       # If the ranking of the existing column "horizon_number"
@@ -4282,6 +4491,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
        df$layer_number[vec] <- rank(df$layer_number[vec],
                                              na.last = "keep")
      }
+    }
     
 
 
@@ -4431,6 +4641,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     # in unique_survey_profile: 55_1987_10_10a
     # The profile however looks complete, so no need to take it into account
   
+    if (length(vec) >= 2) {
+      
     vec_non_redundant <- vec[which(!is.na(df$layer_number[vec]))]
     
     if (any(df$layer_type[vec_non_redundant] == "peat")) {
@@ -4476,7 +4688,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
     
     
-    # Assure that no forest floors are thicker than 40 cm
+    # Forest floors thicker than 40 cm ----
     
     if (any(df$layer_type[vec_non_redundant] == "forest_floor")) {
       
@@ -4490,12 +4702,50 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       # Take the first forest floor layer only,
       # because there may be buried forest floor layers
       
-      assertthat::assert_that(
-        df_sub$total_thickness[which(
-          df_sub$layer_type == "forest_floor")][1] <= 40)
+      # assertthat::assert_that(
+      #   df_sub$total_thickness[which(
+      #     df_sub$layer_type == "forest_floor")][1] <= 40)
+      
+       if (df_sub$total_thickness[which(
+              df_sub$layer_type == "forest_floor")][1] > 40) {
+           
+           # Then it should be considered as peat?
+           # Manually confirmed for the profiles in s1_pfh
+           
+         if (abs(df_sub$horizon_limit_up[1]) < 40 &&
+             (df_sub$horizon_limit_low[1] > 0)) {
+           
+           # In this case, the profile shouldn't move, but the
+           # below-ground layers should become peat
+           
+           vec_ff_to_peat <-
+             vec_ff[which(
+               (df$horizon_limit_up[vec_ff] >=
+                  0) &
+                 df$horizon_limit_low[vec_ff] <=
+                 df_sub$horizon_limit_low[1])]
+           
+         } else {
+           
+           # Else, everything should become peat
+           
+           vec_ff_to_peat <-
+             vec_ff[which(
+               (df$horizon_limit_up[vec_ff] >=
+                  df_sub$horizon_limit_up[1]) &
+                 df$horizon_limit_low[vec_ff] <=
+                 df_sub$horizon_limit_low[1])]
+         }
+
+           df$layer_type[vec_ff_to_peat] <- "peat"
+         
+         # vec_profiles_thick_ff <- c(vec_profiles_thick_ff,
+         #                            unique(df$unique_survey_profile)[i])
+         
+       }
      }
     }
-    
+    }
     
     
     
@@ -4513,6 +4763,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     #   necessary (by shifting the layers up or down and changing their
     #   layer limits).
     
+   if (length(vec) >= 2) {
+      
     vec_non_redundant <- vec[which(!is.na(df$layer_number[vec]))]
     
     if (!identical(vec_non_redundant, integer(0))) {
@@ -4540,7 +4792,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                                       df_sub$horizon_limit_up[2])))
       } else {
         
-        # If there is a considerable gap, e.g. in "7_2007_10_2"
+        # If there is a considerable gap, e.g. in "7_2007_10_2" (so_pfh)
         
         # Consider the below-ground layer limit as reference
         # and move the forest floor layers to the below-ground
@@ -4559,8 +4811,6 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
             df$horizon_limit_low[vec_to_move] - df_sub$horizon_limit_low[1]
           df$horizon_limit_up[vec_to_move] <-
             df$horizon_limit_up[vec_to_move] - df_sub$horizon_limit_low[1]
-          
-          df$moved[vec_to_move] <- TRUE
           
           diff_to_move <- df_sub$horizon_limit_up[2]
           
@@ -4601,7 +4851,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     }
     }
     }
-    
+    }
     
     
 
