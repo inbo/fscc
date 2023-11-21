@@ -498,6 +498,8 @@ for (i in seq_along(survey_forms)) {
 
     df$layer_type <- df$code_layer
     levels(df$layer_type) <- layer_type_levels
+    
+    df$layer_type <- as.character(df$layer_type)
     }
 
   # For s1_pfh and so_pfh: add column "layer type" ----
@@ -876,7 +878,7 @@ for (i in seq_along(survey_forms)) {
   assign_env(paste0(code_survey, "_",
                 list_data_tables[[which(names(list_data_tables) ==
                                           code_survey)]][i]),
-             as.tibble(df))
+             as_tibble(df))
 
   }
   }
@@ -997,14 +999,14 @@ if (save_to_env == TRUE) {
 
   if (exists("data_availability", envir = environment())) {
     assign_env(paste0("data_availability_", code_survey),
-               as.tibble(data_availability))
+               as_tibble(data_availability))
   }
 
-assign_env(paste0("coordinates_", code_survey), as.tibble(coordinates))
+assign_env(paste0("coordinates_", code_survey), as_tibble(coordinates))
 
-assign_env("d_country", as.tibble(d_country))
+assign_env("d_country", as_tibble(d_country))
 
-assign_env("d_partner", as.tibble(d_partner))
+assign_env("d_partner", as_tibble(d_partner))
 
 }
 }
