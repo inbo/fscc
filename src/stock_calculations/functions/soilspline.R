@@ -41,7 +41,7 @@ soilspline <- function(id,
   
   # Set directory where graphs should be saved
   
-  path <- c("./output/stocks/so/splines/")
+  path <- c("./output/stocks/splines/")
   
   # Create directory if it doesn't exist
   
@@ -65,7 +65,7 @@ soilspline <- function(id,
   
   
   # Fit a spline using mpspline function (mpspline2 package) ----
-  # The max depth will be bottom lowest boundary (i.e. bottom of lowest layer)
+  # The max depth will be the bottom layer limit of the lowest layer)
   
   # Information about mpspline_one from GitHub:
   
@@ -81,7 +81,7 @@ soilspline <- function(id,
   #             "site" in which target data is stored. If not supplied, the
   #             fourth column of the input object is assumed to contain the
   #             target data.
-  # - lam number: smoothing parameter for spline. Defaults to 0.1.
+  # - lam: smoothing parameter for spline. Defaults to 0.1.
   # - d: sequential integer vector; denotes the output depth ranges in cm.
   #      Defaults to c(0, 5, 15, 30, 60, 100, 200) after the GlobalSoilMap
   #      specification, giving output predictions over intervals 0-5 cm,
@@ -139,7 +139,7 @@ soilspline <- function(id,
                           spline_output)
   
   # Creating a list to store multiple results
-  spline_output <- list(
+  result <- list(
     spline_output = spline_output,
     rmse_mpspline = mpspline_output$est_err[1])
   
@@ -217,5 +217,5 @@ soilspline <- function(id,
   }
   
   # Return splined variable for each cm until the maximum soil depth
-  return(spline_output)
+  return(result)
 }

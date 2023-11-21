@@ -43,7 +43,7 @@ calculate_stocks <- function(prof) {
                depth_bottom = prof$depth_bottom,
                variab = prof$carbon_density,
                max_soil_depth = max_soil_depth,
-               graph = FALSE)
+               graph = TRUE)
   
   spline_output_per_cm <- spline_output$spline_output
   

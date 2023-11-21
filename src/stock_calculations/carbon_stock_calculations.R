@@ -54,8 +54,8 @@ df_working <- df %>%
   # If the effective soil depth is deeper than 100 cm or unknown (NA):
   # assume it is 100 cm (for stocks)
   mutate(eff_soil_depth =
-           ifelse(is.na(.data$eff_soil_depth |
-                          (.data$eff_soil_depth > 100)),
+           ifelse(is.na(.data$eff_soil_depth) |
+                          (.data$eff_soil_depth > 100),
                   100,
                   .data$eff_soil_depth)) %>%
   # If there is a layer at the bottom for which the layer limits are not
@@ -347,7 +347,7 @@ plot_carbon_stocks_below_ground %>%
   nrow
 
 # 4. Forest floor layers ----
-## 4.1. Derive layer-based carbon stock dataset for forest floors ----
+## 4.1. Derive layer-based dataset for forest floors ----
 
 df_forest_floor <- df_working %>%
   filter(layer_type == "forest_floor") %>%
