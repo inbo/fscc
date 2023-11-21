@@ -70,15 +70,15 @@ bind_objects_starting_with <- function(object_name_start,
     envir <- globalenv()
   }
 
-  list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
-                           s1 = c("som", "prf", "pls", "pfh", "lqa"),
-                           si = c("eve", "plt", "sta", "tco"),
-                           y1 = c("pl1", "st1", "ev1"),
-                           sw = c("swa", "swc"))
+  list_surveys <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
+                       s1 = c("som", "prf", "pls", "pfh", "lqa"),
+                       si = c("eve", "plt", "sta", "tco"),
+                       y1 = c("pl1", "st1", "ev1"),
+                       sw = c("swa", "swc"))
 
-  list_data_tables <- unlist(
-    lapply(names(list_data_tables), function(name) {
-      paste0(name, "_", list_data_tables[[name]])
+  list_survey_forms <- unlist(
+    lapply(names(list_surveys), function(name) {
+      paste0(name, "_", list_surveys[[name]])
     })
   )
   
@@ -88,9 +88,12 @@ bind_objects_starting_with <- function(object_name_start,
   if (!identical(matching_objects, character(0))) {
     
   matching_objects <-
-    matching_objects[which(gsub(paste0(object_name_start, "_"),
+    matching_objects[which((gsub(paste0(object_name_start, "_"),
                                 "",
-                                matching_objects) %in% list_data_tables)]
+                                matching_objects) %in% list_survey_forms) |
+                           (gsub(paste0(object_name_start, "_"),
+                                 "",
+                                 matching_objects) %in% names(list_surveys)))]
   }
 
   if (!identical(matching_objects, character(0))) {
