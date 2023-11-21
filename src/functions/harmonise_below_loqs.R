@@ -66,6 +66,7 @@ harmonise_below_loqs <- function(survey_form,
     # Add corresponding "som"/"pfh" parameter names
     
     if (unlist(str_split(survey_form, "_"))[2] == "som") {
+      
     lqa <- lqa %>%
       left_join(lqa_parameters %>%
                   select(-pfh_parameter),
@@ -75,6 +76,7 @@ harmonise_below_loqs <- function(survey_form,
     }
     
     if (unlist(str_split(survey_form, "_"))[2] == "pfh") {
+      
       lqa <- lqa %>%
         left_join(lqa_parameters %>%
                     select(-som_parameter) %>%

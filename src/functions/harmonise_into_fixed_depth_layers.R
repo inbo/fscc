@@ -84,10 +84,10 @@ harmonise_into_fixed_depth_layers <-
   
   # Convert specified columns to numeric
   df_fixed <- df_fixed %>%
-    mutate_at(vars(parameters_numeric), as.numeric)
+    mutate_at(vars(all_of(parameters_numeric)), as.numeric)
   
   df <- df %>%
-    mutate_at(vars(parameters_numeric), as.numeric)
+    mutate_at(vars(all_of(parameters_numeric)), as.numeric)
   
   # Adjust harmonised data frame ----
   
@@ -252,6 +252,54 @@ harmonise_into_fixed_depth_layers <-
     }
     
     
+    if (nrow(forest_floor_layers) == 5) {
+      
+      extra_rows <- rbind(df_fixed[ind_ff, ],
+                          df_fixed[ind_ff, ],
+                          df_fixed[ind_ff, ],
+                          df_fixed[ind_ff, ])
+      
+      df_fixed$code_layer[ind_ff] <-
+        forest_floor_layers$horizon_master[1]
+      df_fixed$layer_limit_superior[ind_ff] <-
+        forest_floor_layers$horizon_limit_up[1]
+      df_fixed$layer_limit_inferior[ind_ff] <-
+        forest_floor_layers$horizon_limit_low[1]
+      df_fixed$forest_floor[ind_ff] <- TRUE
+      
+      extra_rows$code_layer[1] <-
+        forest_floor_layers$horizon_master[2]
+      extra_rows$layer_limit_superior[1] <-
+        forest_floor_layers$horizon_limit_up[2]
+      extra_rows$layer_limit_inferior[1] <-
+        forest_floor_layers$horizon_limit_low[2]
+      extra_rows$forest_floor[1] <- TRUE
+      
+      extra_rows$code_layer[2] <-
+        forest_floor_layers$horizon_master[3]
+      extra_rows$layer_limit_superior[2] <-
+        forest_floor_layers$horizon_limit_up[3]
+      extra_rows$layer_limit_inferior[2] <-
+        forest_floor_layers$horizon_limit_low[3]
+      extra_rows$forest_floor[2] <- TRUE
+      
+      extra_rows$code_layer[3] <-
+        forest_floor_layers$horizon_master[4]
+      extra_rows$layer_limit_superior[3] <-
+        forest_floor_layers$horizon_limit_up[4]
+      extra_rows$layer_limit_inferior[3] <-
+        forest_floor_layers$horizon_limit_low[4]
+      extra_rows$forest_floor[3] <- TRUE
+      
+      extra_rows$code_layer[4] <-
+        forest_floor_layers$horizon_master[5]
+      extra_rows$layer_limit_superior[4] <-
+        forest_floor_layers$horizon_limit_up[5]
+      extra_rows$layer_limit_inferior[4] <-
+        forest_floor_layers$horizon_limit_low[5]
+      extra_rows$forest_floor[4] <- TRUE
+      
+    }
     
     
     # Adjust below-ground layers
