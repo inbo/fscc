@@ -65,6 +65,15 @@ get_primary_inconsistencies <- function(code_survey,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
+  
+  # Specify date on which 'layer 0' data were downloaded ----
+  # from ICP Forests website
+  
+  source("./src/functions/get_date_local.R")
+  download_date <- get_date_local(path = "./data/raw_data/",
+                                  save_to_env = TRUE,
+                                  collapsed = TRUE)
+  download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
 
 # Import the inconsistency catalogue ----
 
@@ -259,21 +268,32 @@ get_primary_inconsistencies <- function(code_survey,
           # Update the columns "unique_survey_layer" and
           # "unique_layer_repetition" too
 
-          df$unique_survey_layer[j_dupl] <-
-            paste0(df[j_dupl, which(names(df) == "code_country")], "_",
-                   df[j_dupl, which(names(df) == "survey_year")], "_",
-                   df[j_dupl, which(names(df) == "code_plot")], "_",
-                   df[j_dupl, which(names(df) == "code_layer")])
-          df$unique_layer_repetition[j_dupl] <-
-            paste0(df[j_dupl, which(names(df) == "code_country")], "_",
-                   df[j_dupl, which(names(df) == "survey_year")], "_",
-                   df[j_dupl, which(names(df) == "code_plot")], "_",
-                   df[j_dupl, which(names(df) == "code_layer")], "_",
-                   df[j_dupl, which(names(df) == "repetition")])
-          df$unique_layer[j_dupl] <-
-            paste0(df[j_dupl, which(names(df) == "code_country")], "_",
-                   df[j_dupl, which(names(df) == "code_plot")], "_",
-                   df[j_dupl, which(names(df) == "code_layer")])
+          df[j_dupl,] <- df[j_dupl,] %>%
+            rowwise() %>%
+            mutate(
+              unique_survey_layer = paste0(
+                code_country, "_",
+                survey_year, "_",
+                code_plot, "_",
+                code_layer))
+          
+          df[j_dupl,] <- df[j_dupl,] %>%
+            rowwise() %>%
+            mutate(
+              unique_layer_repetition = paste0(
+                code_country, "_",
+                survey_year, "_",
+                code_plot, "_",
+                code_layer, "_",
+                repetition))
+          
+          df[j_dupl,] <- df[j_dupl,] %>%
+            rowwise() %>%
+            mutate(
+              unique_layer = paste0(
+                code_country, "_",
+                code_plot, "_",
+                code_layer))
           }
 
 

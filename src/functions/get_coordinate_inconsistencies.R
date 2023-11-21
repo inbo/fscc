@@ -75,6 +75,16 @@ get_coordinate_inconsistencies <- function(surveys_with_coordinates = NULL,
   } else {
     envir <- globalenv()
   }
+  
+  # Specify date on which 'layer 0' data were downloaded ----
+  # from ICP Forests website
+  
+  source("./src/functions/get_date_local.R")
+  download_date <- get_date_local(path = "./data/raw_data/",
+                                  save_to_env = TRUE,
+                                  collapsed = TRUE)
+  download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
+  
 
 if (is.null(surveys_with_coordinates)) {
 
