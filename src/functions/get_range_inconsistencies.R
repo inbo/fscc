@@ -69,10 +69,20 @@ get_range_inconsistencies <- function(survey_form,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
-
+  
   # Monitor how long it takes to run this function
-
+  
   start_time_r <- Sys.time()
+
+  # Specify date on which 'layer 0' data were downloaded ----
+  # from ICP Forests website
+  
+  source("./src/functions/get_date_local.R")
+  download_date <- get_date_local(path = "./data/raw_data/",
+                                  save_to_env = TRUE,
+                                  collapsed = TRUE)
+  download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
+
 
   # Retrieve the survey_form data
 
@@ -1232,7 +1242,7 @@ get_range_inconsistencies <- function(survey_form,
   # in the same units. So if a mistake in units has been made, it should be
   # the case for all data of the given "unique_partner_survey"
 
-  df$unique_partner_survey <- paste0(df$code_country, "_", df$survey_year)
+  df$unique_partner_survey <- paste0(df$partner_code, "_", df$survey_year)
 
   # For parameter for which units can be potentially wrong:
 
@@ -1312,14 +1322,15 @@ get_range_inconsistencies <- function(survey_form,
 
       vec <- which(df$unique_partner_survey ==
                      unique(df$unique_partner_survey)[j])
-      vec_nonempty <- vec[which(!is.na(df[vec, col_ind]))]
+      vec_nonempty <- vec[which(!is.na(pull(df[vec, col_ind])) &
+                                  (pull(df[vec, col_ind]) != -1))]
       vec_data <- df[vec, col_ind]
 
       if ("tbl_df" %in% class(vec_data)) {
         vec_data <- pull(vec_data)
       }
 
-      vec_data <- vec_data[which(!is.na(vec_data))]
+      vec_data <- vec_data[which((!is.na(vec_data)) & (vec_data != -1))]
       vec_layer_type <- df$layer_type[vec_nonempty]
 
       # Check if there are any data
@@ -1402,14 +1413,16 @@ get_range_inconsistencies <- function(survey_form,
             ind_repetition_profile_pit_id <- df$profile_pit_id[vec_nonempty]
           } else
 
-          if (unlist(strsplit(survey_form, "_"))[2] == "som")
-          {if ("code_layer_original" %in% names(df)) {
+          if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+          
+          if ("code_layer_original" %in% names(df)) {
             ind_layer_horizon <-
               as.character(df$code_layer_original[vec_nonempty])
             } else {
               ind_layer_horizon <- as.character(df$code_layer[vec_nonempty])
             }
           ind_repetition_profile_pit_id <- df$repetition[vec_nonempty]
+          
           } else
 
           if (survey_form == "sw_swc") {
