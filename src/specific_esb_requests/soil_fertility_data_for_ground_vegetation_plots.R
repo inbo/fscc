@@ -9,12 +9,7 @@
 
 # 1. Prepare required packages ----
 
-stopifnot(require("sf"),
-          require("tidyverse"),
-          require("openxlsx"),
-          require("parsedate"),
-          require("googlesheets4"),
-          require("googledrive"),
+stopifnot(require("tidyverse"),
           require("assertthat"))
 
 # 2. Import "layer 1" data for soil (Level II) ----
@@ -27,9 +22,25 @@ read_processed(survey_forms = c("si", "so"),
 
 so_som_working <- so_som %>%
   # Filter for records starting from 1996
-  filter(.data$survey_year >= 1996) %>%
+  # Update 20231123: also include survey years before 1996
+  # filter(.data$survey_year >= 1996) %>%
   # Remove redundant layers
-  filter(!is.na(.data$layer_number))
+  filter(!is.na(.data$layer_number)) %>%
+  # Account for coarse fragments
+  # Assume they are 0 if NA
+  mutate(coarse_fragment_vol_frac =
+           ifelse(is.na(.data$coarse_fragment_vol),
+                  0,
+                  .data$coarse_fragment_vol / 100)) %>%
+  # Introduce a new variable for bulk density
+  # which represents the mass (kg) of fine earth per volume (m3) of total soil
+  # (instead of "per volume of fine earth")
+  # This is the variable to be used as a weighting factor
+  mutate(bulk_density_total_soil =
+           ifelse(!is.na(.data$bulk_density) &
+                    !is.na(.data$coarse_fragment_vol_frac),
+                  .data$bulk_density * (1 - .data$coarse_fragment_vol_frac),
+                  NA))
 
 
 # 3. Import list of plots with ground vegetation data ----
@@ -47,7 +58,8 @@ plots_vegetation <-
          ph_h2o_0_10 = NA,
          c_to_n_forest_floor = NA,
          ph_cacl2_forest_floor = NA,
-         ph_h2o_forest_floor = NA)
+         ph_h2o_forest_floor = NA,
+         survey_years = NA)
 
 # Assert: No issue with Polish plot codes
 
@@ -72,12 +84,18 @@ for (i in seq_len(nrow(plots_vegetation))) {
   if (!identical(which(so_som_working$plot_id == plot_id_i),
                  integer(0))) {
   
-  
 ## 4.1. 0 - 10 cm depth layer ----
   
     # Some of the below-ground fixed-depth layers are not "conform"
     # the theoretical depths (e.g. 4_503)
     # Therefore, harmonise the layers covering the 0 - 10 cm depth range
+    # using function "harmonise_layer_to_depths"
+    # Across each of the layers (partly) within the 0 - 10 cm depth range,
+    # this function will take a weighted average, using
+    # - bulk_density_total_soil;
+    # - the portion of each layer's depth range contributing to the
+    #   0 - 10 cm depth range;
+    # as a weighting factor
     
     # Select the layers covering the 0 - 10 cm depth range
     
@@ -100,12 +118,12 @@ for (i in seq_len(nrow(plots_vegetation))) {
     source("./src/functions/harmonise_layer_to_depths.R")
     
     df_0_10 <- df_sub %>%
-      group_by(unique_survey_repetition, plot_id) %>%
+      group_by(unique_survey_repetition, plot_id, survey_year) %>%
       reframe(organic_carbon_total_avg =
                   harmonise_layer_to_depths(limit_sup = 0,
                                             limit_inf = 10,
                                             bulk_density =
-                                              .data$bulk_density,
+                                              .data$bulk_density_total_soil,
                                             upper_depths =
                                               .data$layer_limit_superior,
                                             lower_depths =
@@ -118,7 +136,7 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   harmonise_layer_to_depths(limit_sup = 0,
                                             limit_inf = 10,
                                             bulk_density =
-                                              .data$bulk_density,
+                                              .data$bulk_density_total_soil,
                                             upper_depths =
                                               .data$layer_limit_superior,
                                             lower_depths =
@@ -131,7 +149,7 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   harmonise_layer_to_depths(limit_sup = 0,
                                             limit_inf = 10,
                                             bulk_density =
-                                              .data$bulk_density,
+                                              .data$bulk_density_total_soil,
                                             upper_depths =
                                               .data$layer_limit_superior,
                                             lower_depths =
@@ -144,7 +162,7 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   harmonise_layer_to_depths(limit_sup = 0,
                                             limit_inf = 10,
                                             bulk_density =
-                                              .data$bulk_density,
+                                              .data$bulk_density_total_soil,
                                             upper_depths =
                                               .data$layer_limit_superior,
                                             lower_depths =
@@ -158,7 +176,7 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   harmonise_layer_to_depths(limit_sup = 0,
                                             limit_inf = 10,
                                             bulk_density =
-                                              .data$bulk_density,
+                                              .data$bulk_density_total_soil,
                                             upper_depths =
                                               .data$layer_limit_superior,
                                             lower_depths =
@@ -171,7 +189,7 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   harmonise_layer_to_depths(limit_sup = 0,
                                             limit_inf = 10,
                                             bulk_density =
-                                              .data$bulk_density,
+                                              .data$bulk_density_total_soil,
                                             upper_depths =
                                               .data$layer_limit_superior,
                                             lower_depths =
@@ -184,18 +202,21 @@ for (i in seq_len(nrow(plots_vegetation))) {
       # Aggregate per plot_id
       group_by(plot_id) %>%
       reframe(organic_carbon_total_avg =
-                  mean(organic_carbon_total_avg, na.rm = TRUE),
-                n_total_avg =
-                  mean(n_total_avg, na.rm = TRUE),
-                ph_cacl2_avg =
-                  mean(ph_cacl2_avg, na.rm = TRUE),
-                ph_h2o_avg =
-                  mean(ph_h2o_avg, na.rm = TRUE),
-                # LOQs
-                organic_carbon_total_loq =
-                  mean(organic_carbon_total_loq, na.rm = TRUE),
-                n_total_loq =
-                  mean(n_total_loq, na.rm = TRUE))
+                mean(organic_carbon_total_avg, na.rm = TRUE),
+              n_total_avg =
+                mean(n_total_avg, na.rm = TRUE),
+              ph_cacl2_avg =
+                mean(ph_cacl2_avg, na.rm = TRUE),
+              ph_h2o_avg =
+                mean(ph_h2o_avg, na.rm = TRUE),
+              # LOQs
+              organic_carbon_total_loq =
+                mean(organic_carbon_total_loq, na.rm = TRUE),
+              n_total_loq =
+                mean(n_total_loq, na.rm = TRUE),
+              # Add survey years
+              survey_years =
+                paste(sort(unique(.data$survey_year)), collapse = "_"))
   
   
   # If any 0 - 10 cm layers were reported for the given plot_id
@@ -217,6 +238,8 @@ for (i in seq_len(nrow(plots_vegetation))) {
   plots_vegetation$ph_cacl2_0_10[i] <- round(df_0_10$ph_cacl2_avg, 2)
   
   plots_vegetation$ph_h2o_0_10[i] <- round(df_0_10$ph_h2o_avg, 2)
+  
+  plots_vegetation$survey_years[i] <- df_0_10$survey_years
   
   }
   
@@ -358,7 +381,8 @@ colSums(!is.na(plots_vegetation))
 
 write.csv2(plots_vegetation,
            paste0("./output/specific_esb_requests/",
-                  "plots_vegetation_with_soil_fertility_data.csv"),
+                  as.character(format(Sys.Date(), format = "%Y%m%d")),
+                  "_plots_vegetation_with_soil_fertility_data.csv"),
            row.names = FALSE,
            na = "")
 
