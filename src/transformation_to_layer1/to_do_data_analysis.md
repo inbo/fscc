@@ -6,7 +6,7 @@ Please add any observed data issues to this file
 
 * R script: `./src/transformation_to_layer1/solid_soil_data_transformation_to_layer1.R`
 * Gap-filling from external data sources and internal gap-filling using assumptions:
-  + Folder with direct partner communication (AFSCDB.LII.2.1 subfolder) - at least Austria, Spain, bulk density and coarse fragments from Sweden… (Note: still necessary?)
+  + ~~Folder with direct partner communication (AFSCDB.LII.2.1 subfolder) - at least Austria, Spain, bulk density and coarse fragments from Sweden… (Note: still necessary?)~~
   + Folder AFSCDB.LII.2.2: also check whether there are any plot surveys that do not appear in so_som at all. Use the original data forms (with different repetitions etc), not the aggregated version.
   + ~~Folder BIOSOIL.LII - at least Spain, Finland… (Note: missing Spanish data now in layer 0)~~
   + Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?
@@ -18,13 +18,15 @@ Please add any observed data issues to this file
     - ~~bulk_density: assumption constant over time; from "pfh" ("horizon_bulk_dens_measure", "horizon_bulk_dens_est"); "sw_swc" ("bulk_density");~~ pedotransfer functions/machine learning
     - ~~organic_carbon_total: from "pfh" ("horizon_c_organic_total")~~
     - ~~coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol");~~ machine learning?
+    - considerable uncertainty in code_horizon_coarse_vol (in “pfh”) → first priority: coarse fragment fractions from other survey year?
     - ~~effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm? This was manually harmonised by Nathalie (data form "./data/additional_data/SO_PRF_ADDS.csv")~~
-    - profiles with data until 20 cm or 40 cm: monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
-* Check whether vertical shifting of layer limits is needed, e.g. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Rule for organic H layers:
-  + if code_layer is H and no layer limits, the layer should be in the forest floor. Change layer_type to forest_floor.
-  + if organic H layers are < 40 cm thick in total (and below any forest floor or above any mineral soil), this layer(s) should be considered as the forest floor. Change layer_type to forest_floor.
-  + if organic H layers are >= 40 cm thick in total, they can be considered as actual peat layers.
-  The null line should be between the forest floor (including those H layers just added; negative layer limits) and the peat/mineral layers (positive layer limits). Move null line in accordance if necessary (by shifting the layers up or down and changing their layer limits).
+    - profiles with data until 20 cm or 40 cm: (i) assume carbon density in subsoil does not change with time; or (ii) monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
+    - "pfh" survey forms gap filling for C stocks: add bulk densities forest floor from "som" after linking forest floor layers across "pfh" and "som" (same survey, i.e. maximum difference in survey years of 3 years)
+* ~~Check whether vertical shifting of layer limits is needed, e.g. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Rule for organic H layers:~~
+  + ~~if code_layer is H and no layer limits, the layer should be in the forest floor. Change layer_type to forest_floor.~~
+  + ~~if organic H layers are < 40 cm thick in total (and below any forest floor or above any mineral soil), this layer(s) should be considered as the forest floor. Change layer_type to forest_floor.~~
+  + ~~if organic H layers are >= 40 cm thick in total, they can be considered as actual peat layers.~~
+  ~~The null line should be between the forest floor (including those H layers just added; negative layer limits) and the peat/mineral layers (positive layer limits). Move null line in accordance if necessary (by shifting the layers up or down and changing their layer limits).~~
 * Check “other_obs” columns properly
 * ~~Harmonise plot_id’s and coordinates (e.g. Poland, UK)~~ (Note: completed)
 * Was there a systematic coordinate issue in the Pyrennees in Spain?
@@ -37,8 +39,8 @@ Please add any observed data issues to this file
   + Recode humus type (e.g. amphihumus) in accordance with survey year
   + After joining: identify missing plots without soil classification (due to gap-filling) - also check in other survey forms.
   + s1_prf: create machine-learning model to predict WRB soil classes in plots where this information is lacking?
-* Check Russian plots in “so” survey: some of them actually belong to “s1”. Move accordingly.
-* ~~Germany: harmonisation partner code across different survey forms?~~ (Note: completed in scripts after automatically asserting that plot codes are unique across Germany - all German partner codes are now 98)
+* ~~Check Russian plots in “so” survey: some of them actually belong to “s1”. Move accordingly.~~
+* ~~Germany: harmonisation partner code across different survey forms?~~
 * ~~Replace impossible data (e.g. bulk density above 2650 kg m-3) by NA~~
 * ~~Regarding implausible values of "organic_layer_weight":~~
   + ~~Are Slovakian organic_layer_weight values for code_plot 211 and 212 reported in the wrong units?~~
@@ -50,13 +52,13 @@ Please add any observed data issues to this file
 * ~~LOQ: harmonise and list assumptions~~
 * Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.
 * Gap-filling forest types and WRB LI and humus + confirmation by national experts
-* Remove incomplete unique profiles (e.g. profiles with only one forest floor layer)? Or do we keep it for plot-level integration (at least in “som” forms, i.e. with fixed depths)?
-* Convert script into a function.
-* Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.
+* ~~Remove incomplete unique profiles (e.g. profiles with only one forest floor layer)? Or do we keep it for plot-level integration (at least in “som” forms, i.e. with fixed depths)?~~
+* Add list with structure similar to PIRs, in which specific data updates by FSCC can be listed (along with their reason and a "change_date"). These can then be applied in a way similar to updated values in the checked PIRs.
+* Convert script into a function, in which you can choose the survey form (so_som, so_pfh, s1_som, s1_pfh) and the variable to calculate stocks from. Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.
 
 
 
-## TO DO - Checked PIRs
+~~## TO DO - Checked PIRs~~
 * ~~Remove rows in pir where code_nfc_action_taken, nfc_remark and updated_value are empty~~
 * ~~Ignore code_nfc_action_taken if updated_value is empty (we can't do much with it anyway for now). Not relevant to add "confirmations" (e.g. extreme but correct values; no data avaible...) to the layer 1 data for now. We'll have to use statistics and objective expert reasons to exclude values.~~
 * ~~I'm sometimes not sure whether the column "parameter_value" was updated by the partner. Checking this is possibly by joining the checked pir with the shared empty pir and comparing these two columns. So possibly, "updated_value"" does not contain all newly delivered data from the pirs. The other way around is also possible: that I placed the "parameter_value" info to the "updated_value" column because I assumed the values looked updated. Also possible by comparing likewise.~~
@@ -80,10 +82,14 @@ Please add any observed data issues to this file
 
 * Machine-learning prediction of lowest point splines (depth of 100 cm) + Monte Carlo uncertainty assessment?
 * FSCDB.LI: Check whether indicator data in VWDD tables match the Vanmechelen report formulas
-* Check within-plot variability
+* ~~Check within-plot variability~~
 * Compare stocks based on fixed-depth layers with those based on pedogenetic horizons.
 * Propagate any uncertainty correctly.
 * Convert scripts into a function. Different methodological decisions should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be included as metadata in the output. Also include total uncertainty (including uncertainty from the spline fitting + spline extrapolation + propagated uncertainty from other sources) in the output.
+* Make functions to visualise output, e.g. violin plots per stratifier, overview graphs per plot_id, dynamic maps.
+* Calculate stocks based on "pfh" survey forms too.
+* Calculate change in carbon stock per year.
+* Also include stocks until 30 cm as output in plot-aggregated stock files.
 
 
 ## TO DO - How to assess uncertainty?
