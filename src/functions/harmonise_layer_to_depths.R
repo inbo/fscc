@@ -14,7 +14,7 @@
 #' and "variab" should not be NULL.
 #' @param bulk_density A vector containing bulk densities or organic layer
 #' weights which serve as weights. Should follow the same layer sequence
-#' as the parameters "upper_depths", "lower_depths", and "variab". 
+#' as the parameters "upper_depths", "lower_depths", and "variab".
 #' Should be NULL if df_sub_selected is not NULL.
 #' @param upper_depths A vector containing the upper layer limits.
 #' Should follow the same layer sequence as the parameters "bulk_density",
@@ -24,7 +24,7 @@
 #' "bulk_density", and "variab". Should be NULL if df_sub_selected is not NULL.
 #' @param variab A vector containing the actual parameter values to be
 #' weighted. This vector can contain NAs. Should follow the same layer sequence
-#' as the parameters "upper_depths", "lower_depths", and "bulk_density". 
+#' as the parameters "upper_depths", "lower_depths", and "bulk_density".
 #' Should be NULL if df_sub_selected is not NULL.
 #' @param parameter_name The name of the parameter to harmonise
 #' (e.g., "bulk_density").
@@ -56,119 +56,135 @@ harmonise_layer_to_depths <- function(limit_sup,
                                       parameter_name,
                                       mode = c("numeric",
                                                "categorical")) {
-  
+
   mode <- match.arg(mode)
-  
+
   assertthat::assert_that(!is.null(df_sub_selected) ||
                             (!is.null(bulk_density) &&
                                !is.null(variab) &&
                                !is.null(upper_depths) &&
                                !is.null(lower_depths)))
-  
+
+  if (!is.null(df_sub_selected)) {
+
+    is_som <- ("layer_limit_superior" %in% names(df_sub_selected) &&
+                       "layer_limit_inferior" %in% names(df_sub_selected))
+
+    if (is_som) {
+
+      df_sub_selected <- df_sub_selected %>%
+        rename(horizon_limit_up = layer_limit_superior) %>%
+        rename(horizon_limit_low = layer_limit_inferior)
+
+    }
+
+  }
+
   # If different vectors are given instead of a dataframe
   # (this may be useful in a group_by() %>% summarise() construction)
-  
+
   if (is.null(df_sub_selected)) {
-    
+
     df_sub_selected <-
       data.frame(bulk_density = bulk_density,
                  horizon_limit_up = upper_depths,
                  horizon_limit_low = lower_depths,
                  variab = variab)
-    
+
     names(df_sub_selected)[which(names(df_sub_selected) == "variab")] <-
       parameter_name
   }
-  
-  
+
+
   # If any bulk density value is missing:
   # give all layers relatively the same bulk density weight
   # (i.e. only the thickness contributions of the non-harmonised
   # layers to the fixed layer depth range matter)
-  
+
   bulk_density_orig <- df_sub_selected$bulk_density
-  
+
   df_sub_selected <- df_sub_selected %>%
     mutate(bd_gapfilled = ifelse(any(is.na(bulk_density_orig)),
                                  1,
                                  bulk_density))
-  
+
   df_sub_selected$weight <- NA
   df_sub_selected$weight_aid <- NA
-  
+
   # Calculate relative weights for each layer (based on bulk density)
-  
+
   if (nrow(df_sub_selected) == 1) {
     df_sub_selected$weight_aid <- 1
   }
-  
+
   if (nrow(df_sub_selected) >= 2) {
-    
+
     ind_sup <-
       which(df_sub_selected$horizon_limit_up ==
               min(df_sub_selected$horizon_limit_up))
-    
+
     ind_inf <-
       which(df_sub_selected$horizon_limit_low ==
               max(df_sub_selected$horizon_limit_low))
-    
-    
+
+
     for (l in seq_len(nrow(df_sub_selected))) {
-      
+
       # Superior layer
-      
-      if (l == ind_sup) {
-        
-        df_sub_selected$weight_aid[l] <- 
+
+      if (l %in% ind_sup) {
+
+        df_sub_selected$weight_aid[l] <-
           diff(c(limit_sup, df_sub_selected$horizon_limit_low[l])) *
           df_sub_selected$bd_gapfilled[l]
-        
+
       } else
-        
+
         # Inferior layer
-        
-        if (l == ind_inf) {
-          
-          df_sub_selected$weight_aid[l] <- 
-            diff(c(df_sub_selected$horizon_limit_up[l], limit_inf)) *
+
+        if (l %in% ind_inf) {
+
+          df_sub_selected$weight_aid[l] <-
+            diff(c(df_sub_selected$horizon_limit_up[l],
+                   min(limit_inf, df_sub_selected$horizon_limit_low[l]))) *
             df_sub_selected$bd_gapfilled[l]
-          
+
           # Layers in between
         } else {
-          
-          df_sub_selected$weight_aid[l] <- 
+
+          df_sub_selected$weight_aid[l] <-
             diff(c(df_sub_selected$horizon_limit_up[l],
                    df_sub_selected$horizon_limit_low[l])) *
             df_sub_selected$bd_gapfilled[l]
-          
+
         }
     }
   }
-  
+
   df_sub_selected <- df_sub_selected %>%
     filter(!is.na(.data[[parameter_name]]))
-  
+
   if (nrow(df_sub_selected) == 0) {
     result <- NA
   } else {
-    
+
     weight_sum <- sum(df_sub_selected$weight_aid)
-    
+
     df_sub_selected <- df_sub_selected %>%
       mutate(weight = .data$weight_aid / weight_sum)
-    
+
     # Calculate the final value
-    
+
     # If numeric: by taking the sum of the product
-    
+
     if (mode == "numeric") {
-      
+
       result <- sum(df_sub_selected[[parameter_name]] * df_sub_selected$weight)
-      
+
     } else
-      
+
       if (mode == "categorical") {
-        
+
         result <- df_sub_selected %>%
           # filter(!is.na(.data[[parameter_name]])) %>%
           arrange(desc(weight)) %>%
@@ -176,7 +192,7 @@ harmonise_layer_to_depths <- function(limit_sup,
           pull(.data[[parameter_name]])
       }
   }
-  
+
   return(result)
-  
+
 }
