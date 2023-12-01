@@ -34,7 +34,8 @@ stopifnot(require("sf"),
           require("parsedate"),
           require("googlesheets4"),
           require("googledrive"),
-          require("assertthat"))
+          require("assertthat"),
+          require("aqp"))
 
 
 
@@ -57,10 +58,10 @@ sync_local_data(list_subfolders_data = "raw_data",
 
 
 
-level <- "LII"
-transform_to_layer1(level = "LII")
+# Input level ----
 
-transform_to_layer1 <- function(level) {
+level <- "LI"
+
 
 # Define surveys and survey forms within level
 
@@ -74,7 +75,7 @@ if (level == "LI") {
 
   level_surveys <-
     list_surveys[names(list_surveys) %in% c("y1", "s1")]
-  
+
 }
 
 if (level == "LII") {
@@ -118,11 +119,28 @@ read_raw("sw", save_to_env = TRUE)
 
 
 
-## 3.2. Merge duplicate records in "so_som" ----
+## 3.2. Solve issues with duplicate records ----
+
+
+if (level == "LI") {
+
+  cat("Solve issues with duplicate records\n")
+
+  source("./src/functions/solve_record_inconsistencies.R")
+  s1_som <- solve_record_inconsistencies(survey_form = "s1_som",
+                                         data_frame = s1_som,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+  s1_pfh <- solve_record_inconsistencies(survey_form = "s1_pfh",
+                                         data_frame = s1_pfh,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+}
+
 
 if (level == "LII") {
 
-cat("Merge duplicate records\n")
+cat("Merge duplicate records 'so_som'\n")
 
 source("./src/functions/merge_duplicate_records.R")
 so_som <- merge_duplicate_records(survey_form = "so_som",
@@ -130,6 +148,7 @@ so_som <- merge_duplicate_records(survey_form = "so_som",
                                   merge = TRUE,
                                   save_to_env = FALSE)
 
+cat("Solve other issues with duplicate records\n")
 
 source("./src/functions/solve_record_inconsistencies.R")
 so_som <- solve_record_inconsistencies(survey_form = "so_som",
@@ -155,7 +174,7 @@ so_som <- solve_record_inconsistencies(survey_form = "so_som",
 source("./src/functions/gapfill_from_pir.R")
 
 cat("Gap-fill from PIRs (data corrected by partners)\n")
-  
+
 
 if (level == "LI") {
 
@@ -304,7 +323,7 @@ so_som <- so_som %>%
                      coarse_fragment_vol_afscdb = coarse_fragment_vol,
                      part_size_clay_afscdb = part_size_clay),
             by = "unique_survey_layer")
-  
+
 # Merge the columns
 
 so_som <- so_som %>%
@@ -338,7 +357,7 @@ so_som <- so_som %>%
                   .data$part_size_clay,
                   .data$part_size_clay_afscdb)) %>%
   select(-part_size_clay_afscdb)
-  
+
 }
 
 ### 4.2.2. Adding missing records ----
@@ -602,6 +621,9 @@ get_primary_inconsistencies(code_survey = "y1",
                             save_to_env = TRUE)
 get_primary_inconsistencies(code_survey = "s1", solve = TRUE,
                             save_to_env = TRUE)
+
+s1_pfh1 <- s1_pfh
+s1_som1 <- s1_som
 }
 
 if (level == "LII") {
@@ -612,6 +634,9 @@ get_primary_inconsistencies(code_survey = "so", solve = TRUE,
                             save_to_env = TRUE)
 get_primary_inconsistencies(code_survey = "sw",
                             save_to_env = TRUE)
+
+so_pfh1 <- so_pfh
+so_som1 <- so_som
 }
 
 source("./src/functions/bind_objects_starting_with.R")
@@ -682,6 +707,14 @@ bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
 
 
 
+# At this stage, link forest floor layers in "som" with those of "pfh"
+# in the same survey.
+# This can be used to gap-fill forest floor layer limits as well as bulk
+# densities
+
+
+
+
 
 ## 5.4. Inconsistencies in range/presence of data ----
 # "solve = TRUE" converts data in the wrong units to the correct units
@@ -725,8 +758,8 @@ so_pfh3 <- so_pfh
 so_som3 <- so_som
 }
 
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
+# source("./src/functions/bind_objects_starting_with.R")
+# bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
 
 
 
@@ -741,10 +774,10 @@ cat("Harmonise data below LOQ\n")
 source("./src/functions/harmonise_below_loqs.R")
 
 if (level == "LI") {
-  
+
   s1_som <- harmonise_below_loqs(survey_form = "s1_som",
                                  data_frame = s1_som)
-  
+
   s1_pfh <- harmonise_below_loqs(survey_form = "s1_pfh",
                                  data_frame = s1_pfh,
                                  parameters = c("horizon_clay",
@@ -787,7 +820,7 @@ if (level == "LI") {
 }
 
 if (level == "LII") {
-  
+
   so_som <- get_derived_variable_inconsistencies("so_som", so_som,
                                                  save_to_env = FALSE)
   so_pfh <- get_derived_variable_inconsistencies("so_pfh", so_pfh,
@@ -795,8 +828,8 @@ if (level == "LII") {
 
 }
 
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
+# source("./src/functions/bind_objects_starting_with.R")
+# bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
 
 
 
@@ -828,10 +861,10 @@ unique_layers_to_convert <- so_som %>%
 if (length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
     0.9 * nrow(unique_layers_to_convert) &&
     nrow(unique_layers_to_convert) >= 2) {
-  
+
   unique_layers_to_convert <-
     unique(unique_layers_to_convert$unique_layer_repetition)
-  
+
   so_som <- so_som %>%
     mutate(organic_carbon_total =
              ifelse(.data$unique_layer_repetition %in%
@@ -856,10 +889,10 @@ unique_layers_to_convert <- so_som %>%
 if (length(which(unique_layers_to_convert$unit_issue_tn == TRUE)) >=
     0.7 * nrow(unique_layers_to_convert) &&
     nrow(unique_layers_to_convert) >= 2) {
-  
+
   unique_layers_to_convert <-
     unique(unique_layers_to_convert$unique_layer_repetition)
-  
+
   so_som <- so_som %>%
     mutate(n_total =
              ifelse(.data$unique_layer_repetition %in%
@@ -884,10 +917,10 @@ unique_layers_to_convert <- so_som %>%
 if (length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
     0.9 * nrow(unique_layers_to_convert) &&
     nrow(unique_layers_to_convert) >= 2) {
-  
+
   unique_layers_to_convert <-
     unique(unique_layers_to_convert$unique_layer_repetition)
-  
+
   so_som <- so_som %>%
     mutate(organic_carbon_total =
              ifelse(.data$unique_layer_repetition %in%
@@ -914,7 +947,7 @@ source("./src/functions/gapfill_internally.R")
 
 if (level == "LI") {
 
-test <- gapfill_internally(survey_form = "s1_som",
+s1_som <- gapfill_internally(survey_form = "s1_som",
                            data_frame = s1_som,
                            save_to_env = FALSE)
 
@@ -924,41 +957,45 @@ write.csv2(s1_pfh_fixed,
            row.names = FALSE,
            na = "")
 
+s1_pfh <- gapfill_internally(survey_form = "s1_pfh",
+                             data_frame = s1_pfh,
+                             save_to_env = FALSE)
+
+write.csv2(s1_som_pedogenic,
+           paste0("./output/gap_filling_details/",
+                  "s1_som_pedogenic.csv"),
+           row.names = FALSE,
+           na = "")
+
 }
+
+
 
 if (level == "LII") {
 
 so_som <- gapfill_internally(survey_form = "so_som",
                              data_frame = so_som,
                              save_to_env = FALSE)
+
+write.csv2(so_pfh_fixed,
+           paste0("./output/gap_filling_details/",
+                  "so_pfh_fixed_depths.csv"),
+           row.names = FALSE,
+           na = "")
+
+so_pfh <- gapfill_internally(survey_form = "so_pfh",
+                             data_frame = so_pfh,
+                             save_to_env = FALSE)
+
+write.csv2(so_som_pedogenic,
+           paste0("./output/gap_filling_details/",
+                  "so_som_pedogenic.csv"),
+           row.names = FALSE,
+           na = "")
 }
 
 
-# Save "Layer 1"
 
-# survey_forms_layer1 <-
-#   names(sapply(list_survey_forms, function(form_name) {
-#   exists(form_name, envir = .GlobalEnv) &&
-#     "data.frame" %in% class(get(form_name, envir = .GlobalEnv))
-# }))
-
-
-survey_forms_layer1 <-
-  names(sapply(list_survey_forms, function(form_name) {
-  (exists(form_name, envir = environment()) &&
-     "data.frame" %in% class(get(form_name, envir = environment()))) ||
-    (exists(form_name, envir = .GlobalEnv) &&
-       "data.frame" %in% class(get(form_name, envir = .GlobalEnv)))
-}))
-
-# Use mget to get the data frames from the function environment
-forms_data <- mget(survey_forms_layer1, envir = environment())
-
-# Assign them to the global environment
-list2env(forms_data, envir = .GlobalEnv)
-
-} # End of 'transform_to_layer1' function
-  
 
 # 8. Export the processed survey forms ----
 
@@ -991,5 +1028,7 @@ source("./src/functions/read_processed.R")
 read_processed(save_to_env = TRUE)
 read_processed(survey_forms = c("si", "so", "sw"),
                save_to_env = TRUE)
-
+read_processed(survey_forms = c("y1", "s1"),
+               path_name = "./data/layer1_data/",
+               save_to_env = TRUE)
 
