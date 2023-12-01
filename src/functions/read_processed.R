@@ -96,7 +96,7 @@ read_processed <- function(survey_forms = NULL,
       "stand_rotation", "code_plot_status", "code_nfi_status",
       "cc_tree_number", "azimuth", "distance",
       "latitude_dec", "longitude_dec")
-  
+
 # Define vectors with survey forms and codes to read ----
 
   survey_forms_all <- c("so_som", "so_prf", "so_pls", "so_pfh", "so_lqa",
@@ -233,7 +233,7 @@ cat(paste0("Most recent data were found in the '",
 }
 
 
-  
+
 # Remove extra dataframes from environment ----
 
   if (isTRUE(getOption("knitr.in.progress"))) {
@@ -246,9 +246,9 @@ cat(paste0("Most recent data were found in the '",
                              paste0("coordinates_", survey_codes))
 
   if (save_to_env == TRUE) {
-    
+
     for (i in seq_along(survey_forms_extended)) {
-      
+
       if (exists(survey_forms_extended[i], envir = envir)) {
         rm(list = survey_forms_extended[i], envir = envir)
       }
@@ -264,17 +264,22 @@ cat(paste0("Most recent data were found in the '",
                                       change_date_google_drive = NULL)
 
   for (i in seq_along(survey_forms)) {
+
     if (exists(survey_forms[i]) &&
         is.data.frame(get(survey_forms[i]))) {
 
-      if (!identical(unique(get(survey_forms[i])$change_date_google_drive),
-                     NULL)) {
+      if (exists("change_date_google_drive", where = get(survey_forms[i])) &&
+            !is.null(unique(get(survey_forms[i])[[
+              "change_date_google_drive"]])))  {
+
     survey_forms_existing <-
       rbind(survey_forms_existing,
             data.frame(survey_form = survey_forms[i],
                        change_date_google_drive =
                          unique(get(survey_forms[i])$change_date_google_drive)))
+
       } else {
+
       survey_forms_existing <-
         rbind(survey_forms_existing,
               data.frame(survey_form = survey_forms[i],
@@ -285,6 +290,7 @@ cat(paste0("Most recent data were found in the '",
   }
 
   if (nrow(survey_forms_existing) > 0) {
+
   survey_forms_existing <- survey_forms_existing %>%
     mutate(change_date_google_drive =
              as.character(as.Date(change_date_google_drive)))
@@ -309,7 +315,7 @@ cat(paste0("Most recent data were found in the '",
   confirmation <-
     readline(prompt = paste0("Do you grant ",
                              "permission to overwrite the current survey ",
-                             "forms in the local folder? (Y/N): "))
+                             "forms in the Global Environment? (Y/N): "))
 
   if (tolower(confirmation) == "y") {
     overwrite_permission <- TRUE
@@ -334,6 +340,15 @@ cat(paste0("Most recent data were found in the '",
     survey_forms_code <- grep(paste0("^", survey_codes[i]),
                               survey_forms, value = TRUE)
 
+    # Temporary solution since this was not yet added to save_to_google_drive
+    # To remove ----
+    if ("y1_ev1" %in% survey_forms_code) {
+      survey_forms_code <-
+        survey_forms_code[!survey_forms_code %in% c("y1_ev1")]
+    }
+    # ----
+
+
     path_name_survey <- paste0(path_name,
                                survey_codes[i], "/")
 
@@ -346,7 +361,7 @@ cat(paste0("Most recent data were found in the '",
 
     # Replace any "" values by NA
     df[df == ""] <- NA
-    
+
     # Convert numeric columns to numeric
     vec_df <- names(df)[which(names(df) %in% vec_numeric)]
     vec_df <- vec_df[which(!vec_df %in%
@@ -356,7 +371,7 @@ cat(paste0("Most recent data were found in the '",
     df <- df %>%
       mutate(across(all_of(vec_df), as.numeric))
     }
-    
+
       # Add change date of Google Drive version of imported data
       # (to keep track of which version you are working on internally)
 
