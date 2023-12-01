@@ -473,7 +473,10 @@ if (survey_form == "s1_som") {
         columns_with_different_content <- names(result_columns[result_columns])
 
         assertthat::assert_that(identical(columns_with_different_content,
-                                           character(0)))
+                                           character(0)) ||
+                                # Sometimes single values may have been
+                                # updated upon resubmission
+                                length(columns_with_different_content) < 4)
 
         ind_to_remove <-
           which(df$unique_survey %in%
@@ -536,7 +539,10 @@ if (survey_form == "s1_som") {
         columns_with_different_content <- names(result_columns[result_columns])
 
         assertthat::assert_that(identical(columns_with_different_content,
-                                          character(0)))
+                                          character(0)) ||
+                                  # Sometimes single values may have been
+                                  # updated upon resubmission
+                                  length(columns_with_different_content) < 4)
 
         ind_to_remove <-
           which(df$unique_survey %in%
@@ -604,7 +610,7 @@ if (survey_form == "s1_pfh") {
 
         result_columns <- sapply(df_sub[, numeric_column_names],
                                  function(col) length(unique(col)) >
-                                   ceiling(nrow(df_sub)/2))
+                                   ceiling(nrow(df_sub)/2) + 1)
 
         columns_with_different_content <- names(result_columns[result_columns])
 
@@ -617,7 +623,10 @@ if (survey_form == "s1_pfh") {
                                              "horizon_bulk_dens_est")]
 
         assertthat::assert_that(identical(columns_with_different_content,
-                                          character(0)))
+                                          character(0)) ||
+                                  # Sometimes single values may have been
+                                  # updated upon resubmission
+                                  length(columns_with_different_content) < 4)
 
         ind_to_remove <-
           which(df$plot_id %in%
@@ -684,8 +693,19 @@ if (survey_form == "s1_pfh") {
 
         columns_with_different_content <- names(result_columns[result_columns])
 
+        # Some variables can be adjusted during resubmission
+        columns_with_different_content <-
+          columns_with_different_content[!columns_with_different_content %in%
+                                           c("horizon_c_organic_total",
+                                             "horizon_n_total",
+                                             "horizon_bulk_dens_measure",
+                                             "horizon_bulk_dens_est")]
+
         assertthat::assert_that(identical(columns_with_different_content,
-                                          character(0)))
+                                          character(0)) ||
+                                  # Sometimes single values may have been
+                                  # updated upon resubmission
+                                  length(columns_with_different_content) < 4)
 
         ind_to_remove <-
           which(df$unique_survey %in%
