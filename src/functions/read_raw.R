@@ -427,10 +427,10 @@ for (i in seq_along(survey_forms)) {
   # Convert columns that should be factors to factors ----
   vec_as_factor <- which(names(df) %in%
                          c("code_layer", "code_texture_class", "origin",
-                           "horizon_master", "horizon_subordinate",
+                           "horizon_subordinate",
                            "colour_moist", "colour_dry",
-                           "code_horizon_texture_class", "profile_pit_ID",
-                           "profile_pit_id", "code_wrb_soil_group",
+                           "code_horizon_texture_class",
+                           "code_wrb_soil_group",
                            "code_wrb_qualifier_1",
                            "code_wrb_spezifier_1", "code_wrb_qualifier_2",
                            "code_wrb_spezifier_2", "code_wrb_qualifier_3",
@@ -566,6 +566,8 @@ for (i in seq_along(survey_forms)) {
     levels(df$layer_type) <- layer_type_levels
 
     df$layer_type <- as.character(df$layer_type)
+    df$code_layer <- as.character(df$code_layer)
+
     }
 
   # For s1_pfh and so_pfh: add column "layer type" ----
