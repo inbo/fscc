@@ -3,7 +3,7 @@
 #'
 #' This function expands a vector of unique survey strings by
 #' adding adjacent years based on the given number of years.
-#' 
+#'
 #' This is useful to match unique surveys (plot_id x survey_year)
 #' among survey forms, when some variation in the survey year is possible.
 #'
@@ -26,22 +26,22 @@
 
 expand_unique_survey_vec_adjacent_years <- function(unique_survey_vec,
                                                     number_of_years) {
-  
+
   # Extract the year
-  years <- gsub(".*_(\\d{4}).*", "\\1", unique_survey_vec)
-  
+  years <- gsub(".*_(\\d{4})_.*", "\\1", unique_survey_vec)
+
   # Replace each year one by one
   unique_surveys <- NULL
-  
+
   for (i in seq_along(unique_survey_vec)) {
-    
+
     unique_surveys <- c(
       unique_surveys,
       # Add unique_survey
       unique_survey_vec[i])
-    
+
     for (j in seq_len(number_of_years)) {
-      
+
       unique_surveys <- c(
         unique_surveys,
         # Add survey_year - 1
@@ -54,7 +54,7 @@ expand_unique_survey_vec_adjacent_years <- function(unique_survey_vec,
              unique_survey_vec[i]))
     }
   }
-  
+
   return(unique_surveys)
-  
+
 }
