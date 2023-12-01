@@ -379,10 +379,10 @@ colSums(!is.na(plots_vegetation))
 
 # 6. Export ----
 
-write.csv2(plots_vegetation,
+write.csv(plots_vegetation,
            paste0("./output/specific_esb_requests/",
                   as.character(format(Sys.Date(), format = "%Y%m%d")),
-                  "_plots_vegetation_with_soil_fertility_data.csv"),
+                  "_plots_vegetation_with_soil_fertility_data2.csv"),
            row.names = FALSE,
            na = "")
 
