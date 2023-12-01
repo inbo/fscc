@@ -262,12 +262,12 @@ save_to_google_drive <- function(objects_to_save = NULL,
   survey_forms_all <- c("so_som", "so_prf", "so_pls", "so_pfh", "so_lqa",
                         "s1_som", "s1_prf", "s1_pls", "s1_pfh", "s1_lqa",
                         "si_eve", "si_plt", "si_sta", "si_tco", "y1_pl1",
-                        "y1_st1", "sw_swa", "sw_swc")
+                        "y1_st1", "y1_ev1", "sw_swa", "sw_swc")
 
   list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
                            s1 = c("som", "prf", "pls", "pfh", "lqa"),
                            si = c("eve", "plt", "sta", "tco"),
-                           y1 = c("pl1", "st1"),
+                           y1 = c("pl1", "st1", "ev1"),
                            sw = c("swa", "swc"))
 
 
