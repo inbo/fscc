@@ -10,7 +10,7 @@
 #'
 #' @details This function takes profile data,
 #' groups layers adjacent to each other and with the same layer type together,
-#' and summarises the total thickness, superior and 
+#' and summarises the total thickness, superior and
 #' inferior limits of each group of layers.
 #'
 #' @export
@@ -21,37 +21,38 @@
 
 
 summarise_profile_per_depth_layer_type <- function(df_profile) {
-  
+
   is_pfh <- FALSE
-  
+
   # if "pfh"
-  
+
   if ("horizon_limit_up" %in% names(df_profile) &&
       "horizon_limit_low" %in% names(df_profile)) {
-    
+
     is_pfh <- TRUE
-    
+
     df_profile <- df_profile %>%
       rename(layer_limit_superior = horizon_limit_up) %>%
       rename(layer_limit_inferior = horizon_limit_low) %>%
       rename(unique_survey_repetition = unique_survey_profile) %>%
       rename(code_layer = horizon_master)
-    
+
   }
-  
-  
-  if ((!"layer_number" %in% names(df_profile)) |
-      all(is.na(df_profile$layer_number))) {
-    
+
+
+  if ((!"layer_number" %in% names(df_profile)) ||
+      ("layer_number" %in% names(df_profile) &&
+       all(is.na(df_profile$layer_number)))) {
+
     if (any(is.na(df_profile$layer_limit_superior)) ||
         any(is.na(df_profile$layer_limit_inferior))) {
-      
+
       # Add theoretical layer limits
-      
+
       d_depth_level_soil <-
         read.csv("./data/additional_data/d_depth_level_soil.csv",
                  sep = ";")
-      
+
       df_profile <- df_profile %>%
         left_join(d_depth_level_soil %>%
                     select(code,
@@ -70,9 +71,9 @@ summarise_profile_per_depth_layer_type <- function(df_profile) {
                  ifelse(!is.na(.data$layer_limit_inferior),
                         .data$layer_limit_inferior,
                         .data$layer_limit_inferior_theory))
-      
+
     }
-    
+
     df_profile <- df_profile %>%
       # A quick preliminary way to sort the available layers
       mutate(layer_number =
@@ -84,20 +85,20 @@ summarise_profile_per_depth_layer_type <- function(df_profile) {
                            .data$layer_limit_superior),
                     na.last = "keep"))
   }
-  
-  
+
+
   assertthat::assert_that(
     length(unique(df_profile$unique_survey_repetition)) == 1,
     msg = "More than one profile has been given as input")
-  
-  
+
+
   # df_profile %>%
   #   select(code_layer,
   #          layer_type,
   #          layer_number,
   #          layer_limit_superior,
   #          layer_limit_inferior)
-  
+
   df_sub <- df_profile %>%
     ungroup() %>%
     mutate(layer_thickness = ifelse(!is.na(layer_limit_superior) &
@@ -132,16 +133,16 @@ summarise_profile_per_depth_layer_type <- function(df_profile) {
     ungroup() %>%
     select(-grp) %>%
     filter(.data$total_thickness > 0)
-  
-  
-  
+
+
+
   if (is_pfh) {
-    
+
     df_sub <- df_sub %>%
       rename(horizon_limit_up = layer_limit_superior) %>%
       rename(horizon_limit_low = layer_limit_inferior)
   }
-  
+
   return(df_sub)
-  
+
 }
