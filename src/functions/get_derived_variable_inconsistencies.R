@@ -82,13 +82,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
   # Specify date on which 'layer 0' data were downloaded ----
   # from ICP Forests website
-  
+
   source("./src/functions/get_date_local.R")
   download_date <- get_date_local(path = "./data/raw_data/",
                                   save_to_env = TRUE,
                                   collapsed = TRUE)
   download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
-  
+
   # Import the inconsistency catalogue ----
 
   assertthat::assert_that(
@@ -100,14 +100,14 @@ get_derived_variable_inconsistencies <- function(survey_form,
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
   # Retrieve the survey_form data
-  
+
   if (is.null(data_frame)) {
     df <- get_env(survey_form)
   } else {
     df <- data_frame
   }
-  
-  
+
+
   # "som" survey forms ----
 
   if (unlist(strsplit(survey_form, "_"))[2] == "som") {
@@ -165,7 +165,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
       # } else {
       #     sand <- df$part_size_sand[i]
       # }
-      
+
       df$sum_texture[i] <- df$part_size_clay[i] +
         df$part_size_silt[i] +
         df$part_size_sand[i]
@@ -322,7 +322,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
       # sum_base_cations
 
       # TO DO: update LOQ implementation
-      
+
       if (!is.na(df$horizon_exch_ca[i]) &&
           !is.na(df$horizon_exch_mg[i]) &&
           !is.na(df$horizon_exch_k[i]) &&
@@ -399,8 +399,14 @@ get_derived_variable_inconsistencies <- function(survey_form,
     range_max <- 2650
 
     vec_inconsistency <- which(!is.na(df$bulk_density_layer_weight) &
-                                 ((df$bulk_density_layer_weight < range_min) |
-                                 (df$bulk_density_layer_weight > range_max)))
+                                 ((df$layer_type == "mineral" &
+                                   ((df$bulk_density_layer_weight < range_min) |
+                                 (df$bulk_density_layer_weight > range_max))) |
+                                   # organic
+                             (df$layer_type != "mineral" &
+                                ((df$bulk_density_layer_weight < range_min) |
+                                   (df$bulk_density_layer_weight > 1400)))
+                                   ))
 
     if (!identical(vec_inconsistency, integer(0))) {
 
@@ -498,6 +504,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  download_date = rep(download_date_pir, length(i))))
 
       }
+
+      df$bulk_density_layer_weight[vec_inconsistency] <- NA
     }
     }
 
@@ -734,8 +742,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
   if ("sum_base_cations" %in% names(df)) {
 
     cec <- NULL
-    
-    
+
+
     if (unlist(strsplit(survey_form, "_"))[2] == "som" &&
         ("exch_cec" %in% names(df))) {
       cec <- df$exch_cec
@@ -941,31 +949,31 @@ get_derived_variable_inconsistencies <- function(survey_form,
     vec_inconsistency <- which(!is.na(df$sum_acid_cations) &
                                  !is.na(df$exch_acidiy) &
                                  (df$exch_acidiy != -1))
-    
+
     # "Approximate" is not well defined, and we had a look at the plot
-    # to see which values could be considered close enough. 
+    # to see which values could be considered close enough.
     # This rule is unfortunately quite arbitrary.
-    
+
     # The plot was made using the following code:
-    
+
         # plot(df$exch_acidiy[vec_inconsistency],
         #      df$sum_acid_cations[vec_inconsistency])
         # fit <- lm(df$exch_acidiy[vec_inconsistency] ~
         #             df$sum_acid_cations[vec_inconsistency])
         # abline(a = coef(fit)[1], b = coef(fit)[2], col = "red")
-        
+
         # fit_up <- lm((2 + 1.3 * df$exch_acidiy[vec_inconsistency]) ~
         #                df$sum_acid_cations[vec_inconsistency])
         # abline(a = coef(fit_up)[1], b = coef(fit_up)[2], col = "blue")
-        
+
         # fit_low <- lm((-2 + 0.7 * df$exch_acidiy[vec_inconsistency]) ~
         #                 df$sum_acid_cations[vec_inconsistency])
         # abline(a = coef(fit_low)[1], b = coef(fit_low)[2], col = "green")
-        
+
         # abline(a = 0, b = 1, col = "red")
         # abline(a = 2, b = 1.3, col = "blue")
         # abline(a = -2, b = 0.7, col = "green")
-    
+
     # Based on plot:
     range_min <- (-2) + df$exch_acidiy[vec_inconsistency] * 0.7
     range_max <- 2 + df$exch_acidiy[vec_inconsistency] * 1.3
@@ -1124,7 +1132,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
   # Save the survey form and inconsistency list ----
   # for the given survey
   # form to the global environment
-  
+
   if (save_to_env == TRUE) {
     assign_env(survey_form, df)
     assign_env(paste0("list_derived_inconsistencies_", survey_form),
@@ -1132,5 +1140,5 @@ get_derived_variable_inconsistencies <- function(survey_form,
   } else {
     return(df)
   }
-  
+
 }
