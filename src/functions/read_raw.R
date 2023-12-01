@@ -129,8 +129,8 @@ read_raw <- function(code_survey,
 
 # Create a list with names of the different survey forms per survey
 
-list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
-                         s1 = c("som", "prf", "pls", "pfh", "lqa"),
+list_data_tables <- list(so = c("pfh", "som", "prf", "pls", "lqa"),
+                         s1 = c("pfh", "som", "prf", "pls", "lqa"),
                          si = c("eve", "plt", "sta", "tco"),
                          y1 = c("pl1", "st1", "ev1"),
                          sw = c("swa", "swc"),
@@ -289,13 +289,13 @@ if (file.exists(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
 if (file.exists(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
                        file_level,
                        "_53_plot_coord_harmonisation_key_Poland.csv"))) {
-  
+
   plot_coord_harmonisation_key_poland <-
     read.csv2(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
                      file_level,
                      "_53_plot_coord_harmonisation_key_Poland.csv"),
               na.strings = "")
-  
+
   plot_coord_harmonisation_key <- plot_coord_harmonisation_key_poland
 }
 
@@ -357,7 +357,7 @@ if (!file.exists(paste0(subdir,
   data_availability_long <- NULL
 
   for (i in seq_along(survey_forms)) {
-    
+
     # Read the data table ----
     df <- read.csv(paste0(subdir, "/", code_survey, "_",
                           list_data_tables[[which(names(list_data_tables) ==
@@ -380,7 +380,7 @@ if (!file.exists(paste0(subdir,
                                        .data$partner_code, "_",
                                        .data$code_plot)) %>%
       distinct(survey_id)
-    
+
     data_availability_long <- bind_rows(data_availability_long,
                                         df)
   }
@@ -414,7 +414,7 @@ if (!file.exists(paste0(subdir,
 
 
 for (i in seq_along(survey_forms)) {
-  
+
   # Read the data table ----
   df <- read.csv(paste0(subdir, "/", code_survey, "_",
                        list_data_tables[[which(names(list_data_tables) ==
@@ -466,20 +466,86 @@ for (i in seq_along(survey_forms)) {
     }
     }
 
+  # Convert Munsell colours to hex ----
+
+  source("./src/functions/gives_error.R")
+
+  vec_colour <- grep("colou?r", names(df))
+
+  if (!identical(vec_colour, integer(0))) {
+
+    # Column index of colour moist
+
+    vec_colour_moist <- vec_colour[grep("moist", names(df)[vec_colour])]
+
+    # Name of colour column with most data
+
+    col_sums <- colSums(!is.na(df[, vec_colour]))
+    name_max_col <- names(col_sums[which(col_sums == max(col_sums))])
+
+    assertthat::assert_that(length(vec_colour) == 2 &&
+                              !identical(vec_colour_moist, integer(0)) &&
+                              name_max_col == names(df)[vec_colour_moist],
+                            msg =
+                              paste0("The column with most soil colour data ",
+                                   "is not the column with ",
+                                   "moist soil colours."))
+
+    assertthat::assert_that(
+      file.exists(paste0("./data/additional_data/",
+                         "munsell_hex_colour_conversion_table.csv")))
+
+    munsell_hex_colour_conversion_table <-
+      read.csv2(paste0("./data/additional_data/",
+                       "munsell_hex_colour_conversion_table.csv"))
+
+    df <- df %>%
+      mutate(
+        colour_moist_clean = gsub("YR /", "YR",
+                                  gsub("YR/", "YR",
+                                       gsub(" ", "",
+                                            as.character(colour_moist))))) %>%
+      left_join(munsell_hex_colour_conversion_table %>%
+                  select(-colour_moist),
+                by = "colour_moist_clean")
+
+    for (j in seq_len(nrow(df))) {
+
+      if (is.na(df$colour_moist_hex[j])) {
+
+        df$colour_moist_hex[j] <-
+          suppressWarnings(
+            ifelse(
+              is.na(df$colour_moist_clean[j]),
+              NA,
+              ifelse(
+                gives_error(aqp::getClosestMunsellChip(
+                  df$colour_moist_clean[j])),
+                NA,
+                aqp::getClosestMunsellChip(df$colour_moist_clean[j]))))
+      }
+    }
+
+    df <- df %>%
+      select(-colour_moist_clean) %>%
+      relocate(.data$colour_moist_hex, .after = colour_moist)
+   }
+
+
   # Add a column with download_date ----
 
   # If no download_date was given
-  
+
   if (is.null(download_date)) {
   source("./src/functions/get_date_local.R")
   download_date <- get_date_local(path = dir)
   }
-  
+
   df$download_date <-
     as.character(as.Date(parsedate::parse_iso_8601(download_date)))
 
   # For s1_som and so_som: add column "layer type" ----
-  if ((code_survey == "so" || code_survey == "s1") && 
+  if ((code_survey == "so" || code_survey == "s1") &&
      list_data_tables[[
        which(names(list_data_tables) == code_survey)]][i] == "som") {
 
@@ -498,12 +564,12 @@ for (i in seq_along(survey_forms)) {
 
     df$layer_type <- df$code_layer
     levels(df$layer_type) <- layer_type_levels
-    
+
     df$layer_type <- as.character(df$layer_type)
     }
 
   # For s1_pfh and so_pfh: add column "layer type" ----
-  if ((code_survey == "so" || code_survey == "s1") && 
+  if ((code_survey == "so" || code_survey == "s1") &&
       list_data_tables[[
         which(names(list_data_tables) == code_survey)]][i] == "pfh") {
 
@@ -643,9 +709,9 @@ for (i in seq_along(survey_forms)) {
 
   if (any(df$partner_code %in%
           unique(plot_coord_harmonisation_key$partner_code))) {
-    
+
     df$code_plot_orig <- df$code_plot
-    
+
     if ("latitude_dec" %in% names(df) &&
         "longitude_dec" %in% names(df)) {
 
@@ -654,28 +720,28 @@ for (i in seq_along(survey_forms)) {
     }
 
     renamed_survey_year <- FALSE
-    
+
     if ("last_year" %in% names(df) &&
         !"survey_year" %in% names(df)) {
 
       names(df)[which(names(df) == "last_year")] <- "survey_year"
       renamed_survey_year <- TRUE
     }
-    
+
     for (j in
          seq_along(unique(plot_coord_harmonisation_key$partner_survey_year))) {
-      
+
       plot_coord_harmonisation_key_j <- plot_coord_harmonisation_key %>%
         filter(partner_survey_year ==
                  unique(plot_coord_harmonisation_key$partner_survey_year)[j])
-      
+
       join_key_j <- plot_coord_harmonisation_key_j %>%
         select(code_plot_orig, code_plot,
                longitude_dec, latitude_dec) %>%
         rename(code_plot_join = code_plot,
                latitude_dec_join = latitude_dec,
                longitude_dec_join = longitude_dec)
-      
+
       if (!"latitude_dec" %in% names(df) &&
           !"longitude_dec" %in% names(df)) {
         join_key_j <- select(join_key_j, code_plot_orig, code_plot_join)
@@ -684,18 +750,18 @@ for (i in seq_along(survey_forms)) {
       survey_years_j <-
         unlist(strsplit(unique(plot_coord_harmonisation_key_j$survey_year),
                         "_"))
-      
+
       code_plot_orig_j <-
         sort(unique(df$code_plot_orig[
           which(df$partner_code ==
                   unique(plot_coord_harmonisation_key_j$partner_code) &
                   df$survey_year %in% survey_years_j)]))
-      
+
       # If most of the wrong code_plots do not appear in the original
       # code_plots of df,
       # the plot codes have probably been corrected in Layer 0
       # So no need to do the conversion in that case
-      
+
       if ((unique(plot_coord_harmonisation_key_j$partner_code) != 53) ||
           (sum(sort(plot_coord_harmonisation_key_j$code_plot_orig) %in%
               code_plot_orig_j) >=
@@ -740,11 +806,11 @@ for (i in seq_along(survey_forms)) {
                             longitude_dec)) %>%
             select(-longitude_dec_join)
         }
-        
+
       }
-      
+
     }
-    
+
     if (renamed_survey_year == TRUE) {
       names(df)[which(names(df) == "survey_year")] <- "last_year"
     }
@@ -857,7 +923,7 @@ for (i in seq_along(survey_forms)) {
                                           code_plot, "_",
                                           code_layer))
   }
-  
+
   if ("code_country" %in% names(df) &&
       "code_plot" %in% names(df) &&
       "horizon_master" %in% names(df)) {
@@ -866,8 +932,8 @@ for (i in seq_along(survey_forms)) {
                                           code_plot, "_",
                                           horizon_master))
   }
-  
-  
+
+
 
   # Save the survey forms to the global environment if permitted ----
 
