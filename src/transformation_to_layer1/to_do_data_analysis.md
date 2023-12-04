@@ -21,7 +21,7 @@ Please add any observed data issues to this file
     - considerable uncertainty in code_horizon_coarse_vol (in “pfh”) → first priority: coarse fragment fractions from other survey year?
     - ~~effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm? This was manually harmonised by Nathalie (data form "./data/additional_data/SO_PRF_ADDS.csv")~~
     - profiles with data until 20 cm or 40 cm: (i) assume carbon density in subsoil does not change with time; or (ii) monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
-    - "pfh" survey forms gap filling for C stocks: add bulk densities forest floor from "som" after linking forest floor layers across "pfh" and "som" (same survey, i.e. maximum difference in survey years of 3 years)
+    - ~~"pfh" survey forms gap filling for C stocks: add bulk densities forest floor from "som" after linking forest floor layers across "pfh" and "som" (same survey, i.e. maximum difference in survey years of 3 years)~~
 * ~~Check whether vertical shifting of layer limits is needed, e.g. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Rule for organic H layers:~~
   + ~~if code_layer is H and no layer limits, the layer should be in the forest floor. Change layer_type to forest_floor.~~
   + ~~if organic H layers are < 40 cm thick in total (and below any forest floor or above any mineral soil), this layer(s) should be considered as the forest floor. Change layer_type to forest_floor.~~
@@ -49,6 +49,7 @@ Please add any observed data issues to this file
     - ~~Plot 212: organic layer weights give a bulk density of 19212.08 - 88668.75 kg m-3 (95 % quantile), i.e. a factor 455 higher~~
     - ~~Conclusion there are two options: (i) either the data are wrongly reported in tonnes per ha (factor 100 higher); of (ii) the data are wrongly reported in g per m2 (factor 1000 higher). Assumption: they were reported in g per m2.~~
   + ~~Values of organic_layer_weight for which the derived bulk density is higher than 1400 kg m-3 (density of organic matter) are impossible and replaced by NA.~~
+* survey_year in "som" and "pfh" does not always correspond with the actual sampling year (i.e. sometimes lab analysis year). Correct by means of survey_year in "prf" and "pls"
 * ~~LOQ: harmonise and list assumptions~~
 * Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.
 * Gap-filling forest types and WRB LI and humus + confirmation by national experts
@@ -83,11 +84,10 @@ Please add any observed data issues to this file
 * Machine-learning prediction of lowest point splines (depth of 100 cm) + Monte Carlo uncertainty assessment?
 * FSCDB.LI: Check whether indicator data in VWDD tables match the Vanmechelen report formulas
 * ~~Check within-plot variability~~
-* Compare stocks based on fixed-depth layers with those based on pedogenetic horizons.
 * Propagate any uncertainty correctly.
 * Convert scripts into a function. Different methodological decisions should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be included as metadata in the output. Also include total uncertainty (including uncertainty from the spline fitting + spline extrapolation + propagated uncertainty from other sources) in the output.
 * Make functions to visualise output, e.g. violin plots per stratifier, overview graphs per plot_id, dynamic maps.
-* Calculate stocks based on "pfh" survey forms too.
+* Calculate stocks based on "pfh" survey forms too. Compare stocks based on fixed-depth layers with those based on pedogenetic horizons.
 * Calculate change in carbon stock per year.
 * Also include stocks until 30 cm as output in plot-aggregated stock files.
 
