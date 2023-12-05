@@ -1,9 +1,39 @@
 
-
+#' Calculate stocks for a given concentration parameter
+#'
+#' @param survey_form Character string - Name of the survey form (lower case
+#' and separated by '_') to be evaluated
+#' @param data_frame Dataframe with the layer-specific profile data, e.g.
+#' "som" or "pfh" survey forms. If NULL, the dataframe with the name specified
+#' in "survey_form" is retrieved from the global environment.
+#' @param parameter Name of concentration parameter to calculate stocks for.
+#' Default is "organic_carbon_total".
+#' @param constant_subsoil Logical indicating whether it is okay to assume that
+#' the density (per cm) of the parameter is constant in the subsoil, i.e.
+#' from 30 to 100 cm.
+#' @param graph Logical indicating whether a graph of the spline fitting
+#' should be made for the given depth profile
+#' @param density_per_three_cm Logical indicating whether the density data
+#' as returned from the spline function per 3 cm depth increment should be
+#' included for graphing purposes. Default is FALSE.
+#' @param save_to_env Logical indicating whether the output dataframes
+#' can be saved to the environment and override any existing objects
+#' with the same name. Default is TRUE.
+#' @param save_to_gdrive Logical indicating whether the output dataframes
+#' can be saved to the project Google Drive folder (date-specific subfolder
+#' of "./output/stocks/). Default is TRUE.
+#'
+#' @return
+#' @export
+#'
+#' @examples get_stocks(survey_form = "so_pfh",
+#'                      data_frame = so_pfh,
+#'                      density_per_three_cm = TRUE)
 
 get_stocks <- function(survey_form,
                         data_frame = NULL,
                         parameter = "organic_carbon_total",
+                        constant_subsoil = TRUE,
                         graph = FALSE,
                         density_per_three_cm = FALSE,
                         save_to_env = TRUE,
@@ -359,9 +389,6 @@ get_stocks <- function(survey_form,
   }
 
   if (save_to_gdrive == TRUE) {
-  # save_to_google_drive(objects_to_save =
-  #                        paste0(survey_form, "_below_ground"),
-  #                      path_name = "./output/stocks/")
 
     save_to_google_drive(objects_to_save =
                            paste0(survey_form, "_below_ground"),
@@ -369,7 +396,39 @@ get_stocks <- function(survey_form,
                          path_name = "./output/stocks/")
   }
 
+  # If it is okay to assume that the subsoil carbon density remains the same
+  # gap-fill subsoil carbon density data
 
+  if (constant_subsoil == TRUE) {
+
+    for (i in seq_along(unique(df_below_ground$profile_id))) {
+
+      prof_id_i <- as.character(unique(df_below_ground$profile_id)[i])
+
+      df_profile_i <- df_below_ground %>%
+        filter(!is.na(density)) %>%
+        filter(profile_id == prof_id_i)
+
+      if (nrow(df_profile_i) >= 1) {
+
+      depth_range <- df_profile_i %>%
+        mutate(depth_sequence =
+                 purrr::pmap(list(depth_top, depth_bottom), seq, by = 1)) %>%
+        pull(depth_sequence) %>%
+        unlist %>%
+        unique
+
+      # Let's consider the range that can be considered constant: 30 - 100 cm
+
+      target_depth_range <- seq(30, 100, by = 1)
+
+      # List the layers of other profiles of this plot that do contain these
+      # data
+
+      }
+    }
+
+  }
 
 
   ## 2.2. Calculate below-ground carbon stocks ----

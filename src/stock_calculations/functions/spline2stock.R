@@ -14,7 +14,7 @@
 #' @param survey_form Name of the survey form from which stocks are being
 #' calculated, for the graphs
 #' @param density_per_three_cm Logical indicating whether the density data
-#' as returned from the spline function per 5 cm depth increment should be
+#' as returned from the spline function per 3 cm depth increment should be
 #' included for graphing purposes
 #' @param graph Logical indicating whether a graph of the spline fitting
 #' should be made for the given depth profile
