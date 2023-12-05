@@ -12,7 +12,7 @@
 # To do: convert into a function.
 # Possible origin data: s1_som, so_som, s1_pfh, so_pfh
 
-survey_form <- "s1_som"
+survey_form <- "so_som"
 
 code_survey <- unlist(strsplit(survey_form, "_"))[1]
 
@@ -39,9 +39,7 @@ if (!exists(survey_form)) {
 df <- get_env(survey_form)
 prf <- get_env(paste0(code_survey, "_prf"))
 
-
-
-# Add eff_soil_depth data
+# Aggregate per plot_id
 
 prf_agg <- prf %>%
   # Aggregate per plot_id
@@ -49,6 +47,7 @@ prf_agg <- prf %>%
   summarise(eff_soil_depth = mean(eff_soil_depth, na.rm = TRUE))
 
 df_working <- df %>%
+  # Add soil depth data
   left_join(prf_agg,
             by = "plot_id") %>%
   # If the effective soil depth is deeper than 100 cm or unknown (NA):
@@ -82,11 +81,7 @@ df_working <- df %>%
   ungroup() %>%
   select(-layer_number_deepest,
          -prev_layer_limit_inferior,
-         -depth_max)
-
-# Recode helping variables for stock calculation
-
-df_working <- df_working %>%
+         -depth_max) %>%
   # If coarse fragments is unknown:
   # Assume it is 0
   # To do: the uncertainty associated with this assumption needs to be assessed
@@ -200,22 +195,22 @@ progress_bar <- txtProgressBar(min = 0,
 # Evaluate for each of the profiles
 
 for (i in seq_along(profile_list)) {
-  
+
   # Select profile
-  
+
   df_profile_i <- df_below_ground %>%
     filter(profile_id == profile_list[i])
-  
+
   # Define variables for calculation output
-  
+
   prof_id_i <- as.character(unique(df_profile_i$profile_id))
   plot_id_i <- as.character(unique(df_profile_i$plot_id))
-  
+
   assertthat::assert_that(length(unique(df_profile_i$soil_depth)) == 1)
   soil_depth_i <- unique(df_profile_i$soil_depth)
-  
+
   # Prepare input for calculate_stocks function
-  
+
   prof <- df_profile_i %>%
     select(plot_id,
            profile_id,
@@ -230,14 +225,14 @@ for (i in seq_along(profile_list)) {
     # and for which their layer limits are known
     filter(!is.na(.data$depth_top) &
              !is.na(.data$depth_bottom))
-  
+
   # Assert that all the depth layers are below-ground
-  
+
   if (!prof_id_i %in% c("1995_7_139_1",
                         "1995_7_208_1",
                         "2008_13_164_1",
                         "2008_13_1161_1")) {
-    
+
   assertthat::assert_that(
     all(prof$depth_top >= 0) &&
       all(prof$depth_bottom >= 0),
@@ -245,12 +240,12 @@ for (i in seq_along(profile_list)) {
                  "(i.e. not below 0) for the profile '",
                  prof_id_i, "'."))
   }
-  
+
   # Issue:
   # Not possible to calculate splines in case of overlapping layers in
   # the profile
   # Solution: take average of the adjacent overlapping depth limits
-  
+
   prof <- prof %>%
     mutate(prev_depth_bottom = lag(depth_bottom),
            next_depth_top = lead(depth_top)) %>%
@@ -269,19 +264,19 @@ for (i in seq_along(profile_list)) {
                                   .data$depth_top)) %>%
     select(-prev_depth_bottom,
            -next_depth_top)
-    
-  
+
+
   # Apply calculate_stocks and soilspline functions on profile
-  
+
   # Only fit splines to profiles with:
   # - known carbon densities and layer limits for at least two layers
   # - and one of them should be the upper below-ground layer
-  
+
   # If there are less than two layers or
   # if the highest layer is not the upper below-ground layer,
   # any stock calculations beyond the boundaries of the known layers
   # are simply too unreliable
-  
+
   if ((nrow(prof) >= 2) &&
       (min(prof$depth_top) == 0) &&
       # The issue with this profile needs to be solved
@@ -289,11 +284,11 @@ for (i in seq_along(profile_list)) {
                          "1995_7_208_1",
                          "2008_13_164_1",
                          "2008_13_1161_1"))) {
-    
+
     profile_stock_output_i <- calculate_stocks(prof = prof,
                                                survey_form = survey_form,
-                                               graph = TRUE)
-    
+                                               graph = FALSE)
+
     profile_c_stocks_i <-
        data.frame(partner_short = unique(df_profile_i$partner_short),
                   plot_id = plot_id_i,
@@ -307,13 +302,13 @@ for (i in seq_along(profile_list)) {
                   obs_depth = max(prof$depth_bottom),
                   soil_depth = soil_depth_i,
                   profile_stock_output_i)
-    
+
     profile_c_stocks_below_ground <-
       rbind(profile_c_stocks_below_ground,
             profile_c_stocks_i)
 
   }
-  
+
   # Update progress bar
   setTxtProgressBar(progress_bar, i)
 
@@ -470,17 +465,17 @@ progress_bar <- txtProgressBar(min = 0,
                                max = length(profile_list), style = 3)
 
 for (i in seq_along(profile_list)) {
-  
+
   # Select profile
-  
+
   df_profile_i <- df_forest_floor %>%
     filter(profile_id == profile_list[i]) %>%
     filter(!is.na(c_stock_layer))
-  
+
   if (nrow(df_profile_i) > 0) {
-  
+
   # Combine stocks in OL, OFH and O per profile
-  
+
   profile_c_stocks_i <-
     data.frame(partner_short = unique(df_profile_i$partner_short),
                plot_id = as.character(unique(df_profile_i$plot_id)),
@@ -527,9 +522,9 @@ for (i in seq_along(profile_list)) {
   profile_c_stocks_forest_floor <-
     rbind(profile_c_stocks_forest_floor,
           profile_c_stocks_i)
-  
+
   }
-  
+
   # Update progress bar
   setTxtProgressBar(progress_bar, i)
 }
@@ -628,6 +623,9 @@ write.csv2(profile_c_stocks %>%
            row.names = FALSE,
            na = "")
 
+assign_env(paste0(survey_form, "_profile_carbon_stocks"),
+           profile_c_stocks)
+
 
 
 ## 5.2. Aggregate per plot ----
@@ -701,20 +699,22 @@ write.csv2(plot_c_stocks,
 
 
 
+
+# Test function
+
+source("./src/stock_calculations/functions/get_stocks.R")
+
+get_stocks(survey_form = "so_som",
+           data_frame = so_som,
+           density_per_three_cm = TRUE)
+
+
+
+
+
+
+
 # 6. Visual check per plot
 
 
-
-# Sample data
-names_list <- sort(unique(c(names(df_below_ground),
-                            names(profile_c_stocks_below_ground),
-                            names(plot_c_stocks_below_ground),
-                            names(df_forest_floor),
-                            names(profile_c_stocks_forest_floor),
-                            names(plot_c_stocks_forest_floor),
-                            names(profile_c_stocks),
-                            names(plot_c_stocks))))
-
-# Format and print the names
-cat(paste0("-   **", names_list, "** -"), sep = "\n")
 
