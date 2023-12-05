@@ -50,6 +50,7 @@ harmonise_layer_to_depths <- function(limit_sup,
                                       limit_inf,
                                       df_sub_selected = NULL,
                                       bulk_density = NULL,
+                                      coarse_fragment_vol_frac = NULL,
                                       upper_depths = NULL,
                                       lower_depths = NULL,
                                       variab = NULL,
@@ -85,16 +86,59 @@ harmonise_layer_to_depths <- function(limit_sup,
 
   if (is.null(df_sub_selected)) {
 
+    if (is.null(coarse_fragment_vol_frac)) {
     df_sub_selected <-
       data.frame(bulk_density = bulk_density,
                  horizon_limit_up = upper_depths,
                  horizon_limit_low = lower_depths,
                  variab = variab)
+    } else {
+      df_sub_selected <-
+        data.frame(bulk_density = bulk_density,
+                   coarse_fragment_vol_frac = coarse_fragment_vol_frac,
+                   horizon_limit_up = upper_depths,
+                   horizon_limit_low = lower_depths,
+                   variab = variab)
+    }
+
+    if (parameter_name == "bulk_density") {
+      df_sub_selected <- df_sub_selected %>%
+        select(-bulk_density)
+    }
 
     names(df_sub_selected)[which(names(df_sub_selected) == "variab")] <-
       parameter_name
   }
 
+  # If no "bulk_density_total_soil" is present
+  # and if "coarse_fragment_vol_frac" is known:
+  # Calculate the bulk density of the total soil (not only the fine earth)
+
+  if (parameter_name != "bulk_density" &&
+      !"bulk_density_total_soil" %in% names(df_sub_selected) &&
+      "coarse_fragment_vol_frac" %in% names(df_sub_selected)) {
+
+    assertthat::assert_that(
+      all(na.omit(df_sub_selected$coarse_fragment_vol_frac) <= 1))
+
+    df_sub_selected <- df_sub_selected %>%
+      # Account for coarse fragments
+      # Assume they are 0 if NA
+      mutate(coarse_fragment_vol_frac =
+               ifelse(is.na(.data$coarse_fragment_vol_frac),
+                      0,
+                      .data$coarse_fragment_vol_frac)) %>%
+      # Introduce a new variable for bulk density
+      # which represents the mass (kg) of fine earth per volume (m3) of total
+      # soil (instead of "per volume of fine earth")
+      # This is the variable to be used as a weighting factor
+      mutate(bulk_density_total_soil =
+               ifelse(!is.na(.data$bulk_density) &
+                        !is.na(.data$coarse_fragment_vol_frac),
+                      .data$bulk_density * (1 - .data$coarse_fragment_vol_frac),
+                      NA)) %>%
+      mutate(bulk_density = bulk_density_total_soil)
+  }
 
   # If any bulk density value is missing:
   # give all layers relatively the same bulk density weight
@@ -104,7 +148,8 @@ harmonise_layer_to_depths <- function(limit_sup,
   bulk_density_orig <- df_sub_selected$bulk_density
 
   df_sub_selected <- df_sub_selected %>%
-    mutate(bd_gapfilled = ifelse(any(is.na(bulk_density_orig)),
+    mutate(bd_gapfilled = ifelse(any(is.na(bulk_density_orig)) ||
+                                   parameter_name == "bulk_density",
                                  1,
                                  bulk_density))
 
