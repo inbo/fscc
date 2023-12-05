@@ -134,7 +134,7 @@ spline2stock <- function(prof,
       stocks$new_col <- NA
 
       if (i <= round(max_soil_depth)) {
-      stocks$new_col <- spline_output_per_cm[i]
+      stocks$new_col <- round(spline_output_per_cm[i], 3)
       }
 
       names(stocks)[which(names(stocks) == "new_col")] <-

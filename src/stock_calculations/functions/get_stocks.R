@@ -210,6 +210,7 @@ get_stocks <- function(survey_form,
   assertthat::assert_that(!identical(ind, integer(0)))
 
   unit <- parameter_table$unit[ind]
+  unit_density_per_cm <- parameter_table$unit_density_per_cm[ind]
   shorter_var_name <- parameter_table$shorter_name[ind]
 
   assertthat::assert_that(!is.na(shorter_var_name))
@@ -254,6 +255,7 @@ get_stocks <- function(survey_form,
   ## 1.5. Final data preparations ----
 
   df_working <- df %>%
+    ungroup() %>%
     # If the effective soil depth is deeper than 100 cm or unknown (NA):
     # assume it is 100 cm (for stocks)
     mutate(soil_depth =
@@ -385,7 +387,7 @@ get_stocks <- function(survey_form,
 
   if (save_to_env == TRUE) {
     assign_env(paste0(survey_form, "_below_ground"),
-               format(df_below_ground))
+               df_below_ground)
   }
 
   if (save_to_gdrive == TRUE) {
@@ -396,45 +398,194 @@ get_stocks <- function(survey_form,
                          path_name = "./output/stocks/")
   }
 
+
+
+
+  ## 2.2. Gap-fill with assumption: constant subsoil ----
+
   # If it is okay to assume that the subsoil carbon density remains the same
   # gap-fill subsoil carbon density data
 
   if (constant_subsoil == TRUE) {
+
+    cat(paste0(" \nGap-fill subsoil\n"))
+
+    source("./src/functions/harmonise_layer_to_depths.R")
+
+    extra_rows <- NULL
+
+    # Assume the following depth range that can be considered constant:
+    target_depth_range <- seq(40, 100, by = 1)
+
+    # Set progress bar
+    progress_bar <-
+      txtProgressBar(min = 0,
+                     max = length(unique(df_below_ground$profile_id)),
+                     style = 3)
 
     for (i in seq_along(unique(df_below_ground$profile_id))) {
 
       prof_id_i <- as.character(unique(df_below_ground$profile_id)[i])
 
       df_profile_i <- df_below_ground %>%
+        filter(profile_id == prof_id_i) %>%
         filter(!is.na(density)) %>%
-        filter(profile_id == prof_id_i)
+        filter(!is.na(depth_top) &
+                 !is.na(depth_bottom))
 
-      if (nrow(df_profile_i) >= 1) {
+      if (nrow(df_profile_i) >= 1 &&
+          any(df_profile_i$depth_top == 0)) {
+
+      plot_id_i <- unique(df_profile_i$plot_id)
 
       depth_range <- df_profile_i %>%
         mutate(depth_sequence =
-                 purrr::pmap(list(depth_top, depth_bottom), seq, by = 1)) %>%
+                 purrr::pmap(list(round(depth_top),
+                                  round(depth_bottom)), seq, by = 1)) %>%
         pull(depth_sequence) %>%
         unlist %>%
         unique
 
-      # Let's consider the range that can be considered constant: 30 - 100 cm
+      # Remove "bordering values"
+      depth_range <- depth_range[-(c(which(diff(depth_range) != 1),
+                                     which(diff(depth_range) != 1) + 1,
+                                     length(depth_range)))]
 
-      target_depth_range <- seq(30, 100, by = 1)
+      # Specify the depth range with missing density data
 
-      # List the layers of other profiles of this plot that do contain these
-      # data
+      depth_range_missing <-
+        target_depth_range[!target_depth_range %in% depth_range]
+
+      if (!identical(depth_range_missing, numeric(0))) {
+
+        if (length(depth_range_missing) == 1) {
+          depth_range_missing <- numeric(0)
+        } else {
+
+          if (diff(depth_range_missing)[1] > 1) {
+            depth_range_missing <- depth_range_missing[-1]
+          }
+
+          if (depth_range_missing[length(depth_range_missing)] == 100 &&
+              depth_range_missing[length(depth_range_missing) - 1] < 99) {
+            depth_range_missing <-
+              depth_range_missing[-length(depth_range_missing)]
+          }
+        }
+      }
+
+      if (!identical(depth_range_missing, numeric(0))) {
+
+      # List the layers of other profiles of this plot that do contain
+      # deeper data
+
+      other_profile_ids_i <- df_below_ground %>%
+        filter(plot_id == plot_id_i) %>%
+        filter(profile_id != prof_id_i) %>%
+        filter(!is.na(density)) %>%
+        rowwise() %>%
+        filter(any(depth_range_missing > .data$depth_top &
+                     depth_range_missing < .data$depth_bottom)) %>%
+        distinct(profile_id) %>%
+        pull(profile_id)
+
+      # If there are any other profiles to get subsoil data from
+
+      if (!identical(other_profile_ids_i, character(0))) {
+
+      df_sub_selected <- df_below_ground %>%
+        filter(!is.na(density)) %>%
+        filter(profile_id %in% other_profile_ids_i) %>%
+        rowwise() %>%
+        filter(any(depth_range_missing > .data$depth_top &
+                     depth_range_missing < .data$depth_bottom)) %>%
+        rename(layer_limit_superior = depth_top) %>%
+        rename(layer_limit_inferior = depth_bottom) %>%
+        select(code_layer,
+               layer_limit_superior,
+               layer_limit_inferior,
+               bulk_density,
+               coarse_fragment_vol_frac,
+               layer_thickness,
+               density)
+
+      limit_sup <- max(min(df_sub_selected$layer_limit_superior),
+                       min(depth_range_missing))
+
+      limit_inf <- min(max(df_sub_selected$layer_limit_inferior),
+                       max(depth_range_missing))
+
+      density_i <-
+        harmonise_layer_to_depths(limit_sup = limit_sup,
+                                  limit_inf = limit_inf,
+                                  df_sub_selected = df_sub_selected,
+                                  parameter_name = "density")
+
+      bulk_density_i <-
+        harmonise_layer_to_depths(limit_sup = limit_sup,
+                                  limit_inf = limit_inf,
+                                  df_sub_selected = df_sub_selected,
+                                  parameter_name = "bulk_density")
+
+      df_sub_selected <-
+      extra_row_i <- df_profile_i %>%
+        filter(layer_number == max(df_profile_i$layer_number)) %>%
+        mutate(code_layer = "X",
+               layer_type = "mineral",
+               layer_number = 100,
+               depth_top = limit_sup,
+               depth_bottom = limit_inf,
+               depth_avg = mean(c(limit_sup, limit_inf)),
+               layer_thickness = diff(c(limit_sup, limit_inf)),
+               bulk_density = bulk_density_i,
+               density = density_i) %>%
+        mutate(across(c("organic_layer_weight", "coarse_fragment_vol_frac",
+                      "parameter_for_stock", "stock_layer",
+                      "avail_thick", "avail_toc", "avail_bd", "avail_cf"),
+                    ~ NA_real_))
+
+      extra_rows <- rbind(extra_rows,
+                          extra_row_i)
 
       }
-    }
+      }
+      }
 
+      # Update progress bar
+      setTxtProgressBar(progress_bar, i)
+
+    } # End of for loop along profiles
+
+    close(progress_bar)
+
+    df_below_ground <-
+      bind_rows(df_below_ground,
+                extra_rows) %>%
+      arrange(partner_short,
+              code_plot,
+              survey_year,
+              repetition,
+              layer_number)
+
+    cat(paste0(" \nSubsoils gap-filled for ",
+               length(unique(extra_rows$profile_id)),
+               " profiles in '",
+               survey_form, "'.\n",
+               "--------------------------------------------------------\n"))
   }
 
 
-  ## 2.2. Calculate below-ground carbon stocks ----
+
+
+
+
+  ## 2.3. Calculate below-ground carbon stocks ----
 
   profile_stocks_below_ground <- NULL
   profile_list <- unique(df_below_ground$profile_id)
+
+  cat(paste0(" \nCalculate below-ground stocks after fitting ",
+             "mass-preserving splines.\n"))
 
   # Set progress bar
   progress_bar <- txtProgressBar(min = 0,
@@ -591,7 +742,7 @@ get_stocks <- function(survey_form,
 
 
 
-  ## 2.3. Aggregate below-ground per plot ----
+  ## 2.4. Aggregate below-ground per plot ----
 
   plot_stocks_below_ground <- profile_stocks_below_ground %>%
     filter(stock_10 > 0) %>%
@@ -655,38 +806,20 @@ get_stocks <- function(survey_form,
   }
 
 
-  # Number of plots with stocks
 
-  cat(paste0("Number of plots in '",
-             survey_form,
-             "' with below-ground '",
-             parameter,
-             "' stocks:\n"))
 
-  print(plot_stocks_below_ground %>%
-        distinct(plot_id) %>%
-        nrow)
 
-  # Number of plots with stocks for at least two surveys
+  cat(" \n--------------------------------------------------------\n")
 
-  cat(paste0(" \n",
-             "Number of plots in '",
-             survey_form,
-             "' with below-ground '",
-             parameter,
-             "' stocks for at least two survey years:\n"))
-
-  print(plot_stocks_below_ground %>%
-        group_by(plot_id) %>%
-        summarise(n = n()) %>%
-        filter(n > 1) %>%
-        nrow)
 
 
 
 
   # 3. Forest floor layers ----
   ## 3.1. Derive layer-based dataset for forest floors ----
+
+  cat(paste0(" \nCalculate forest floor stocks by depth-integrating ",
+             "layer stocks.\n"))
 
   df_forest_floor <- df_working %>%
     filter(layer_type == "forest_floor") %>%
@@ -742,13 +875,13 @@ get_stocks <- function(survey_form,
 
   if (save_to_env == TRUE) {
     assign_env(paste0(survey_form, "_forest_floor"),
-               format(df_forest_floor))
+               df_forest_floor)
   }
 
   if (save_to_gdrive == TRUE) {
     save_to_google_drive(objects_to_save =
                            paste0(survey_form, "_forest_floor"),
-                         df_object_to_save = df_forest_floor,
+                         df_object_to_save = format_stocks(df_forest_floor),
                          path_name = "./output/stocks/")
   }
 
@@ -913,6 +1046,7 @@ get_stocks <- function(survey_form,
                          path_name = "./output/stocks/")
   }
 
+  cat(" \n--------------------------------------------------------\n")
 
 
 
@@ -922,9 +1056,11 @@ get_stocks <- function(survey_form,
   # 4. Combine below-ground and forest floor ----
   ## 4.1. Join below-ground and forest floor ----
 
+  cat(paste0(" \nCombine below-ground and forest floor stocks.\n"))
+
   profile_stocks <-
-    so_som_profile_c_stocks_below_ground %>%
-    left_join(so_som_profile_c_stocks_forest_floor %>%
+    profile_stocks_below_ground %>%
+    left_join(profile_stocks_forest_floor %>%
                 select(-partner_short,
                        -plot_id,
                        -survey_year,
@@ -1059,7 +1195,33 @@ get_stocks <- function(survey_form,
                            format_stocks(plot_stocks),
                          path_name = "./output/stocks/")
   }
+  cat(" \n--------------------------------------------------------\n")
 
+  # Number of plots with stocks
 
+  cat(paste0(" \nNumber of plots in '",
+             survey_form,
+             "' with below-ground '",
+             parameter,
+             "' stocks:\n"))
+
+  print(plot_stocks %>%
+          distinct(plot_id) %>%
+          nrow)
+
+  # Number of plots with stocks for at least two surveys
+
+  cat(paste0(" \n",
+             "Number of plots in '",
+             survey_form,
+             "' with below-ground '",
+             parameter,
+             "' stocks for at least two survey years:\n"))
+
+  print(plot_stocks %>%
+          group_by(plot_id) %>%
+          summarise(n = n()) %>%
+          filter(n > 1) %>%
+          nrow)
 
 }
