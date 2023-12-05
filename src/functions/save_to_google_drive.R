@@ -19,6 +19,10 @@
 #' forms should be stored in Google Drive. If NULL, a subfolder with indication
 #' of the download_date and change_date is used. If FALSE, the objects are
 #' stored in the folder mentioned in "path_name" (i.e. no subfolder is made).
+#' @param delete_permission If the folder already exists in Google Drive,
+#' do you want and grant permission to delete its current content? If FALSE,
+#' the new files will just be added to the existing files in the folder, without
+#' deleting the existing files.
 #' @param ... Arguments to pass to ggplot2::ggsave() function. Can be "dpi",
 #' "width", "height" or "export_name". If null, the arguments "width" and
 #' "height" take the default values of ggsave, and the argument "dpi" becomes
@@ -45,9 +49,12 @@
 #'                      export_name = "plot_c_example")
 
 save_to_google_drive <- function(objects_to_save = NULL,
+                                 df_object_to_save = NULL,
                                  path_name,
                                  change_date = NULL,
                                  subfolder_non_survey_forms = NULL,
+                                 sub_version_folder = NULL,
+                                 delete_permission = FALSE,
                                  ...) {
 
 # KEEP THE FOLLOWING CODE OF THIS R SCRIPT UP TO DATE: ----
@@ -291,7 +298,8 @@ save_to_google_drive <- function(objects_to_save = NULL,
       which(survey_forms_all %in%
               ls(envir = parent.frame())[
                 sapply(ls(envir = parent.frame()),
-                       function(x) any(grepl("data.frame", class(get(x, envir = envir)))))
+                       function(x) any(grepl("data.frame",
+                                             class(get(x, envir = envir)))))
                        #function(x) class(get(x, envir = envir))) == "data.frame"
               ])
     ]
@@ -313,6 +321,9 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
     for (i in seq_along(objects_to_save)) {
 
+      if (objects_to_save[i] %in% survey_forms_all ||
+          objects_to_save[i] %in% names(list_data_tables)) {
+
       if ((length(unlist(strsplit(objects_to_save[i], "_"))) == 1) &&
           (objects_to_save[i] %in% names(list_data_tables))) {
 
@@ -327,6 +338,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
         survey_forms[i] <- NA
       }
       }
+    }
 
     if (!identical(survey_forms_extra, NULL)) {
 
@@ -345,7 +357,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
   for (i in seq_along(survey_forms)) {
 
-    assertthat::assert_that(exists(survey_forms[i], envir = .GlobalEnv))
+    # assertthat::assert_that(exists(survey_forms[i], envir = .GlobalEnv))
 
     if (survey_forms[i] %in% survey_forms_all) {
     survey_codes <- c(survey_codes,
@@ -368,15 +380,23 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
     download_date_list <- NULL
     for (i in seq_along(survey_forms)) {
+      if (exists(survey_forms[i])) {
+        if ("download_date" %in% names(get_env(survey_forms[i]))) {
       download_date_list <-
         c(download_date_list,
           suppressWarnings(get_env(survey_forms[i])$download_date))
+        }
+      }
     }
 
     if (is.null(download_date_list)) {
+
+      source("./src/functions/get_date_local.R")
+
       download_date_retrieved <-
-        readline(prompt = paste0("What is the download date ",
-                                 "of the data? (YYYYMMDD): "))
+        get_date_local("./data/raw_data/", collapsed = TRUE)
+        # readline(prompt = paste0("What is the download date ",
+        #                          "of the data? (YYYYMMDD): "))
     } else {
     download_date_retrieved <-
       names(table(download_date_list))[which.max(table(download_date_list))]
@@ -400,6 +420,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
                                          "be in YYYYMMDD format."))
     change_date_collapsed <- gsub("-", "", change_date)
   }
+
   if (is.null(change_date)) {
     change_date <- as.character(Sys.Date())
     change_date_collapsed <- gsub("-", "", as.character(Sys.Date()))
@@ -419,46 +440,66 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
   if (!is.null(survey_codes) ||
       (!is.null(objects) &&
-       is.null(subfolder_non_survey_forms))) {
+       (!exists("subfolder_non_survey_forms", inherits = FALSE) ||
+        is.null(subfolder_non_survey_forms)))) {
 
   # Check if this folder name already exists and ask permission to overwrite
 
   if (folder_name %in% (drive_ls(id_target, type = "folder")$name)) {
 
-    delete_permission <- FALSE
+    # delete_permission <- FALSE
 
     cat(paste0("Google Drive folder '",
                folder_name,
                "' already exists.\n"))
 
-    confirmation <-
-      readline(prompt = paste0("Do you grant ",
-                               "permission to delete the existing folder ",
-                               "on Google Drive? (Y/N): "))
-
-    # Check the user's response
-    if (tolower(confirmation) == "y") {
-      delete_permission <- TRUE
-    }
+    # confirmation <-
+    #   readline(prompt = paste0("Do you want and grant ",
+    #                            "permission to delete the existing folder ",
+    #                            "content on Google Drive? (Y/N): "))
+    #
+    # # Check the user's response
+    # if (tolower(confirmation) == "y") {
+    #   delete_permission <- TRUE
+    # }
 
     # Assert that you have the permission
-    assertthat::assert_that(delete_permission == TRUE,
-                            msg = paste0("No permission to overwrite the ",
-                                         "existing Google Drive folder with ",
-                                         "same name (",
-                                         folder_name,
-                                         ")."))
+    # assertthat::assert_that(delete_permission == TRUE,
+    #                         msg = paste0("No permission to overwrite the ",
+    #                                      "existing Google Drive folder with ",
+    #                                      "same name (",
+    #                                      folder_name,
+    #                                      ")."))
+
+    if (delete_permission == TRUE) {
+
+    cat(paste0("Existing files in the folder will be deleted.\n"))
 
     gd_subfolders <- drive_ls(id_target, type = "folder")
     id_to_delete <- gd_subfolders$id[which(gd_subfolders$name == folder_name)]
     drive_rm(as_id(id_to_delete))
+
+    # Create a new subfolder inside the target_id
+
+    id_version <- create_google_folder(folder_name = folder_name,
+                                       id = id_target)
+    } else {
+
+      cat(paste0("New files will be added to the folder without ",
+                 "deleting any existing files.\n"))
+
+      gd_subfolders <- drive_ls(id_target, type = "folder")
+      id_version <- gd_subfolders$id[which(gd_subfolders$name == folder_name)]
+
+    }
+  } else {
+
+    # Create a new subfolder inside the target_id
+
+    id_version <- create_google_folder(folder_name = folder_name,
+                                       id = id_target)
+
   }
-
-
-  # Create a new subfolder inside the target_id
-
-  id_version <- create_google_folder(folder_name = folder_name,
-                                     id = id_target)
   }
 
 
@@ -470,7 +511,8 @@ save_to_google_drive <- function(objects_to_save = NULL,
   if (!is.null(objects)) {
 
     # If a name was given to subfolder_non_survey_forms:
-     if (is.character(subfolder_non_survey_forms)) {
+     if (exists("subfolder_non_survey_forms", inherits = FALSE) &&
+         is.character(subfolder_non_survey_forms)) {
 
     # If a subfolder with that name already exists: get its id
     if (subfolder_non_survey_forms %in%
@@ -489,12 +531,21 @@ save_to_google_drive <- function(objects_to_save = NULL,
     }
 
     # If subfolder_non_survey_forms is FALSE: no subfolder needed
-    } else if (isFALSE(subfolder_non_survey_forms)) {
+    } else if (exists("subfolder_non_survey_forms", inherits = FALSE) &&
+               isFALSE(subfolder_non_survey_forms)) {
       id_object <- id_target
 
     # If subfolder_non_survey_forms is NULL: use the subfolder with dates
-    } else if (is.null(subfolder_non_survey_forms)) {
+    } else if (!exists("subfolder_non_survey_forms", inherits = FALSE) ||
+               is.null(subfolder_non_survey_forms)) {
+
+      if (is.null(sub_version_folder)) {
       id_object <- id_version
+      } else {
+        id_object <- create_google_folder(sub_version_folder,
+                                          id = id_version)
+      }
+
     }
   }
 
@@ -509,7 +560,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
     # Save the data frame as a temporary CSV file
 
     temp_file <- tempfile(fileext = ".csv")
-    write.csv2(dataframe,
+    write.csv(dataframe,
                file = temp_file,
                row.names = FALSE,
                na = "")
@@ -653,12 +704,53 @@ save_to_google_drive <- function(objects_to_save = NULL,
 
     for (i in seq_along(objects)) {
 
-      assertthat::assert_that(inherits(get_env(objects[i]), "ggplot") ||
+      assertthat::assert_that((length(objects) == 1 &&
+                                 !is.null(df_object_to_save) &&
+                                 ("data.frame" %in% class(df_object_to_save) ||
+                                    "ggplot" %in% class(df_object_to_save))) ||
+                                inherits(get_env(objects[i]), "ggplot") ||
                                 inherits(get_env(objects[i]), "data.frame"),
                               msg = paste0("The function is only able to ",
                                            "save dataframes and ggplot ",
                                            "objects to Google Drive ",
                                            "in its current version."))
+
+      if (length(objects) == 1 && !is.null(df_object_to_save)) {
+
+        if ("data.frame" %in% class(df_object_to_save)) {
+
+        # Save the data frame as a .csv file in Google Drive
+        drive_upload_csv(dataframe = df_object_to_save,
+                         id = id_object,
+                         file_name_drive = paste0(objects[i], ".csv"))
+        }
+
+        if ("ggplot" %in% class(df_object_to_save)) {
+
+          # Retrieve additional input arguments from save_to_google_drive function
+          other_args <- list(...)
+
+          # Extract specific arguments if needed
+          dpi <- other_args$dpi
+          width <- other_args$width
+          height <- other_args$height
+
+          # Save the plot as a .png file in Google Drive
+
+          dpi <- ifelse(is.null(dpi),
+                        500,
+                        dpi)
+
+          drive_upload_png(plot = plot,
+                           id = id_object,
+                           file_name_drive = paste0(objects[i], ".png"),
+                           dpi = dpi,
+                           width = width,
+                           height = height)
+
+        }
+
+      } else {
 
       # If the object is a data frame
 
@@ -732,7 +824,7 @@ save_to_google_drive <- function(objects_to_save = NULL,
                          height = height)
 
       }
-
+}
     }
   }
 
