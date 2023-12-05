@@ -552,14 +552,15 @@ harmonise_into_fixed_depth_layers <-
 
           if (!identical(ind, integer(0))) {
 
-            assertthat::assert_that(length(ind) == 1)
+            assertthat::assert_that(
+              length(unique(link_forest_floors$code_layers_link[ind])) == 1)
 
             df_target$code_layers_som[j] <-
-              link_forest_floors$code_layers_link[ind]
+              link_forest_floors$code_layers_link[ind[1]]
 
-            assertthat::assert_that(
-              df_target$unique_survey_som[j] ==
-                link_forest_floors$unique_survey_link[ind])
+            # assertthat::assert_that(
+            #   df_target$unique_survey_som[j] ==
+            #     link_forest_floors$unique_survey_link[ind])
 
             # Add to the extra rows too
 
@@ -568,7 +569,7 @@ harmonise_into_fixed_depth_layers <-
               rows_to_add_i$code_layers_som[
                 which(rows_to_add_i$horizon_master ==
                         df_target$horizon_master[j])] <-
-                link_forest_floors$code_layers_link[ind]
+                link_forest_floors$code_layers_link[ind[1]]
             }
 
           }

@@ -7,18 +7,6 @@ gapfill_internally <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
-  # # Note: This function is designed for internal gap-filling of 'som'
-  # # survey forms only. It won't work with other types of survey forms.
-  #
-  # assertthat::assert_that(unlist(strsplit(survey_form, "_"))[2] == "som",
-  #                         msg = paste0("This function is designed for ",
-  #                                      "internal gap-filling of 'som' ",
-  #                                      "survey forms only"))
-
-
-
-
-
 
 
   # . ----
@@ -176,10 +164,10 @@ gapfill_internally <- function(survey_form,
     select(-coarse_fragment_aid) %>%
     mutate(coarse_fragment_vol = case_when(
       # Priority 1: converted weight %
-      !is.na(coarse_fragment_vol_converted) ~ coarse_fragment_vol_converted,
+      !is.na(.data$coarse_fragment_vol_converted) ~ coarse_fragment_vol_converted,
       # Priority 2: volumetric classes
-      !is.na(coarse_fragment_vol_avg) ~ coarse_fragment_vol_avg,
-      TRUE ~ NA_character_))
+      !is.na(.data$coarse_fragment_vol_avg) ~ coarse_fragment_vol_avg,
+      TRUE ~ NA_real_))
 
 
 
@@ -526,7 +514,7 @@ gapfill_internally <- function(survey_form,
                       NA)))
 
   cat("Data sources 'organic_layer_weight' after internal gap-filling:\n")
-  print(table(df$part_size_clay_source))
+  print(table(df$organic_layer_weight_source))
 
 
   } # End of "som"
@@ -775,7 +763,7 @@ gapfill_internally <- function(survey_form,
           coarse_fragment_vol_som_sameyear,
         # Priority 3: volumetric classes
         !is.na(coarse_fragment_vol_avg) ~ coarse_fragment_vol_avg,
-        TRUE ~ NA_character_)) %>%
+        TRUE ~ NA_real_)) %>%
       mutate(
         coarse_fragment_source = case_when(
           !is.na(.data$coarse_fragment_vol_converted) ~
