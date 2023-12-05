@@ -709,12 +709,76 @@ get_stocks(survey_form = "so_som",
            density_per_three_cm = TRUE)
 
 
-
-
+get_stocks(survey_form = "so_pfh",
+           data_frame = so_pfh,
+           density_per_three_cm = TRUE)
 
 
 
 # 6. Visual check per plot
+
+df_layer <-
+  bind_rows(so_som_below_ground %>%
+              mutate(survey_form = "so_som") %>%
+              relocate(survey_form, .before = partner_short) %>%
+              mutate(repetition = as.character(repetition)) %>%
+              select(-avail_thick,
+                     -avail_toc,
+                     -avail_bd,
+                     -avail_cf),
+            so_pfh_below_ground %>%
+              mutate(survey_form = "so_pfh") %>%
+              relocate(survey_form, .before = partner_short) %>%
+              select(-avail_thick,
+                     -avail_toc,
+                     -avail_bd,
+                     -avail_cf),
+            so_som_forest_floor %>%
+              mutate(survey_form = "so_som") %>%
+              relocate(survey_form, .before = partner_short) %>%
+              relocate(density, .before = stock_layer) %>%
+              mutate(repetition = as.character(repetition)) %>%
+              select(-avail_thick,
+                     -avail_toc,
+                     -avail_bd,
+                     -avail_org_layer_weight),
+            so_pfh_forest_floor %>%
+              mutate(survey_form = "so_pfh") %>%
+              relocate(survey_form, .before = partner_short) %>%
+              relocate(density, .before = stock_layer) %>%
+              select(-avail_thick,
+                     -avail_toc,
+                     -avail_bd,
+                     -avail_org_layer_weight)) %>%
+  rename(profile_id_in_form = profile_id) %>%
+  mutate(profile_id = paste0(survey_form, "_",
+                             profile_id_in_form)) %>%
+  arrange(partner_short,
+          code_plot,
+          survey_year,
+          profile_id,
+          layer_number)
+
+
+df_stocks <-
+  bind_rows(so_som_profile_c_stocks %>%
+              mutate(survey_form = "so_som") %>%
+              relocate(survey_form, .before = partner_short),
+            so_pfh_profile_c_stocks %>%
+              mutate(survey_form = "so_pfh") %>%
+              relocate(survey_form, .before = partner_short)) %>%
+  rename(profile_id_in_form = profile_id) %>%
+  mutate(profile_id = paste0(survey_form, "_",
+                             profile_id_in_form)) %>%
+  arrange(partner_short,
+          code_plot,
+          survey_year,
+          profile_id)
+
+
+
+
+
 
 
 
