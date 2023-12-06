@@ -237,7 +237,33 @@ get_stocks <- function(survey_form,
 
   if (!"eff_soil_depth" %in% names(df)) {
 
-    prf <- get_env(paste0(code_survey, "_prf"))
+  cat(" \nAdd eff_soil_depth\n")
+
+    prf <- get_env(paste0(code_survey, "_prf")) %>%
+      rowwise() %>%
+      mutate(eff_soil_depth = ifelse(.data$eff_soil_depth == 0,
+                                     NA,
+                                     .data$eff_soil_depth),
+             rooting_depth = ifelse(.data$rooting_depth == 0,
+                                     NA,
+                                     .data$rooting_depth),
+             rock_depth = ifelse(.data$rock_depth == 0,
+                                     NA,
+                                     .data$rock_depth),
+             obstacle_depth = ifelse(.data$obstacle_depth == 0,
+                                     NA,
+                                     .data$obstacle_depth)) %>%
+      mutate(eff_soil_depth = ifelse(is.na(.data$eff_soil_depth) &
+                                       any(!is.na(c(.data$rooting_depth,
+                                                    .data$rock_depth,
+                                                    .data$obstacle_depth))),
+                                     # Maximum of these three depths
+                                     max(c(.data$rooting_depth,
+                                           .data$rock_depth,
+                                           .data$obstacle_depth),
+                                         na.rm = TRUE),
+                                     .data$eff_soil_depth)) %>%
+      ungroup()
 
     # Aggregate per plot_id
 
@@ -255,6 +281,11 @@ get_stocks <- function(survey_form,
   ## 1.5. Final data preparations ----
 
   df_working <- df %>%
+    arrange(country,
+            code_plot,
+            survey_year,
+            repetition,
+            layer_number) %>%
     ungroup() %>%
     # If the effective soil depth is deeper than 100 cm or unknown (NA):
     # assume it is 100 cm (for stocks)
@@ -383,38 +414,28 @@ get_stocks <- function(survey_form,
     select(-coarse_fragment_vol)
 
 
-  # Save the df_below_ground dataset (all data, also missing data)
-
-  if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form, "_below_ground"),
-               df_below_ground)
-  }
-
-  if (save_to_gdrive == TRUE) {
-
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form, "_below_ground"),
-                         df_object_to_save = format_stocks(df_below_ground),
-                         path_name = "./output/stocks/")
-  }
 
 
+  ## 2.2. Gap-fill subsoil density data ----
 
 
-  ## 2.2. Gap-fill with assumption: constant subsoil ----
+  ### 2.2.1. Assumption: constant subsoil ----
 
   # If it is okay to assume that the subsoil carbon density remains the same
   # gap-fill subsoil carbon density data
 
   if (constant_subsoil == TRUE) {
 
-    cat(paste0(" \nGap-fill subsoil\n"))
+    cat(paste0(" \nGap-fill below-40-cm subsoil with assumption that subsoil ",
+               "is constant.\n"))
 
     source("./src/functions/harmonise_layer_to_depths.R")
 
     extra_rows <- NULL
 
-    # Assume the following depth range that can be considered constant:
+    # Assume the following depth range that can be considered constant
+    # (in line with the sampling requirements in ICP Forests)
+
     target_depth_range <- seq(40, 100, by = 1)
 
     # Set progress bar
@@ -466,8 +487,14 @@ get_stocks <- function(survey_form,
             depth_range_missing <- depth_range_missing[-1]
           }
 
-          if (depth_range_missing[length(depth_range_missing)] == 100 &&
-              depth_range_missing[length(depth_range_missing) - 1] < 99) {
+          if (!identical(depth_range_missing, numeric(0)) &&
+              length(depth_range_missing) == 1) {
+            depth_range_missing <- numeric(0)
+          }
+
+          if ((!identical(depth_range_missing, numeric(0))) &&
+              (depth_range_missing[length(depth_range_missing)] == 100 &&
+               depth_range_missing[length(depth_range_missing) - 1] < 99)) {
             depth_range_missing <-
               depth_range_missing[-length(depth_range_missing)]
           }
@@ -527,12 +554,33 @@ get_stocks <- function(survey_form,
                                   df_sub_selected = df_sub_selected,
                                   parameter_name = "bulk_density")
 
-      df_sub_selected <-
+      df_profile_i <- df_profile_i %>%
+        mutate(diff_with_limit_sup = limit_sup - round(.data$depth_bottom))
+
+      min_diff_with_limit_sup <- df_profile_i %>%
+        filter(!is.na(diff_with_limit_sup) &
+                 diff_with_limit_sup >= 0) %>%
+        pull(diff_with_limit_sup) %>%
+        min()
+
+      layer_number_above <- df_profile_i$layer_number[
+        which(df_profile_i$diff_with_limit_sup == min_diff_with_limit_sup)]
+
+      if (layer_number_above != max(df_profile_i$layer_number)) {
+
+        df_below_ground <- df_below_ground %>%
+          mutate(layer_number =
+                   ifelse(.data$profile_id == prof_id_i &
+                            .data$layer_number > layer_number_above,
+                          .data$layer_number + 1,
+                          .data$layer_number))
+      }
+
       extra_row_i <- df_profile_i %>%
-        filter(layer_number == max(df_profile_i$layer_number)) %>%
+        select(-diff_with_limit_sup) %>%
+        filter(layer_number == layer_number_above) %>%
         mutate(code_layer = "X",
-               layer_type = "mineral",
-               layer_number = 100,
+               layer_number = layer_number_above + 1,
                depth_top = limit_sup,
                depth_bottom = limit_inf,
                depth_avg = mean(c(limit_sup, limit_inf)),
@@ -559,22 +607,225 @@ get_stocks <- function(survey_form,
     close(progress_bar)
 
     df_below_ground <-
-      bind_rows(df_below_ground,
-                extra_rows) %>%
-      arrange(partner_short,
-              code_plot,
-              survey_year,
-              repetition,
-              layer_number)
-
-    cat(paste0(" \nSubsoils gap-filled for ",
-               length(unique(extra_rows$profile_id)),
-               " profiles in '",
-               survey_form, "'.\n",
-               "--------------------------------------------------------\n"))
+      bind_rows(df_below_ground %>%
+                  mutate(gapfilled_post_layer1 = NA),
+                extra_rows %>%
+                  mutate(gapfilled_post_layer1 = "rule: constant below 40 cm"))
   }
 
 
+
+
+
+    ### 2.2.2. Fixed carbon density ----
+
+    # For TOC
+
+    if (parameter == "organic_carbon_total") {
+
+      cat(paste0(" \nGap-fill below-80-cm subsoil with a fixed ",
+                 "carbon density value (0.1 t C ha-1 cm-1).\n"))
+
+      source("./src/functions/harmonise_layer_to_depths.R")
+
+      extra_rows <- NULL
+
+      # Assume the following depth range that can be considered constant:
+      target_depth_range <- seq(80, 100, by = 1)
+
+      # Set progress bar
+      progress_bar <-
+        txtProgressBar(min = 0,
+                       max = length(unique(df_below_ground$profile_id)),
+                       style = 3)
+
+      for (i in seq_along(unique(df_below_ground$profile_id))) {
+
+        prof_id_i <- as.character(unique(df_below_ground$profile_id)[i])
+
+        df_profile_i <- df_below_ground %>%
+          filter(profile_id == prof_id_i) %>%
+          filter(!is.na(density)) %>%
+          filter(!is.na(depth_top) &
+                   !is.na(depth_bottom))
+
+        if ("gapfilled_post_layer1" %in% names(df_below_ground)) {
+          df_profile_i <- df_profile_i %>%
+            select(-gapfilled_post_layer1)
+        }
+
+        if (nrow(df_profile_i) >= 1 &&
+            any(df_profile_i$depth_top == 0)) {
+
+          plot_id_i <- unique(df_profile_i$plot_id)
+
+          depth_range <- df_profile_i %>%
+            mutate(depth_sequence =
+                     purrr::pmap(list(round(depth_top),
+                                      round(depth_bottom)), seq, by = 1)) %>%
+            pull(depth_sequence) %>%
+            unlist %>%
+            unique
+
+          # Remove "bordering values"
+          depth_range <- depth_range[-(c(which(diff(depth_range) != 1),
+                                         which(diff(depth_range) != 1) + 1,
+                                         length(depth_range)))]
+
+          # Specify the depth range with missing density data
+
+          depth_range_missing <-
+            target_depth_range[!target_depth_range %in% depth_range]
+
+          if (!identical(depth_range_missing, numeric(0))) {
+
+            if (length(depth_range_missing) == 1) {
+              depth_range_missing <- numeric(0)
+            } else {
+
+              if (diff(depth_range_missing)[1] > 1) {
+                depth_range_missing <- depth_range_missing[-1]
+              }
+
+              if (!identical(depth_range_missing, numeric(0)) &&
+                  length(depth_range_missing) == 1) {
+                depth_range_missing <- numeric(0)
+              }
+
+              if ((!identical(depth_range_missing, numeric(0))) &&
+                  (depth_range_missing[length(depth_range_missing)] == 100 &&
+                  depth_range_missing[length(depth_range_missing) - 1] < 99)) {
+                depth_range_missing <-
+                  depth_range_missing[-length(depth_range_missing)]
+              }
+            }
+          }
+
+          if (!identical(depth_range_missing, numeric(0))) {
+
+            # List the layers of other profiles of this plot that do contain
+            # deeper data
+
+              limit_sup <- min(depth_range_missing)
+
+              limit_inf <- max(depth_range_missing)
+
+              density_i <- 0.1 # t C ha-1 cm-1
+
+              df_profile_i <- df_profile_i %>%
+                mutate(diff_with_limit_sup =
+                         limit_sup - round(.data$depth_bottom))
+
+              min_diff_with_limit_sup <- df_profile_i %>%
+                filter(!is.na(diff_with_limit_sup) &
+                         diff_with_limit_sup >= 0) %>%
+                pull(diff_with_limit_sup) %>%
+                min()
+
+              layer_number_above <- df_profile_i$layer_number[
+                which(df_profile_i$diff_with_limit_sup ==
+                        min_diff_with_limit_sup)]
+
+              if (layer_number_above != max(df_profile_i$layer_number)) {
+
+                df_below_ground <- df_below_ground %>%
+                  mutate(layer_number =
+                           ifelse(.data$profile_id == prof_id_i &
+                                    .data$layer_number > layer_number_above,
+                                  .data$layer_number + 1,
+                                  .data$layer_number))
+              }
+
+              # Only if the layer on top is mineral
+
+              if (df_profile_i$layer_type[which(
+                df_profile_i$layer_number == layer_number_above)] ==
+                "mineral") {
+
+              extra_row_i <- df_profile_i %>%
+                select(-diff_with_limit_sup) %>%
+                filter(layer_number == layer_number_above) %>%
+                mutate(code_layer = "X",
+                       layer_number = layer_number_above + 1,
+                       depth_top = limit_sup,
+                       depth_bottom = limit_inf,
+                       depth_avg = mean(c(limit_sup, limit_inf)),
+                       layer_thickness = diff(c(limit_sup, limit_inf)),
+                       bulk_density = NA,
+                       density = density_i) %>%
+                mutate(across(c("organic_layer_weight",
+                                "coarse_fragment_vol_frac",
+                                "parameter_for_stock", "stock_layer",
+                                "avail_thick", "avail_toc", "avail_bd",
+                                "avail_cf"),
+                              ~ NA_real_))
+
+              extra_rows <- rbind(extra_rows,
+                                  extra_row_i)
+              }
+
+          }
+        }
+
+        # Update progress bar
+        setTxtProgressBar(progress_bar, i)
+
+      } # End of for loop along profiles
+
+      close(progress_bar)
+
+      if (!"gapfilled_post_layer1" %in% names(df_below_ground)) {
+        df_below_ground$gapfilled_post_layer1 <- NA
+      }
+
+      df_below_ground <-
+        bind_rows(df_below_ground,
+                  extra_rows %>%
+                    mutate(gapfilled_post_layer1 =
+                             "rule: fixed value below 80 cm")) %>%
+        arrange(partner_short,
+                code_plot,
+                survey_year,
+                repetition,
+                layer_number)
+
+
+    }
+
+
+
+  if ("gapfilled_post_layer1" %in% names(df_below_ground)) {
+
+    cat(paste0(" \nSubsoils gap-filled for ",
+               df_below_ground %>%
+                 filter(!is.na(gapfilled_post_layer1)) %>%
+                 distinct(profile_id) %>%
+                 nrow,
+               " profiles in '",
+               survey_form, "'.\n",
+               "--------------------------------------------------------\n"))
+
+}
+
+
+
+
+
+
+  # Save the df_below_ground dataset (all data, also missing data)
+
+  if (save_to_env == TRUE) {
+    assign_env(paste0(survey_form, "_below_ground"),
+               df_below_ground)
+  }
+
+  if (save_to_gdrive == TRUE) {
+
+    save_to_google_drive(objects_to_save =
+                           paste0(survey_form, "_below_ground"),
+                         df_object_to_save = format_stocks(df_below_ground),
+                         path_name = "./output/stocks/")
+  }
 
 
 
@@ -617,7 +868,8 @@ get_stocks <- function(survey_form,
              depth_top,
              depth_bottom,
              density,
-             soil_depth) %>%
+             soil_depth,
+             gapfilled_post_layer1) %>%
       # Only calculate carbon stocks based on layers
       # for which the carbon density is known
       filter(!is.na(.data$density)) %>%
@@ -643,26 +895,30 @@ get_stocks <- function(survey_form,
     # Issue:
     # Not possible to calculate splines in case of overlapping layers in
     # the profile
+    # This is corrected in the get_layer_inconsistencies script,
+    # but there may be new issues due to gap-filling of the subsoil,
+    # i.e. typically 0.5 cm overlap because of rounding.
     # Solution: take average of the adjacent overlapping depth limits
 
-    # prof <- prof %>%
-    #   mutate(prev_depth_bottom = lag(depth_bottom),
-    #          next_depth_top = lead(depth_top)) %>%
-    #   rowwise() %>%
-    #   mutate(depth_bottom = ifelse(!is.na(.data$depth_bottom) &
-    #                                  !is.na(.data$next_depth_top) &
-    #                                  (.data$next_depth_top < .data$depth_bottom),
-    #                                mean(c(.data$depth_bottom,
-    #                                       .data$next_depth_top)),
-    #                                .data$depth_bottom),
-    #          depth_top = ifelse(!is.na(.data$depth_top) &
-    #                               !is.na(.data$prev_depth_bottom) &
-    #                               (.data$prev_depth_bottom > .data$depth_top),
-    #                             mean(c(.data$depth_top,
-    #                                    .data$prev_depth_bottom)),
-    #                             .data$depth_top)) %>%
-    #   select(-prev_depth_bottom,
-    #          -next_depth_top)
+    prof <- prof %>%
+      mutate(prev_depth_bottom = lag(depth_bottom),
+             next_depth_top = lead(depth_top)) %>%
+      rowwise() %>%
+      mutate(depth_bottom = ifelse(!is.na(.data$depth_bottom) &
+                                     !is.na(.data$next_depth_top) &
+                                     (.data$next_depth_top <
+                                        .data$depth_bottom),
+                                   mean(c(.data$depth_bottom,
+                                          .data$next_depth_top)),
+                                   .data$depth_bottom),
+             depth_top = ifelse(!is.na(.data$depth_top) &
+                                  !is.na(.data$prev_depth_bottom) &
+                                  (.data$prev_depth_bottom > .data$depth_top),
+                                mean(c(.data$depth_top,
+                                       .data$prev_depth_bottom)),
+                                .data$depth_top)) %>%
+      select(-prev_depth_bottom,
+             -next_depth_top)
 
 
     # Apply calculate_stocks and soilspline functions on profile
@@ -676,8 +932,22 @@ get_stocks <- function(survey_form,
     # any stock calculations beyond the boundaries of the known layers
     # are simply too unreliable
 
-    if ((nrow(prof) >= 2) &&
-        (min(prof$depth_top) == 0)) { # &&
+      if ("gapfilled_post_layer1" %in% names(prof)) {
+
+        nlay_below_ground <- prof %>%
+          filter(is.na(gapfilled_post_layer1) |
+                   gapfilled_post_layer1 == "rule: constant below 40 cm") %>%
+          nrow
+
+      } else {
+
+        nlay_below_ground <- nrow(prof)
+      }
+
+
+    if ((nlay_below_ground >= 2) &&
+        (min(prof$depth_top) == 0) &&
+        (unique(prof$soil_depth) > 0)) { # &&
         # The issue with this profile needs to be solved
         # (!prof_id_i %in% c("1995_7_139_1",
         #                    "1995_7_208_1",
@@ -691,6 +961,13 @@ get_stocks <- function(survey_form,
                      density_per_three_cm = density_per_three_cm,
                      graph = graph)
 
+      max_obs_depth <- prof %>%
+        filter(is.na(.data$gapfilled_post_layer1) |
+                 (.data$gapfilled_post_layer1 ==
+                    "rule: constant below 40 cm")) %>%
+        pull(depth_bottom) %>%
+        max()
+
       profile_stocks_i <-
         data.frame(partner_short = unique(df_profile_i$partner_short),
                    plot_id = plot_id_i,
@@ -701,7 +978,8 @@ get_stocks <- function(survey_form,
                    code_plot = unique(df_profile_i$code_plot),
                    repetition = unique(df_profile_i$repetition),
                    contains_peat = any(df_profile_i$layer_type == "peat"),
-                   obs_depth = max(prof$depth_bottom),
+                   obs_depth = max_obs_depth,
+                   use_stock_until_30 = (max_obs_depth < 30),
                    soil_depth = soil_depth_i,
                    profile_stock_output_i)
 
@@ -773,6 +1051,8 @@ get_stocks <- function(survey_form,
                 round(mean(soil_depth, na.rm = TRUE), 2),
               contains_peat =
                 any(contains_peat == TRUE),
+              use_stock_until_30 =
+                any(use_stock_until_30 == TRUE),
               rmse_mpspline_max =
                 max(rmse_mpspline, na.rm = TRUE),
               .groups = "drop") %>%
@@ -1161,6 +1441,8 @@ get_stocks <- function(survey_form,
                        NA),
               contains_peat =
                 any(contains_peat == TRUE),
+              use_stock_until_30 =
+                any(use_stock_until_30 == TRUE),
               rmse_mpspline_max =
                 max(rmse_mpspline, na.rm = TRUE),
               .groups = "drop") %>%

@@ -66,8 +66,18 @@ spline2stock <- function(prof,
   # (spline_output_per_cm[i] gives the carbon density per cm
   # at a depth of i cm)
 
+  if ("gapfilled_post_layer1" %in% names(prof)) {
+
+    nlay_below_ground <- prof %>%
+      filter(is.na(gapfilled_post_layer1)) %>%
+      nrow
+  } else {
+
+    nlay_below_ground <- length(prof[[variab_name]])
+  }
+
   stocks <- data.frame(
-    nlay_below_ground = length(prof[[variab_name]]),
+    nlay_below_ground = nlay_below_ground,
     # Cumulative carbon stocks from 0 until x cm
     stock_10 = ifelse(10 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(10)]),
