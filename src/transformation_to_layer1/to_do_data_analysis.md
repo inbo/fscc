@@ -62,6 +62,7 @@ LESSONS LEARNED FROM MANUAL CORRECTIONS:
 * ~~in s1_som files, for all MINERAL horizons, set organic_layer_weight==NA if bulk density value is given.~~
 
 
+
 ~~## TO DO - Checked PIRs~~
 * ~~Remove rows in pir where code_nfc_action_taken, nfc_remark and updated_value are empty~~
 * ~~Ignore code_nfc_action_taken if updated_value is empty (we can't do much with it anyway for now). Not relevant to add "confirmations" (e.g. extreme but correct values; no data avaible...) to the layer 1 data for now. We'll have to use statistics and objective expert reasons to exclude values.~~
