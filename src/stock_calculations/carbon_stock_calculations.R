@@ -995,21 +995,20 @@ s1_strat <-
             by = join_by(code_forest_type == code)) %>%
   rename(forest_type = short_descr) %>%
   # Add humus type
-  left_join(df_humus <-
-              bind_rows(y1_st1 %>%
-                          select(plot_id, code_humus),
-                        s1_prf %>%
-                          select(plot_id, code_humus)) %>%
-              filter(code_humus != 99) %>%
-              filter(!is.na(code_humus)) %>%
-              group_by(plot_id, code_humus) %>%
-              summarise(count = n(),
-                        .groups = "drop") %>%
-              group_by(plot_id) %>%
-              arrange(-count) %>%
-              slice_head() %>%
-              ungroup() %>%
-              select(plot_id, code_humus),
+  left_join(bind_rows(y1_st1 %>%
+                        select(plot_id, code_humus),
+                      s1_prf %>%
+                        select(plot_id, code_humus)) %>%
+            filter(code_humus != 99) %>%
+            filter(!is.na(code_humus)) %>%
+            group_by(plot_id, code_humus) %>%
+            summarise(count = n(),
+                      .groups = "drop") %>%
+            group_by(plot_id) %>%
+            arrange(-count) %>%
+            slice_head() %>%
+            ungroup() %>%
+            select(plot_id, code_humus),
           by = "plot_id") %>%
   left_join(d_humus,
             by = join_by(code_humus == code)) %>%
