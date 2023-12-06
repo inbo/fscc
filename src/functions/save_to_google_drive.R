@@ -560,10 +560,12 @@ save_to_google_drive <- function(objects_to_save = NULL,
     # Save the data frame as a temporary CSV file
 
     temp_file <- tempfile(fileext = ".csv")
-    write.csv(dataframe,
-               file = temp_file,
-               row.names = FALSE,
-               na = "")
+    write.table(dataframe,
+                 file = temp_file,
+                 row.names = FALSE,
+                 na = "",
+                 sep = ";",
+                 dec = ".")
 
     # If file_name_drive does not end with .csv, add ".csv"
 
