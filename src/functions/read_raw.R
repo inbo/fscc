@@ -233,33 +233,33 @@ d_partner <- read.csv(paste0(subdir,
 # country/partner names, and save to the global environment
 # This only exists for "sw", "s1" and "so"
 
-if (file.exists(paste0(subdir,
-                       "/adds/data_availability_",
-                       code_survey, ".csv"))) {
-
-  data_availability <-
-    read.csv(paste0(subdir,
-                    "/adds/data_availability_",
-                    code_survey, ".csv"), sep = ";")
-
- data_availability <- data_availability %>%
-   mutate(plot_id = paste0(code_country, "_",
-                           code_plot)) %>%
-   mutate(unique_survey = paste0(partner_code, "_",
-                                 survey_year, "_",
-                                 code_plot)) %>%
-   left_join(d_country[, c("code", "lib_country")],
-             by = join_by(code_country == code)) %>%
-   rename(country = lib_country) %>%
-   left_join(d_partner[, c("code", "desc_short", "description")],
-             by = join_by(partner_code == code)) %>%
-   rename(partner_short = desc_short) %>%
-   rename(partner = description) %>%
-   mutate(country = as.factor(country)) %>%
-   mutate(partner_short = as.factor(partner_short)) %>%
-   mutate(partner = as.factor(partner))
-
-}
+# if (file.exists(paste0(subdir,
+#                        "/adds/data_availability_",
+#                        code_survey, ".csv"))) {
+#
+#   data_availability <-
+#     read.csv(paste0(subdir,
+#                     "/adds/data_availability_",
+#                     code_survey, ".csv"), sep = ";")
+#
+#  data_availability <- data_availability %>%
+#    mutate(plot_id = paste0(code_country, "_",
+#                            code_plot)) %>%
+#    mutate(unique_survey = paste0(partner_code, "_",
+#                                  survey_year, "_",
+#                                  code_plot)) %>%
+#    left_join(d_country[, c("code", "lib_country")],
+#              by = join_by(code_country == code)) %>%
+#    rename(country = lib_country) %>%
+#    left_join(d_partner[, c("code", "desc_short", "description")],
+#              by = join_by(partner_code == code)) %>%
+#    rename(partner_short = desc_short) %>%
+#    rename(partner = description) %>%
+#    mutate(country = as.factor(country)) %>%
+#    mutate(partner_short = as.factor(partner_short)) %>%
+#    mutate(partner = as.factor(partner))
+#
+# }
 
 # Import plot coordinate harmonisation keys
 
@@ -349,20 +349,45 @@ for (i in seq_along(survey_forms_extended)) {
 
 
 
-# Create data_availability table if not existing ----
-if (!file.exists(paste0(subdir,
-                       "/adds/data_availability_",
-                       code_survey, ".csv"))) {
+# Create data_availability table ----
 
   data_availability_long <- NULL
 
-  for (i in seq_along(survey_forms)) {
+  for (i in seq_len(length(survey_forms) + 1)) {
 
+    if (i <= length(survey_forms)) {
     # Read the data table ----
-    df <- read.csv(paste0(subdir, "/", code_survey, "_",
+    df <- read.csv(paste0(subdir, code_survey, "_",
                           list_data_tables[[which(names(list_data_tables) ==
                                                     code_survey)]][i], ".csv"),
                    sep = ";")
+    }
+
+    if (i == length(survey_forms) + 1 &&
+        !code_survey %in% c("si", "y1")) {
+
+      if (survey_level == "LI") {
+
+        df <-
+          read.csv(paste0(dir, "y1/y1_pl1.csv"),
+                   sep = ";")
+
+      }
+
+      if (survey_level == "LII") {
+
+        df <-
+          read.csv(paste0(dir, "si/si_plt.csv"),
+                   sep = ";")
+
+      }
+
+    }
+
+    if ((i <= length(survey_forms)) ||
+        (i == length(survey_forms) + 1 &&
+        !code_survey %in% c("si", "y1"))) {
+
 
     if (!"survey_year" %in% colnames(df) &&
         "last_year" %in% colnames(df)) {
@@ -374,28 +399,24 @@ if (!file.exists(paste0(subdir,
       df$survey_year <- NA
     }
 
-    df <- df %>%
-      mutate(survey_id = paste0(.data$survey_year, "_",
-                                       .data$code_country, "_",
-                                       .data$partner_code, "_",
-                                       .data$code_plot)) %>%
-      distinct(survey_id)
-
     data_availability_long <- bind_rows(data_availability_long,
-                                        df)
+                                        df %>%
+                                          select(partner_code,
+                                                 code_country,
+                                                 code_plot,
+                                                 survey_year))
+    }
   }
 
   data_availability <- data_availability_long %>%
-    distinct(survey_id) %>%
-    separate(survey_id, into = c("survey_year",
-                                 "code_country",
-                                 "partner_code",
-                                 "code_plot"), sep = "_") %>%
+    mutate(code_plot = ifelse(code_country == 4 &
+                                as.numeric(code_plot) > 4000000,
+                              as.numeric(code_plot - 4000000),
+                              .data$code_plot)) %>%
     mutate(plot_id = paste0(code_country, "_",
                             code_plot)) %>%
-    mutate(unique_survey = paste0(partner_code, "_",
-                                  survey_year, "_",
-                                  code_plot)) %>%
+    distinct(plot_id, .keep_all = TRUE) %>%
+    select(-survey_year) %>%
     mutate(code_country = as.integer(code_country)) %>%
     left_join(d_country[, c("code", "lib_country")],
               by = join_by(code_country == code)) %>%
@@ -405,10 +426,10 @@ if (!file.exists(paste0(subdir,
               by = join_by(partner_code == code)) %>%
     rename(partner_short = desc_short) %>%
     rename(partner = description) %>%
-    mutate(country = as.factor(country)) %>%
-    mutate(partner_short = as.factor(partner_short)) %>%
-    mutate(partner = as.factor(partner))
-}
+    mutate(country = as.character(country)) %>%
+    mutate(partner_short = as.character(partner_short)) %>%
+    mutate(partner = as.character(partner))
+
 
 
 
@@ -423,6 +444,18 @@ for (i in seq_along(survey_forms)) {
 
   # Replace empty spaces by NA ----
   df[df == ""] <- NA
+
+  # Correct the German plot codes ----
+
+  if (!"code_plot_orig" %in% names(df)) {
+    df$code_plot_orig <- df$code_plot
+  }
+
+  df <- df %>%
+    mutate(code_plot = ifelse(code_country == 4 &
+                                as.numeric(code_plot) > 4000000,
+                              as.numeric(code_plot - 4000000),
+                              .data$code_plot))
 
   # Convert columns that should be factors to factors ----
   vec_as_factor <- which(names(df) %in%
@@ -992,8 +1025,9 @@ for (i in seq_along(surveys)) {
         exists("longitude_dec", where = get_env(surveys[i]))) {
 
       if (is.null(survey_forms_with_coordinates)) {
-        survey_forms_with_coordinates <- surveys[i]} else
-        {survey_forms_with_coordinates <- c(survey_forms_with_coordinates,
+        survey_forms_with_coordinates <- surveys[i]
+        } else {
+          survey_forms_with_coordinates <- c(survey_forms_with_coordinates,
                                             surveys[i])
         }
       }
@@ -1003,55 +1037,59 @@ for (i in seq_along(surveys)) {
 
   # Create vector with unique plots in all surveys
 
-coordinates_full <- get_env(survey_forms_with_coordinates[1]) %>%
-  select(plot_id, longitude_dec, latitude_dec)
+coordinates_full <- NULL
 
-if (length(survey_forms_with_coordinates) > 1) {
-  for (i in 2:length(survey_forms_with_coordinates)) {
-    coordinates_full_i <- get_env(survey_forms_with_coordinates[i]) %>%
-      select(plot_id, longitude_dec, latitude_dec)
+for (i in seq_along(survey_forms_with_coordinates)) {
 
-    coordinates_full <- rbind(coordinates_full,
-                              coordinates_full_i)
-    }
+  coordinates_full <-
+    bind_rows(coordinates_full,
+              get_env(survey_forms_with_coordinates[i]) %>%
+                mutate(survey_form = survey_forms_with_coordinates[i]) %>%
+                mutate(longitude_dec = as.character(longitude_dec)) %>%
+                mutate(latitude_dec = as.character(latitude_dec)) %>%
+                select(survey_form, plot_id, longitude_dec, latitude_dec))
+
 }
+
 
 coordinates_full <- coordinates_full %>%
   filter(!is.na(longitude_dec)) %>%
   filter(!is.na(latitude_dec))
 
-coordinates <- distinct(coordinates_full, plot_id, .keep_all = TRUE)
-coordinates$longitude_dec <- NA
-coordinates$latitude_dec <- NA
+coordinates <- distinct(coordinates_full, plot_id) %>%
+  mutate(longitude_dec = NA,
+         latitude_dec = NA)
+
 
 for (j in seq_len(nrow(coordinates))) {
 
   # Determine the row indices of the given plot_id in coordinates_full
 
-  vec <- which(coordinates$plot_id[j] == coordinates_full$plot_id)
+  coord_plot_j <- coordinates_full %>%
+    filter(plot_id == coordinates$plot_id[j])
 
-  # Store all coordinates which are mentioned for the given plot_id (per Level)
+  # Assumption that coordinates in system installment forms are more correct
 
-  if (!identical(vec, integer(0))) {
+  if (nrow(coord_plot_j) > 0 &&
+      (any(str_starts(coord_plot_j$survey_form, "si")) ||
+       any(str_starts(coord_plot_j$survey_form, "y1")))) {
 
-    list_latitude <- coordinates_full$latitude_dec[vec]
-    list_latitude <- list_latitude[!is.na(list_latitude)]
-
-    list_longitude <- coordinates_full$longitude_dec[vec]
-    list_longitude <- list_longitude[!is.na(list_longitude)]
-
-    # Store the most abundant coordinate
-
-    if (!identical(list_latitude, logical(0))) {
-    coordinates$latitude_dec[j] <-
-      as.numeric(list_latitude[which.max(table(list_latitude))])
-    }
-
-    if (!identical(list_longitude, logical(0))) {
-    coordinates$longitude_dec[j] <-
-      as.numeric(list_longitude[which.max(table(list_longitude))])
-    }
+    coord_plot_j <- coord_plot_j %>%
+      filter(str_starts(survey_form, "si") |
+               str_starts(survey_form, "y1"))
   }
+
+  coord_plot_j_abundance <- coord_plot_j %>%
+    group_by(longitude_dec, latitude_dec) %>%
+    summarize(count = n(),
+              .groups = "drop") %>%
+    arrange(-count)
+
+  coordinates$longitude_dec[j] <-
+    as.numeric(coord_plot_j_abundance$longitude_dec[1])
+
+  coordinates$latitude_dec[j] <-
+    as.numeric(coord_plot_j_abundance$latitude_dec[1])
   }
 
 coordinates <- coordinates %>%
