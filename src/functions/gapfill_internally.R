@@ -7,6 +7,7 @@ gapfill_internally <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  cat(paste0(" \nGap-fill '", survey_form, "' internally\n"))
 
 
   # . ----

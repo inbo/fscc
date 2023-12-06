@@ -65,10 +65,12 @@ get_primary_inconsistencies <- function(code_survey,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
-  
+
+  cat(paste0(" \nSolve primary inconsistencies in '", code_survey, "'\n"))
+
   # Specify date on which 'layer 0' data were downloaded ----
   # from ICP Forests website
-  
+
   source("./src/functions/get_date_local.R")
   download_date <- get_date_local(path = "./data/raw_data/",
                                   save_to_env = TRUE,
@@ -86,7 +88,7 @@ get_primary_inconsistencies <- function(code_survey,
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
 # Identify the survey (form)s to be evaluated ----
-  
+
   # Create a list with names of the different survey forms per survey
 
   list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
@@ -196,7 +198,7 @@ get_primary_inconsistencies <- function(code_survey,
     # Determine where unique_layer_repetition is not unique
 
     ind_duplicated <- which(duplicated(df$unique_layer_repetition))
-    
+
     if (!identical(ind_duplicated, integer(0))) {
 
     layers_duplicated <- unique(df$unique_layer_repetition[ind_duplicated])
@@ -276,7 +278,7 @@ get_primary_inconsistencies <- function(code_survey,
                 survey_year, "_",
                 code_plot, "_",
                 code_layer))
-          
+
           df[j_dupl,] <- df[j_dupl,] %>%
             rowwise() %>%
             mutate(
@@ -286,7 +288,7 @@ get_primary_inconsistencies <- function(code_survey,
                 code_plot, "_",
                 code_layer, "_",
                 repetition))
-          
+
           df[j_dupl,] <- df[j_dupl,] %>%
             rowwise() %>%
             mutate(
@@ -345,31 +347,31 @@ get_primary_inconsistencies <- function(code_survey,
       setTxtProgressBar(progress_bar, j)
       }
     }
-    
-    
-    
+
+
+
     # If there are two OL layers in Slovakia: plot_id 54_208 (repetition 1)
     # And the same unique plot survey contains repetitions with only one OL
     # layer:
     # Rename the "common" OL layer of this unique plot survey (i.e. the layer
     # with layer_limit_inferior -1) to "OL"
-    
+
     vec <- which(df$unique_survey_repetition == "54_2007_208_1" &
                    df$layer_type == "forest_floor" &
                    df$layer_limit_inferior == -1 &
                    df$code_layer == "OL2")
-    
+
     vec_other <- which(df$unique_survey == "54_2007_208" &
                          df$unique_survey_repetition != "54_2007_208_1" &
                          df$layer_type == "forest_floor" &
                          df$code_layer == "OL" &
                          df$layer_limit_inferior == -1)
-    
+
     if (!identical(vec, integer(0)) &&
         !identical(vec_other, integer(0))) {
-      
+
       if (solve == TRUE) {
-        
+
         df$code_layer[vec] <- "OL"
         df$unique_survey_layer[vec] <-
           paste0(df[vec, which(names(df) == "code_country")], "_",

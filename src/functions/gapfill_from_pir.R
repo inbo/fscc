@@ -40,20 +40,23 @@ gapfill_from_pir <- function(code_survey,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
-  
+
+  cat(paste0(" \nGap-fill '", code_survey,
+             "'from PIRs (data corrected by partners)\n"))
+
   # Arrange input dataframe(s) ----
 
   # Assert that input arguments are in correct classes
-  
+
   assertthat::assert_that("character" %in% class(code_survey),
                           msg = paste0("Input variable 'code_survey' ",
                                        "should be a character."))
-  
+
   # if survey_form is not NA,
   # assert that code_survey is not a code (e.g. "so")
 
   if (!is.null(data_frame)) {
-    
+
     survey_forms <- code_survey
 
     assertthat::assert_that("data.frame" %in% class(data_frame),
@@ -67,58 +70,58 @@ gapfill_from_pir <- function(code_survey,
                                          "should consist of two parts, e.g. ",
                                          "'so_som' and not 'so'."))
   }
-  
+
   # if a survey code (e.g. "so") is given:
-  
+
   list_data_tables <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
                            s1 = c("som", "prf", "pls", "pfh", "lqa"),
                            si = c("eve", "plt", "sta", "tco"),
                            y1 = c("pl1", "st1", "ev1"),
                            sw = c("swa", "swc"))
-  
+
   if (length(code_survey) == 1 &&
       length(unlist(strsplit(code_survey, "_"))) == 1 &&
       code_survey %in% names(list_data_tables)) {
 
-    survey_forms <- paste0(code_survey, "_", 
+    survey_forms <- paste0(code_survey, "_",
                            list_data_tables[[code_survey]])
-    
+
   }
-  
-  
+
+
 
   for (j in seq_along(survey_forms)) {
 
     if (!is.null(data_frame)) {
 
       df <- data_frame
-      
+
     } else {
-      
+
       df <- get_env(survey_forms[j])
-      
+
     }
 
 
   # Gap-fill change_date if missing (e.g. in "so_prf")
   # Assumption: 2009-12-06 (date on which database was established at PCC)
-  
+
     # if (!"change_date" %in% names(df)) {
-    #   df$change_date 
+    #   df$change_date
     # }
-    
+
   df <- df %>%
     mutate(change_date = ifelse(is.na(.data$change_date),
                                 as.character(as.Date("2009-12-06")),
                                 .data$change_date))
-  
-  
+
+
   # Import original pir ----
-  
+
   if (!exists("pir_orig") ||
       (exists("pir_orig") &&
        any(!"data.frame" %in% class(pir_orig)))) {
-    
+
     assertthat::assert_that(file.exists(paste0("./output/pirs/20230302_pir/",
                                                "20230302_inconsistency_report_",
                                                "all_partners",
@@ -127,13 +130,13 @@ gapfill_from_pir <- function(code_survey,
                                                "20230302_inconsistency_report_",
                                                "all_partners",
                                                ".xlsx' does not exist."))
-    
+
     pir_orig <-
       openxlsx::read.xlsx(paste0("./output/pirs/20230302_pir/",
                                  "20230302_inconsistency_report_all_partners",
                                  ".xlsx"),
                           sheet = 1)
-    
+
     # Checked pir uses "partner_code" + "code_plot" as "plot_id"
     # We use "code_country" as "code_plot" as "plot_id"
     # Correct this
@@ -160,17 +163,17 @@ gapfill_from_pir <- function(code_survey,
       mutate(parameter_value = ifelse(parameter_value == "",
                                       NA,
                                       parameter_value))
-    
+
     assign_env("pir_orig",
                pir_orig)
-    
+
   }
-  
-  
-  
-  
+
+
+
+
   # Import checked pir ----
-  
+
   if (!exists("pir_checked") ||
       (exists("pir_checked") &&
        any(!"data.frame" %in% class(pir_checked)))) {
@@ -180,7 +183,7 @@ gapfill_from_pir <- function(code_survey,
                             msg = paste0("'./data/additional_data/",
                                          "20230302_checked_pirs.xlsx' ",
                                          "does not exist."))
-    
+
   pir_checked <-
     openxlsx::read.xlsx("./data/additional_data/20230302_checked_pirs.xlsx",
                         sheet = 1)
@@ -205,13 +208,13 @@ gapfill_from_pir <- function(code_survey,
     mutate(parameter_value = gsub(" \\(estimated by FSCC\\)",
                                        "",
                                        parameter_value))
-  
+
   # "1 - The reported value is extreme but correct"
   # "2 - The correct value is resubmitted/the inconsistency is solved"
   # "3 - The reported value is removed (e.g. resubmitted as NA)"
   # "4 - No (good) data are available for this parameter"
   # "5 - Other"
-  
+
   pir_checked$code_nfc_action_taken <-
     gsub("^1.*", "1", pir_checked$code_nfc_action_taken)
   pir_checked$code_nfc_action_taken <-
@@ -224,14 +227,14 @@ gapfill_from_pir <- function(code_survey,
     gsub("^5.*", "5", pir_checked$code_nfc_action_taken)
   pir_checked$code_nfc_action_taken <-
     as.integer(pir_checked$code_nfc_action_taken)
-  
+
   assign_env("pir_checked",
              pir_checked)
   }
-  
-  
-  
-  
+
+
+
+
   # Manipulate checked pir ----
 
   pir_checked_survey_form <-
@@ -308,11 +311,11 @@ gapfill_from_pir <- function(code_survey,
     relocate(unique_inconsistency_id, .before = code_nfc_action_taken) %>%
     relocate(unique_layer_repetition, .before = code_nfc_action_taken)
 
-  
-  
-  
-  
-  
+
+
+
+
+
   # Create function is_the_same ----
   is_the_same <- function(value_1,
                           value_2,
@@ -343,24 +346,24 @@ gapfill_from_pir <- function(code_survey,
     #' @examples
     #' is_the_same("a", NA) # FALSE
     #' is_the_same(5, 5.00009) # TRUE
- 
+
     outcome <- FALSE
-    
+
     # TRUE if both are NAs
-    
+
     if (is.na(value_1) &&
         is.na(value_2)) {
       outcome <- TRUE
 
     } else {
-      
+
       source("./src/functions/gives_warning.R")
-      
+
       # TRUE if both are not numbers and exactly the same
-      
+
       if (gives_warning(as.numeric(value_1)) &&
           gives_warning(as.numeric(value_2))) {
-        
+
         if (identical(value_1, value_2)) {
           outcome <- TRUE
         }
@@ -368,7 +371,7 @@ gapfill_from_pir <- function(code_survey,
       # If the conversion to a numeric does not give warnings
       # (which is also possible if the value is an NA)
       } else {
-        
+
         # TRUE if both are numbers (not NAs) and roughly the same
         if (!gives_warning(as.numeric(value_1)) &&
             !gives_warning(as.numeric(value_2)) &&
@@ -383,7 +386,7 @@ gapfill_from_pir <- function(code_survey,
                abs(as.numeric(value_2)) < tolerance) ||
             (abs((as.numeric(value_1) / as.numeric(value_2)) - 1) <
               tolerance)) {
-            
+
             outcome <- TRUE
           }
         }
@@ -393,12 +396,12 @@ gapfill_from_pir <- function(code_survey,
   }
 
 
-  
-  
+
+
   # Replace values if not up to date ----
-  
+
   # Columns that should be converted to numeric class:
-  
+
   numeric_columns <- c(
     "layer_limit_superior",
     "layer_limit_inferior",
@@ -457,8 +460,8 @@ gapfill_from_pir <- function(code_survey,
     "horizon_exch_na",
     "horizon_cec",
     "horizon_bulk_dens_measure")
-  
-  
+
+
   for (i in seq_len(nrow(pir_checked_survey_form))) {
 
     col_ind <- which(colnames(df) == pir_checked_survey_form$parameter[i])
@@ -475,19 +478,19 @@ gapfill_from_pir <- function(code_survey,
     # If the records haven't been deleted meanwhile
 
     if (identical(row_ind, integer(0))) {
-      
+
       pir_checked_survey_form$fscc_action[i] <-
         "record no longer exists"
-      
+
     } else {
-    
+
       # if the error does not concern rule_id FSCC_12: pH measurement method
-      
+
       if (pir_checked_survey_form$rule_id[i] != "FSCC_12") {
-        
+
         assertthat::assert_that(
           length(pull(df[row_ind, col_ind])) == 1)
-        
+
         pir_checked_survey_form$parameter_value_current[i] <-
           pull(df[row_ind, col_ind])
 
@@ -495,7 +498,7 @@ gapfill_from_pir <- function(code_survey,
     # the value is different from parameter_value_orig:
     # We can assume that layer 0 was corrected in response to the PIR
     # So no need to update data using "updated_value"
-    
+
     if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
         !is_the_same(pull(df[row_ind, col_ind]),
                      pir_checked_survey_form$parameter_value_orig[i])) {
@@ -507,15 +510,15 @@ gapfill_from_pir <- function(code_survey,
         # if the values haven't been updated
         is_the_same(pull(df[row_ind, col_ind]),
                     pir_checked_survey_form$parameter_value_orig[i])) {
-      
+
       # If the updated_value says "record_to_be_removed",
       # then the whole row needs to be removed
-      
+
       if (pir_checked_survey_form$updated_value[i] == "record_to_be_removed") {
-        
+
         df <- df[-row_ind, ]
         pir_checked_survey_form$fscc_action[i] <- "removed"
-        
+
       } else
 
       # If updated_value is not the same like the original value
@@ -523,7 +526,7 @@ gapfill_from_pir <- function(code_survey,
                        pir_checked_survey_form$updated_value[i])) {
 
         if (pir_checked_survey_form$parameter[i] %in% numeric_columns) {
-          
+
           df[row_ind, col_ind] <-
             as.numeric(pir_checked_survey_form$updated_value[i])
         } else {
@@ -533,56 +536,56 @@ gapfill_from_pir <- function(code_survey,
 
         pir_checked_survey_form$fscc_action[i] <- "updated"
       }
-      
+
       }
       } else {
-      
+
         # If the inconcistency concerns FSCC_12: pH measurement method
-        
+
         pir_checked_survey_form$parameter_value_current[i] <-
           pull(df[row_ind, which(names(df) == "other_obs")])
-        
-        
+
+
         if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
             str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
           pir_checked_survey_form$fscc_action[i] <- "already updated in layer 0"
         }
-        
+
         # If the change_date is before 2 March 2023 OR
         if (as.Date(df$change_date[row_ind]) < as.Date("2023-03-02") ||
             # if the values haven't been updated
             !str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
-          
+
           df[row_ind, which(names(df) == "other_obs")] <-
             paste0(pull(df[row_ind, which(names(df) == "other_obs")]), "; ",
                    pir_checked_survey_form$updated_value[i])
-          
+
           pir_checked_survey_form$fscc_action[i] <- "updated"
-          
+
         }
-        
+
     }
     }
   }
-  
-  
+
+
   # Export ----
-  
+
   if (save_to_env == TRUE) {
     assign_env(survey_forms[j],
                df)
     assign_env(paste0("pir_applied_", survey_forms[j]),
                pir_checked_survey_form)
-    
+
   } else {
     return(df)
     assign_env(paste0("pir_applied_", survey_forms[j]),
                pir_checked_survey_form)
-    
+
   }
 
-  
+
   } # End of loop over survey forms
-  
-  
+
+
 }

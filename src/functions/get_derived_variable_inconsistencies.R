@@ -80,6 +80,9 @@ get_derived_variable_inconsistencies <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  cat(paste0(" \nSolve inconsistencies in derived variables in '",
+             survey_form, "'\n"))
+
   # Specify date on which 'layer 0' data were downloaded ----
   # from ICP Forests website
 

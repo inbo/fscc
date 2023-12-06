@@ -1,5 +1,5 @@
 
-#' Display profiles with soil data
+#' Display profiles with soil data per plot_id
 #'
 #' This function displays profiles of "som" and "pfh" soil survey data
 #' for a given (vector of) plot_id(s) in the R console, including values of
