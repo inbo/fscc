@@ -59,7 +59,7 @@ Please add any observed data issues to this file
 * Convert script into a function, in which you can choose the survey form (so_som, so_pfh, s1_som, s1_pfh) and the variable to calculate stocks from. Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.
 
 LESSONS LEARNED FROM MANUAL CORRECTIONS:
-* ~~in s1_som files, for all MINERAL horizons, set organic_layer_weight==NA if bulk density value is given.~~
+* ~~in s1_som files, for all MINERAL horizons, set organic_layer_weight==NA if bulk density value is given.~~ (Note: completed)
 
 
 
