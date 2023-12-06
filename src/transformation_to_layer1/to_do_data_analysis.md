@@ -10,6 +10,7 @@ Please add any observed data issues to this file
   + Folder AFSCDB.LII.2.2: also check whether there are any plot surveys that do not appear in so_som at all. Use the original data forms (with different repetitions etc), not the aggregated version.
   + ~~Folder BIOSOIL.LII - at least Spain, Finland… (Note: missing Spanish data now in layer 0)~~
   + Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?
+  + FSCDB.LI: add profiles to pfh and prf that are lacking (check if this is actually the case: there may be an issue with different former German code plots with the same plot_id that now look like the same plot (same partner_code))
   + ~~PIRs! (note separate e-mail Sture Wijk; Czech pH-H2O in “pfh”) + add column with validation code different parameters?~~
   + ~~Delete impossible values or codes in data? (e.g. forest type 32)~~
   + Add column with data source for different variables (Note: partly completed)

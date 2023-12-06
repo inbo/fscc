@@ -937,7 +937,7 @@ so_strat <- st_join(so_strat_sf, biogeo_sf) %>%
 
 
 
-## 3.1. "s1" ----
+## 3.2. "s1" ----
 
 s1_strat <- s1_som %>%
   distinct(plot_id) %>%
