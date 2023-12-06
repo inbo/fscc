@@ -60,7 +60,7 @@ sync_local_data(list_subfolders_data = "raw_data",
 
 # Input level ----
 
-level <- "LI"
+level <- "LII"
 
 
 # Define surveys and survey forms within level
@@ -562,6 +562,7 @@ so_prf_adds_agg <- so_prf_adds %>%
                            METHOD_RSGu, "_",
                            DEPTHSTOCK, "_",
                            bs_class, "_",
+                           EFTC, "_",
                            remark)) %>%
   group_by(plot_id) %>%
   # Sometimes there are different options, e.g. plot_id 60_9
@@ -576,6 +577,7 @@ so_prf_adds_agg <- so_prf_adds %>%
                     "method_wrb_harmonisation_fscc",
                     "eff_soil_depth",
                     "bs_class",
+                    "forest_type",
                     "remark_harmonisation_fscc"),
            sep = "_") %>%
   mutate(eff_soil_depth = as.numeric(eff_soil_depth))
