@@ -118,6 +118,8 @@ get_layer_inconsistencies <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  cat(paste0(" \nSolve layer inconsistencies in '", survey_form, "'\n"))
+
   # Specify date on which 'layer 0' data were downloaded ----
   # from ICP Forests website
 
@@ -3503,6 +3505,7 @@ df <- df %>%
                                   (.data$eff_soil_depth > .data$depth_max),
                                 .data$eff_soil_depth,
                                 .data$layer_limit_inferior)))) %>%
+  ungroup() %>%
   select(-layer_number_deepest,
          -depth_max,
          -prev_layer_limit_inferior,
@@ -3623,7 +3626,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                                              .data$rock_depth,
                                              .data$obstacle_depth),
                                            na.rm = TRUE),
-                                       .data$eff_soil_depth))
+                                       .data$eff_soil_depth)) %>%
+        ungroup()
     }
 
     prf_agg <- prf %>%
@@ -3838,6 +3842,95 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                                      .data$layer_type))
 
       }
+
+
+      # Swedish horizon numbers are switched:
+
+      if (!"horizon_number_orig" %in% names(df)) {
+
+        df <- df %>%
+          mutate(horizon_number_orig = horizon_number)
+
+      }
+
+      df <- df %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_546_1" &
+                          horizon_limit_up == 8 &
+                          horizon_number == 4,
+                        3,
+                        ifelse(unique_survey_profile == "13_2006_546_1" &
+                                 horizon_limit_up == 13 &
+                                 horizon_number == 3,
+                               4,
+                               .data$horizon_number))) %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_1080_1" &
+                          horizon_limit_up == 11 &
+                          horizon_number == 3,
+                        4,
+                        ifelse(unique_survey_profile == "13_2006_1080_1" &
+                                 horizon_limit_up == 6 &
+                                 horizon_number == 4,
+                               3,
+                               .data$horizon_number))) %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_2072_1" &
+                          horizon_limit_up == -6 &
+                          horizon_number == 3,
+                        1,
+                        ifelse(unique_survey_profile == "13_2006_2072_1" &
+                                 horizon_limit_up == 0 &
+                                 horizon_number == 1,
+                               2,
+                               ifelse(unique_survey_profile ==
+                                        "13_2006_2072_1" &
+                                        horizon_limit_up == 10 &
+                                        horizon_number == 2,
+                                      3,
+                                      .data$horizon_number)))) %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_2341_1" &
+                          horizon_limit_up == 12 &
+                          horizon_number == 3,
+                        4,
+                        ifelse(unique_survey_profile == "13_2006_2341_1" &
+                                 horizon_limit_up == 7 &
+                                 horizon_number == 4,
+                               3,
+                               .data$horizon_number))) %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_231_1" &
+                          horizon_limit_up == 14 &
+                          horizon_number == 3,
+                        4,
+                        ifelse(unique_survey_profile == "13_2006_231_1" &
+                                 horizon_limit_up == 10 &
+                                 horizon_number == 4,
+                               3,
+                               .data$horizon_number))) %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_1025_1" &
+                          horizon_limit_up == 14 &
+                          horizon_number == 3,
+                        4,
+                        ifelse(unique_survey_profile == "13_2006_1025_1" &
+                                 horizon_limit_up == 9 &
+                                 horizon_number == 4,
+                               3,
+                               .data$horizon_number)))  %>%
+        mutate(horizon_number =
+                 ifelse(unique_survey_profile == "13_2006_1360_1" &
+                          horizon_limit_up == 65 &
+                          horizon_number == 2,
+                        3,
+                        ifelse(unique_survey_profile == "13_2006_1360_1" &
+                                 horizon_limit_up == 60 &
+                                 horizon_number == 3,
+                               2,
+                               .data$horizon_number)))
+
+
     }
 
     if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
@@ -5565,6 +5658,11 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
     # Final dataset preparations ----
 
+    if (!"horizon_number_orig" %in% names(df)) {
+
+      df <- df %>%
+        rename(horizon_number_orig = horizon_number)
+    }
 
     df <- df %>%
       # Sort in different levels
@@ -5573,7 +5671,6 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
               survey_year,
               profile_pit_id,
               layer_number) %>%
-      rename(horizon_number_orig = horizon_number) %>%
       mutate(horizon_master_orig =
                ifelse(exists("horizon_master_orig"),
                       horizon_master_orig,
@@ -5667,6 +5764,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                                       (.data$eff_soil_depth > .data$depth_max),
                                     .data$eff_soil_depth,
                                     .data$horizon_limit_low)))) %>%
+      ungroup() %>%
       select(-layer_number_deepest,
              -depth_max,
              -prev_horizon_limit_low,
