@@ -69,14 +69,16 @@ get_range_inconsistencies <- function(survey_form,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
-  
+
+  cat(paste0(" \nSolve range inconsistencies in '", survey_form, "'\n"))
+
   # Monitor how long it takes to run this function
-  
+
   start_time_r <- Sys.time()
 
   # Specify date on which 'layer 0' data were downloaded ----
   # from ICP Forests website
-  
+
   source("./src/functions/get_date_local.R")
   download_date <- get_date_local(path = "./data/raw_data/",
                                   save_to_env = TRUE,
@@ -93,7 +95,7 @@ get_range_inconsistencies <- function(survey_form,
   }
 
   # Import required dataframes ----
-  
+
   # Import the inconsistency catalogue
 
   assertthat::assert_that(
@@ -161,7 +163,7 @@ get_range_inconsistencies <- function(survey_form,
                                      "horizon_gypsum",
                                      "horizon_caco3_total",
                                      "organic_layer_weight"))]
-  
+
   length_parameters_wrong_units <- length(parameters_wrong_units)
   } else {
     length_parameters_wrong_units <- 0
@@ -189,7 +191,7 @@ get_range_inconsistencies <- function(survey_form,
 
   parameters <- names(df)[names(df) %in% ranges_qaqc$parameter]
   length_parameters_range <- length(parameters)
-  
+
   } else {
     length_parameters_range <- 0
   }
@@ -786,7 +788,7 @@ get_range_inconsistencies <- function(survey_form,
     vec_data <-
       df[vec_inconsistency,
          which(names(df) == parameters_mandatory_names[i])]
-    
+
     if ("tbl_df" %in% class(vec_data)) {
       vec_data <- pull(vec_data)
     }
@@ -868,7 +870,7 @@ get_range_inconsistencies <- function(survey_form,
 
 
   # FSCC_42: Are informative but non-mandatory data reported ----
-  
+
   # Some parameters in "prf" are highly informative
   # even though they have
   # not always been mandatory to report
@@ -1113,25 +1115,21 @@ get_range_inconsistencies <- function(survey_form,
     # level (Level I, i.e. "s1", versus Level II, i.e. "so")
 
     if (survey_form == "y1_st1") {
-      data_availability_level <- get_env("data_availability_s1")
+      data_availability_plots <- get_env("s1_som") %>%
+        distinct(plot_id, .keep_all = TRUE) %>%
+        select(code_country, partner_code, code_plot, plot_id,
+               country, partner_short, partner)
       } else
     if (survey_form == "si_sta") {
-      data_availability_level <- get_env("data_availability_so")
+      data_availability_plots <- get_env("so_som") %>%
+        distinct(plot_id, .keep_all = TRUE) %>%
+        select(code_country, partner_code, code_plot, plot_id,
+               country, partner_short, partner)
       }
-
-    data_availability_plots <- data_availability_level[which(
-                  rowSums((data_availability_level[, 8:11]) == 1) > 0), ]
 
     # Create a table "data_availability_plots"
     # to store information about the (presence of) forest type information
 
-    data_availability_plots <-
-      data_availability_plots[!duplicated(data_availability_plots$plot_id),
-                               which(names(data_availability_plots) %in%
-                                       c("code_country", "partner_code",
-                                         "code_plot", "plot_id",
-                                         "country", "partner_short",
-                                         "partner"))]
     data_availability_plots$code_forest_type_count <- NA
     data_availability_plots$code_forest_type <- NA
 
@@ -1299,7 +1297,7 @@ get_range_inconsistencies <- function(survey_form,
       wrong_range_org <- c(0, 36)
       wrong_range_mineral <- c(0, 66) # %
       } else
-      
+
     if (parameters_wrong_units[i] == "organic_layer_weight") {
         df$organic_layer_weight_wrong_unit <- NA
         # Filter so_som for organic_layer_weight < 100: 0.16 - 15.976
@@ -1344,7 +1342,7 @@ get_range_inconsistencies <- function(survey_form,
         # a given unique_partner_survey between 0.04 and 59 (organic layers) or
         # between 0.04 and 15 (mineral layers)?
         # Then, it is assumed that the data are reported in the wrong unit.
-      
+
         # This is probably the most robust way to implement this test.
         # Indeed, for bulk density, data in the "wrong" units are obvious due to
         # the factor 1000 difference, but this is less straightforward for the
@@ -1400,7 +1398,7 @@ get_range_inconsistencies <- function(survey_form,
           if (parameters_wrong_units[i] == "horizon_gypsum") {
             df$gypsum_wrong_unit[vec_nonempty] <- TRUE
             } else
-          
+
           if (parameters_wrong_units[i] == "organic_layer_weight") {
             df$organic_layer_weight_wrong_unit[vec_nonempty] <- TRUE
           }
@@ -1414,7 +1412,7 @@ get_range_inconsistencies <- function(survey_form,
           } else
 
           if (unlist(strsplit(survey_form, "_"))[2] == "som") {
-          
+
           if ("code_layer_original" %in% names(df)) {
             ind_layer_horizon <-
               as.character(df$code_layer_original[vec_nonempty])
@@ -1422,7 +1420,7 @@ get_range_inconsistencies <- function(survey_form,
               ind_layer_horizon <- as.character(df$code_layer[vec_nonempty])
             }
           ind_repetition_profile_pit_id <- df$repetition[vec_nonempty]
-          
+
           } else
 
           if (survey_form == "sw_swc") {
@@ -1512,30 +1510,47 @@ get_range_inconsistencies <- function(survey_form,
             # reported in % instead of g kg-1
             if (parameters_wrong_units[i] %in% c("organic_carbon_total",
                                                  "n_total",
-                                                 "horizon_c_organic_total", 
-                                                 "horizon_n_total", 
-                                                 "horizon_caco3_total", 
+                                                 "horizon_c_organic_total",
+                                                 "horizon_n_total",
+                                                 "horizon_caco3_total",
                                                  "horizon_gypsum")) {
               df[vec_nonempty, col_ind] <- 10 * df[vec_nonempty, col_ind]
             }
-            
+
             # probably reported in g m-2 instead of kg m-2
             if (parameters_wrong_units[i] %in% c("organic_layer_weight")) {
               df[vec_nonempty, col_ind] <- 0.001 * df[vec_nonempty, col_ind]
             }
-            
+
             }
 
         }
       }
+      } # End of for-loop unique_partner_survey
+
+
+    if (parameters_wrong_units[i] %in% c("bulk_density",
+                                         "horizon_bulk_dens_measure",
+                                         "horizon_bulk_dens_est")) {
+
+      vec_inconsistency <-
+        which(!is.na(pull(df[, col_ind])) &
+                pull(df[, col_ind]) < wrong_range_mineral[2])
+
+      if (solve == TRUE) {
+
+        # reported in g cm-3 instead of kg m-3
+        df[vec_inconsistency, col_ind] <- 1000 * df[vec_inconsistency, col_ind]
+
       }
+    }
 
     # Update the progress bar
 
     if (!isTRUE(getOption("knitr.in.progress"))) {
     setTxtProgressBar(progress_bar, (length_parameters_mandatory + i))
     }
-  }
+  } # End of for-loop parameters_wrong_units
   }
 
 
@@ -1772,38 +1787,38 @@ get_range_inconsistencies <- function(survey_form,
         # the thickness of the given layer is known:
         # We can derive the maximum possible value, assuming that the
         # density of organic matter is 1400 kg m-3 (see below)
-        
+
         # Source:
         # "Particle densities generally fall between 2.60 and 2.75 g/cm3 for
         # mineral particles. Organic matter weighs much less than an equal
         # volume of mineral solids and often has a particle density of 1.2
         # to 1.4 g/cm3."
-        
+
         # Reference:
         # Haan, C.T., Barfield, B.J., Hayes, J.C. (1994).
         # Design Hydrology and Sedimentology for Small Catchments.
-        
+
         if ((unlist(strsplit(survey_form, "_"))[2] == "som") &&
             !is.na(df$layer_limit_inferior[j]) &&
             !is.na(df$layer_limit_superior[j]) &&
             (column_name == "organic_layer_weight")) {
-          
+
           layer_thickness_j_meter <-
             0.01 * abs(diff(c(df$layer_limit_inferior[j],
                               df$layer_limit_superior[j])))
-          
+
           range_max_possible <- 1400 * layer_thickness_j_meter
-          
+
         }
-        
+
         # Ignore the parameter value if a value of -1 was reported, because this
         # indicates that the measurement was below a limit of quantification.
 
         # If the parameter value was outside the possible range
 
         if (df$active_column[j] != -1 &&
-            (df$active_column[j] < range_min_possible ||
-             df$active_column[j] > range_max_possible)) {
+            (df$active_column[j] <= range_min_possible ||
+             df$active_column[j] >= range_max_possible)) {
 
           # Store information about the inconsistency in
           # "list_range_inconsistencies"
@@ -1865,20 +1880,20 @@ get_range_inconsistencies <- function(survey_form,
                        change_date = df$change_date[j],
                        download_date = rep(download_date_pir, length(j))))
 
-          
+
           # Replace by NA
-          
+
           if (solve == TRUE) {
-            
+
             df$active_column[j] <- NA
-            
+
           }
-          
-          
+
+
         }
         }
 
-      
+
   # FSCC_14: Are values within a plausible range ----
   #          (See partly code above)
 
@@ -1943,7 +1958,7 @@ get_range_inconsistencies <- function(survey_form,
          ind_layer_horizon <- df$horizon_master[j]
          ind_repetition_profile_pit_id <- df$profile_pit_id[j]
          } else
-          
+
          if (unlist(strsplit(survey_form, "_"))[2] == "som") {
            if ("code_layer_original" %in% names(df)) {
            ind_layer_horizon <- as.character(df$code_layer_original[j])
@@ -2008,7 +2023,7 @@ get_range_inconsistencies <- function(survey_form,
         if (!is.na(df$active_column[j]) &&
            (is.na(df$other_obs[j]) ||
             !str_detect(df$other_obs[j], "H2O|H20|water|CaCl2"))) {
-      
+
       # Store information about the inconsistency in
       # "list_range_inconsistencies"
 
@@ -2129,7 +2144,7 @@ get_range_inconsistencies <- function(survey_form,
       }
 
       vec_data <- df[vec_inconsistency, col_ind]
-      
+
       if ("tbl_df" %in% class(vec_data)) {
         vec_data <- pull(vec_data)
       }
@@ -2172,22 +2187,22 @@ get_range_inconsistencies <- function(survey_form,
                    change_date = df$change_date[vec_inconsistency],
                    download_date = rep(download_date_pir,
                                        length(vec_inconsistency))))
-      
+
       # Replace by NA
-      
+
       if (solve == TRUE) {
-        
+
         df[vec_inconsistency, col_ind] <- NA
-        
+
       }
-      
-      
+
+
       }
 
     # Update the progress bar
 
     if (!isTRUE(getOption("knitr.in.progress"))) {
-      
+
     setTxtProgressBar(progress_bar, (length_parameters_mandatory +
                       length_parameters_wrong_units +
                         length_parameters_range + i))
@@ -2425,7 +2440,7 @@ get_range_inconsistencies <- function(survey_form,
     }
 
   # Final processing and saving of dataframe ----
-  
+
   # Remove the columns that are no longer needed in the data frame
 
   if (any(names(df) %in% c("unique_partner_survey",
