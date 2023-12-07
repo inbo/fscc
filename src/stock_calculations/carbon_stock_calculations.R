@@ -1,9 +1,21 @@
 
-# Calculate carbon stocks until 100 cm of depth
-# Using a mass-preserving spline function of soil layers/horizons
+# Calculate carbon stocks until 100 cm (or until the effective soil depth
+# if shallower)
+# ---------------------------------------------------------------------------
+
+# Details: In this script, validated and gap-filled "layer 1" solid soil data
+# are processed to calculate soil carbon stocks using different functions.
+# The detailed steps taken in each function can be found within the "Roxygen"
+# documentation of the function, i.e. on top of the function scripts
+# (in "./src/stock_calculations/functions/" folder).
+
+# Show "document outline" window of this script in R Studio
+# using Ctrl + Shift + O
 
 # Input data: "./data/layer1_data/"
 # Output data: "./output/stocks/"
+
+
 
 # 1. Load packages and functions ----
 
@@ -13,14 +25,13 @@ stopifnot(require("tidyverse"),
           require("mpspline2"),
           require("ggplot2"))
 
-source("./src/stock_calculations/functions/soilspline.R")
-source("./src/stock_calculations/functions/spline2stock.R")
-
 source("./src/functions/get_env.R")
+
 
 # 2. Specify level ----
 
 level <- "LII"
+
 
 # 3. Calculate stocks ----
 
@@ -47,18 +58,22 @@ if (level == "LII") {
 
   source("./src/stock_calculations/functions/get_stocks.R")
 
-get_stocks(survey_form = "so_som",
-           data_frame = so_som,
-           graph = FALSE,
-           density_per_three_cm = TRUE)
+  get_stocks(survey_form = "so_som",
+             data_frame = so_som,
+             graph = FALSE,
+             density_per_three_cm = TRUE)
 
 
-get_stocks(survey_form = "so_pfh",
-           data_frame = so_pfh,
-           graph = FALSE,
-           density_per_three_cm = TRUE)
+  get_stocks(survey_form = "so_pfh",
+             data_frame = so_pfh,
+             graph = FALSE,
+             density_per_three_cm = TRUE)
 
 }
+
+
+
+
 
 # 4. Compile data per level ----
 
@@ -228,9 +243,16 @@ df_stocks_plot_lii <-
 
 }
 
+
+
+
+
 # 5. Add stratifiers ----
+# (For statistics/visualisation purposes)
 
 if (level == "LI") {
+
+  # Note: expert harmonisation of the LI WRB soil groups are still ongoing
 
   source("./src/functions/get_stratifiers.R")
   s1_strat <- get_stratifiers(level = "LI")
@@ -243,8 +265,6 @@ if (level == "LI") {
     select(plot_id, longitude_dec, latitude_dec,
            wrb_soil_group, forest_type, humus_type, biogeo,
            main_tree_species, bs_class)
-
-
 
 }
 
@@ -264,15 +284,15 @@ if (level == "LII") {
            wrb_soil_group, forest_type, humus_type, biogeo,
            main_tree_species, bs_class)
 
-  df_layer <- df_layer %>%
+  df_layer_lii <- df_layer_lii %>%
     left_join(so_strat,
               by = "plot_id")
 
-  df_stocks <- df_stocks %>%
+  df_stocks_lii <- df_stocks_lii %>%
     left_join(so_strat,
               by = "plot_id")
 
-  # Add colours
+  # Add colours (for visualisation)
 
   df_layer <- df_layer %>%
     mutate(unique_layer_repetition =
@@ -308,7 +328,7 @@ if (level == "LII") {
 dir <- "./output/stocks/20231207_to_share_with_partners/"
 
 # Some German plot_ids need to be excluded in LI because
-# they concern different plots
+# they concern different non-unique plots across different Länder
 
 german_plot_ids_exclude <-
   c("4_259", "4_260", "4_266", "4_267", "4_283", "4_284", "4_285",
@@ -411,6 +431,18 @@ write.table(so_som_output,
             na = "",
             sep = ";",
             dec = ".")
+
+
+# Format and print the names for attribute catalogue:
+
+names_list <-
+  sort(unique(c(names(s1_som_output), names(so_som_output),
+                names(s1_pfh_output), names(so_pfh_output))))
+
+cat(paste0("-   **", names_list, "** - "), sep = "\n")
+
+
+
 
 
 
@@ -591,7 +623,15 @@ save_excel(df_to_correct %>%
 
 
 
-# 7. Make a graph per plot_id ----
+# 7. Statistics ----
+
+
+
+
+
+# 8. Data visualisation ----
+
+## 8.1. Make a graph per plot_id ----
 
 plot_ids <- unique(df_layer$plot_ids)
 

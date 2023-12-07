@@ -66,6 +66,10 @@ apply_additional_manual_corr <- function(survey_form,
         # To do: systematically implement these issues in
         # ./src/functions/get_layer_inconsistencies.R
         filter(parameter != "layer_number") %>%
+        # Remove records related to "code_layer"
+        # To do: systematically implement these issues in
+        # ./src/functions/get_layer_inconsistencies.R
+        filter(parameter != "code_layer") %>%
         # Filter for inconsistencies of the given survey form
         filter(.data$survey_form == name_survey_form) %>%
         # Create column "unique_inconsistency_id"

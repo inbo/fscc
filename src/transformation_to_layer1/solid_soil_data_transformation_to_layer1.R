@@ -20,8 +20,8 @@
 # Status:
 # - Almost complete for Level II (so) (complete for variables required
 #   for carbon stock calculations)
-# - Not yet complete for Level I (s1), but the steps should be roughly
-#   the same
+# - Almost complete for Level I (s1) (complete for variables required
+#   for carbon stock calculations)
 
 
 

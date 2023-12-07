@@ -55,6 +55,9 @@ get_stocks <- function(survey_form,
   source("./src/functions/assign_env.R")
   source("./src/functions/save_to_google_drive.R")
 
+  cat(paste0(" \nCalculate '", parameter, "' stocks for '",
+             survey_form, "'.\n \n"))
+
   ## 1.2. Retrieve data ----
 
   if (is.null(data_frame)) {
