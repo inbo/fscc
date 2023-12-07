@@ -173,8 +173,6 @@ so_som <- solve_record_inconsistencies(survey_form = "so_som",
 
 source("./src/functions/gapfill_from_pir.R")
 
-cat("Gap-fill from PIRs (data corrected by partners)\n")
-
 
 if (level == "LI") {
 
@@ -923,6 +921,15 @@ if (length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
 
 }
 
+if (level == "LI") {
+
+  s1_som <- s1_som %>%
+    mutate(organic_layer_weight =
+             ifelse(layer_type == "mineral",
+                    NA,
+                    .data$organic_layer_weight))
+
+}
 
 # Add "additional_manual_corrections_fscc"
 
@@ -930,7 +937,7 @@ source("./src/functions/apply_additional_manual_corr.R")
 
 if (level == "LI") {
 
-  test <- apply_additional_manual_corr(survey_form = "s1_som",
+  s1_som <- apply_additional_manual_corr(survey_form = "s1_som",
                                        data_frame = s1_som)
   s1_pfh <- apply_additional_manual_corr(survey_form = "s1_pfh",
                                          data_frame = s1_pfh)
@@ -940,39 +947,10 @@ if (level == "LII") {
 
   so_som <- apply_additional_manual_corr(survey_form = "so_som",
                                          data_frame = so_som)
-  so_som <- apply_additional_manual_corr(survey_form = "so_pfh",
+  so_pfh <- apply_additional_manual_corr(survey_form = "so_pfh",
                                          data_frame = so_pfh)
 
 }
-
-# TO DO: initiate a column for each parameter to indicate the sources of the
-# data (e.g. "layer 0", "partner communication", ...)
-
-# In the previous step, "pir_applied" objects are generated for each survey
-# form, which contains the new data from the pirs, and the action that was
-# taken with these data (i.e. whether or not it was still necessary to add
-# them to the survey forms). Combine the different pir_applied dataframes
-# into one dataframe.
-
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with(object_name_start = "pir_applied",
-                           object_type = "pir_applied",
-                           save_to_env = TRUE)
-
-# Save the pir_applied dataframe
-
-wb <- createWorkbook()
-addWorksheet(wb, "Inconsistency report")
-writeData(wb, 1, pir_applied)
-addFilter(wb, 1, row = 1, cols = seq_len(ncol(pir_applied)))
-freezePane(wb, 1, firstActiveRow = 2, firstActiveCol = 1)
-addCreator(wb, "ICP Forests - FSCC")
-openxlsx::saveWorkbook(wb,
-                       file = paste0("./output/gap_filling_details/",
-                                     "20230302_applied_pirs_",
-                                     tolower(level),
-                                     ".xlsx"),
-                       overwrite = TRUE)
 
 
 

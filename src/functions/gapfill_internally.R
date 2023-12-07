@@ -197,7 +197,6 @@ gapfill_internally <- function(survey_form,
               coarse_fragment_vol =
                 mean(coarse_fragment_vol, na.rm = TRUE),
               .groups = "drop") %>%
-    as.data.frame %>%
     mutate_all(function(x) ifelse(is.nan(x), NA, x))
 
   # Aggregate per unique layer (plot_id x code_layer)
@@ -221,7 +220,6 @@ gapfill_internally <- function(survey_form,
               coarse_fragment_vol =
                 mean(coarse_fragment_vol, na.rm = TRUE),
               .groups = "drop") %>%
-    as.data.frame %>%
     mutate(layer_limit_superior = ifelse(is.nan(layer_limit_superior),
                                          NA, layer_limit_superior),
            layer_limit_inferior = ifelse(is.nan(layer_limit_inferior),
@@ -260,7 +258,6 @@ gapfill_internally <- function(survey_form,
               coarse_fragment_vol =
                 mean(coarse_fragment_vol, na.rm = TRUE),
               .groups = "drop") %>%
-    as.data.frame %>%
     mutate_all(function(x) ifelse(is.nan(x), NA, x))
 
   # organic_layer_weight and organic_carbon_total should not be assessed

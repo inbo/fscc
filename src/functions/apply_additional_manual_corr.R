@@ -8,28 +8,25 @@ apply_additional_manual_corr <- function(survey_form,
   cat(paste0(" \nApply additional manual corrections in '", survey_form,
              "'.\n"))
 
+  name_survey_form <- survey_form
 
   # Arrange input dataframe(s) ----
 
   # Assert that input arguments are in correct classes
 
-  assertthat::assert_that("character" %in% class(survey_form),
+  assertthat::assert_that("character" %in% class(name_survey_form),
                           msg = paste0("Input variable 'survey_form' ",
                                        "should be a character."))
 
 
   if (is.null(data_frame)) {
-    df <- get_env(survey_form)
+    df <- get_env(name_survey_form)
   } else {
     df <- data_frame
   }
 
     # Gap-fill change_date if missing (e.g. in "so_prf")
     # Assumption: 2009-12-06 (date on which database was established at PCC)
-
-    # if (!"change_date" %in% names(df)) {
-    #   df$change_date
-    # }
 
     df <- df %>%
       mutate(change_date = ifelse(is.na(.data$change_date),
@@ -46,6 +43,7 @@ apply_additional_manual_corr <- function(survey_form,
       df_to_correct <-
         openxlsx::read.xlsx(path,
                             sheet = 1) %>%
+        mutate(code_line = as.character(code_line)) %>%
         rename(observation_date = change_date) %>%
         # Assuming the Excel epoch is 1899-12-30
         mutate(observation_date = as.Date(.data$observation_date - 1,
@@ -69,7 +67,7 @@ apply_additional_manual_corr <- function(survey_form,
         # ./src/functions/get_layer_inconsistencies.R
         filter(parameter != "layer_number") %>%
         # Filter for inconsistencies of the given survey form
-        filter(.data$survey_form == survey_form) %>%
+        filter(.data$survey_form == name_survey_form) %>%
         # Create column "unique_inconsistency_id"
         mutate(unique_inconsistency_id =
                  paste0(code_line, "_",
@@ -310,11 +308,14 @@ apply_additional_manual_corr <- function(survey_form,
     } # End of evaluation correction records
 }
 
+
+
     # Export ----
 
-      return(df)
-      assign_env(paste0("completed_manual_corr_", survey_form),
+    assign_env(paste0("completed_manual_corr_", name_survey_form),
                  df_to_correct_survey_form)
+
+    return(df)
 
 
 
