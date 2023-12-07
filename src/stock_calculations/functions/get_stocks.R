@@ -326,8 +326,8 @@ get_stocks <- function(survey_form,
       select(-starts_with("density_")) %>%
       # Remove records with negative stocks
       filter(if_any(matches("stock_10"),  ~.x >= 0)) %>%
-      filter(if_any(matches("stock_forest_floor"),  ~.x >= 0)) %>%
-      # Add the variable name (e.g. "c_" for TOC) to the stock names
+      filter(if_any(matches("stock_forest_floor"), ~(is.na(.x) | .x >= 0))) %>%
+    # Add the variable name (e.g. "c_" for TOC) to the stock names
       rename_with(~ ifelse(startsWith(., "stock"),
                            paste(var_name, ., sep = "_"), .),
                   everything()) %>%
