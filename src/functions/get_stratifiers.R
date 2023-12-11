@@ -33,6 +33,13 @@ get_stratifiers <- function(level) {
     read.csv2("./data/raw_data/si/adds/dictionaries/d_tree_spec.csv") %>%
     select(code, description)
 
+  d_parent_material <-
+    read.csv2("./data/raw_data/so/adds/dictionaries/d_parent_material.csv") %>%
+    mutate(description = str_to_title(description)) %>%
+    filter(code != 0) %>%
+    arrange(code) %>%
+    select(code, description)
+
   # Import the shapefile with biogeographical regions
   biogeo_sf <-
     read_sf(paste0("./data/additional_data/shapefiles/",
@@ -86,7 +93,7 @@ get_stratifiers <- function(level) {
                       "code_wrb_qualifier_1",
                       "code_wrb_spezifier_1",
                       "method_wrb_harmonisation_fscc",
-                      "eff_soil_depth",
+                      "depth_stock",
                       "bs_class",
                       "code_forest_type",
                       "remark_harmonisation_fscc"),
@@ -95,7 +102,7 @@ get_stratifiers <- function(level) {
                 select(plot_id, partner_short),
               by = "plot_id") %>%
     relocate(partner_short, .before = plot_id) %>%
-    mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
+    # mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
     mutate_all(~ifelse((.) == "NA", NA, .)) %>%
     mutate_all(~ifelse((.) == "", NA, .)) %>%
     left_join(d_forest_type,
@@ -155,13 +162,120 @@ get_stratifiers <- function(level) {
     left_join(d_humus,
               by = join_by(code_humus == code)) %>%
     rename(humus_type = description) %>%
+    # Add parent_material
+    left_join(get_env("so_prf") %>%
+                select(plot_id, code_parent_material_1) %>%
+                filter(code_parent_material_1 != 0) %>%
+                filter(!is.na(code_parent_material_1)) %>%
+                group_by(plot_id, code_parent_material_1) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, code_parent_material_1),
+              by = "plot_id") %>%
+    left_join(d_parent_material,
+              by = join_by(code_parent_material_1 == code)) %>%
+    rename(parent_material = description) %>%
+    # Add slope
+    left_join(get_env("si_plt") %>%
+                select(plot_id, slope) %>%
+                filter(!is.na(slope)) %>%
+                group_by(plot_id, slope) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, slope),
+              by = "plot_id") %>%
+    # Add soil depth
+    left_join(get_env("so_prf") %>%
+                rowwise() %>%
+                mutate(eff_soil_depth = ifelse(.data$eff_soil_depth_orig == 0,
+                                               NA,
+                                               .data$eff_soil_depth_orig),
+                       rooting_depth = ifelse(.data$rooting_depth == 0 |
+                                                .data$rooting_depth == 999,
+                                              NA,
+                                              .data$rooting_depth),
+                       rock_depth = ifelse(.data$rock_depth == 0 |
+                                             .data$rock_depth == 999,
+                                           NA,
+                                           .data$rock_depth),
+                       obstacle_depth = ifelse(.data$obstacle_depth == 0 |
+                                                 .data$obstacle_depth == 999,
+                                               NA,
+                                               .data$obstacle_depth)) %>%
+                mutate(eff_soil_depth =
+                         ifelse(is.na(.data$eff_soil_depth) &
+                                  any(!is.na(c(.data$rooting_depth,
+                                               .data$rock_depth,
+                                               .data$obstacle_depth))),
+                                # Maximum of these three depths
+                                max(c(.data$rooting_depth,
+                                      .data$rock_depth,
+                                      .data$obstacle_depth),
+                                    na.rm = TRUE),
+                                .data$eff_soil_depth)) %>%
+                ungroup %>%
+                filter(!is.na(eff_soil_depth)) %>%
+                # Filter for records with the most recent change_date
+                # per plot
+                group_by(plot_id) %>%
+                slice_max(order_by =
+                            as.Date(change_date, format = "%Y-%m-%d")) %>%
+                ungroup() %>%
+                group_by(plot_id, eff_soil_depth) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                filter(count == max(count)) %>%
+                summarise(
+                  eff_soil_depth = first(eff_soil_depth)) %>%
+                ungroup() %>%
+                select(plot_id, eff_soil_depth),
+              by = "plot_id") %>%
+    mutate(eff_soil_depth = ifelse(is.na(eff_soil_depth) &
+                                     !is.na(depth_stock),
+                                   .data$depth_stock,
+                                   .data$eff_soil_depth)) %>%
+    # Add rooting depth
+    left_join(get_env("so_prf") %>%
+                mutate(rooting_depth = ifelse(.data$rooting_depth == 0,
+                                              NA,
+                                              .data$rooting_depth)) %>%
+                filter(!is.na(rooting_depth)) %>%
+                # Filter for records with the most recent change_date
+                # per plot
+                group_by(plot_id) %>%
+                slice_max(order_by =
+                            as.Date(change_date, format = "%Y-%m-%d")) %>%
+                ungroup() %>%
+                group_by(plot_id, rooting_depth) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                filter(count == max(count)) %>%
+                summarise(
+                  rooting_depth = first(rooting_depth)) %>%
+                ungroup() %>%
+                select(plot_id, rooting_depth),
+              by = "plot_id") %>%
     select(partner_short,
            plot_id,
            longitude_dec,
            latitude_dec,
+           slope,
+           eff_soil_depth,
+           rooting_depth,
            wrb_soil_group,
            forest_type,
            humus_type,
+           parent_material,
            biogeo,
            main_tree_species,
            bs_class,
@@ -170,6 +284,7 @@ get_stratifiers <- function(level) {
            code_wrb_spezifier_1,
            code_forest_type,
            code_humus,
+           code_parent_material_1,
            code_tree_species)
 
 }
@@ -272,6 +387,23 @@ get_stratifiers <- function(level) {
     left_join(d_humus,
               by = join_by(code_humus == code)) %>%
     rename(humus_type = description) %>%
+    # Add parent_material
+    left_join(get_env("s1_prf") %>%
+                select(plot_id, code_parent_material_1) %>%
+                filter(code_parent_material_1 != 0) %>%
+                filter(!is.na(code_parent_material_1)) %>%
+                group_by(plot_id, code_parent_material_1) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, code_parent_material_1),
+              by = "plot_id") %>%
+    left_join(d_parent_material,
+              by = join_by(code_parent_material_1 == code)) %>%
+    rename(parent_material = description) %>%
     # Add main tree species
     left_join(get_env("y1_st1") %>%
                 select(plot_id, code_tree_species) %>%
@@ -289,14 +421,78 @@ get_stratifiers <- function(level) {
     left_join(d_tree_spec,
               by = join_by(code_tree_species == code)) %>%
     rename(main_tree_species = description) %>%
+    # Add slope
+    left_join(get_env("y1_pl1") %>%
+                select(plot_id, slope) %>%
+                filter(!is.na(slope)) %>%
+                group_by(plot_id, slope) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, slope),
+              by = "plot_id") %>%
+    mutate(bs_class = NA) %>%
+    # Add soil depth
+    left_join(get_env("s1_prf") %>%
+                rowwise() %>%
+                mutate(eff_soil_depth = ifelse(.data$eff_soil_depth == 0,
+                                               NA,
+                                               .data$eff_soil_depth),
+                       rooting_depth = ifelse(.data$rooting_depth == 0 |
+                                                .data$rooting_depth == 999,
+                                              NA,
+                                              .data$rooting_depth),
+                       rock_depth = ifelse(.data$rock_depth == 0 |
+                                             .data$rock_depth == 999,
+                                           NA,
+                                           .data$rock_depth),
+                       obstacle_depth = ifelse(.data$obstacle_depth == 0 |
+                                                 .data$obstacle_depth == 999,
+                                               NA,
+                                               .data$obstacle_depth)) %>%
+                mutate(eff_soil_depth =
+                         ifelse(is.na(.data$eff_soil_depth) &
+                                 any(!is.na(c(.data$rooting_depth,
+                                              .data$rock_depth,
+                                              .data$obstacle_depth))),
+                               # Maximum of these three depths
+                               max(c(.data$rooting_depth,
+                                     .data$rock_depth,
+                                     .data$obstacle_depth),
+                                   na.rm = TRUE),
+                               .data$eff_soil_depth)) %>%
+                ungroup %>%
+                filter(!is.na(eff_soil_depth)) %>%
+                # Filter for records with the most recent change_date
+                # per plot
+                group_by(plot_id) %>%
+                slice_max(order_by =
+                            as.Date(change_date, format = "%Y-%m-%d")) %>%
+                ungroup() %>%
+                group_by(plot_id, eff_soil_depth) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                filter(count == max(count)) %>%
+                summarise(
+                  eff_soil_depth = first(eff_soil_depth)) %>%
+                ungroup() %>%
+                select(plot_id, eff_soil_depth),
+              by = "plot_id") %>%
     mutate(bs_class = NA) %>%
     select(partner_short,
            plot_id,
            longitude_dec,
            latitude_dec,
+           slope,
+           eff_soil_depth,
            wrb_soil_group,
            forest_type,
            humus_type,
+           parent_material,
            biogeo,
            main_tree_species,
            bs_class,
@@ -306,6 +502,7 @@ get_stratifiers <- function(level) {
            code_wrb_spezifier_1,
            code_forest_type,
            code_humus,
+           code_parent_material_1,
            code_tree_species)
 
 
