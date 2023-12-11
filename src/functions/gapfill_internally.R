@@ -192,6 +192,10 @@ gapfill_internally <- function(survey_form,
                 mean(horizon_c_organic_total, na.rm = TRUE),
               horizon_clay =
                 mean(horizon_clay, na.rm = TRUE),
+              horizon_silt =
+                mean(horizon_silt, na.rm = TRUE),
+              horizon_sand =
+                mean(horizon_sand, na.rm = TRUE),
               bulk_density =
                 mean(bulk_density, na.rm = TRUE),
               coarse_fragment_vol =
@@ -215,6 +219,10 @@ gapfill_internally <- function(survey_form,
                 mean(layer_limit_inferior, na.rm = TRUE),
               horizon_clay =
                 mean(horizon_clay, na.rm = TRUE),
+              horizon_silt =
+                mean(horizon_silt, na.rm = TRUE),
+              horizon_sand =
+                mean(horizon_sand, na.rm = TRUE),
               bulk_density =
                 mean(bulk_density, na.rm = TRUE),
               coarse_fragment_vol =
@@ -226,6 +234,10 @@ gapfill_internally <- function(survey_form,
                                          NA, layer_limit_inferior),
            horizon_clay = ifelse(is.nan(horizon_clay),
                                  NA, horizon_clay),
+           horizon_silt = ifelse(is.nan(horizon_silt),
+                                 NA, horizon_silt),
+           horizon_sand = ifelse(is.nan(horizon_sand),
+                                 NA, horizon_sand),
            bulk_density = ifelse(is.nan(bulk_density),
                                  NA, bulk_density),
            coarse_fragment_vol = ifelse(is.nan(coarse_fragment_vol),
@@ -253,6 +265,10 @@ gapfill_internally <- function(survey_form,
                 mean(layer_limit_inferior, na.rm = TRUE),
               part_size_clay =
                 mean(part_size_clay, na.rm = TRUE),
+              part_size_silt =
+                mean(part_size_silt, na.rm = TRUE),
+              part_size_sand =
+                mean(part_size_sand, na.rm = TRUE),
               bulk_density =
                 mean(bulk_density, na.rm = TRUE),
               coarse_fragment_vol =
@@ -296,12 +312,18 @@ gapfill_internally <- function(survey_form,
                        coarse_fragment_vol_pfh_sameyear =
                          coarse_fragment_vol,
                        part_size_clay_pfh_sameyear =
-                         horizon_clay) %>%
+                         horizon_clay,
+                       part_size_silt_pfh_sameyear =
+                         horizon_silt,
+                       part_size_sand_pfh_sameyear =
+                         horizon_sand) %>%
                 select(unique_survey_layer,
                        organic_carbon_total_pfh_sameyear,
                        bulk_density_pfh_sameyear,
                        coarse_fragment_vol_pfh_sameyear,
-                       part_size_clay_pfh_sameyear),
+                       part_size_clay_pfh_sameyear,
+                       part_size_silt_pfh_sameyear,
+                       part_size_sand_pfh_sameyear),
               by = "unique_survey_layer") %>%
     # som other year
     left_join(som_otheryear %>%
@@ -310,11 +332,17 @@ gapfill_internally <- function(survey_form,
                        coarse_fragment_vol_som_otheryear =
                          coarse_fragment_vol,
                        part_size_clay_som_otheryear =
-                         part_size_clay) %>%
+                         part_size_clay,
+                       part_size_silt_som_otheryear =
+                         part_size_silt,
+                       part_size_sand_som_otheryear =
+                         part_size_sand) %>%
                 select(unique_layer,
                        bulk_density_som_otheryear,
                        coarse_fragment_vol_som_otheryear,
-                       part_size_clay_som_otheryear),
+                       part_size_clay_som_otheryear,
+                       part_size_silt_som_otheryear,
+                       part_size_sand_som_otheryear),
               by = "unique_layer")
 
   if (unlist(strsplit(survey_form, "_"))[1] == "so") {
@@ -336,11 +364,17 @@ gapfill_internally <- function(survey_form,
                        coarse_fragment_vol_pfh_otheryear =
                          coarse_fragment_vol,
                        part_size_clay_pfh_otheryear =
-                         horizon_clay) %>%
+                         horizon_clay,
+                       part_size_silt_pfh_otheryear =
+                         horizon_silt,
+                       part_size_sand_pfh_otheryear =
+                         horizon_sand) %>%
                 select(unique_layer,
                        bulk_density_pfh_otheryear,
                        coarse_fragment_vol_pfh_otheryear,
-                       part_size_clay_pfh_otheryear),
+                       part_size_clay_pfh_otheryear,
+                       part_size_silt_pfh_otheryear,
+                       part_size_sand_pfh_otheryear),
               by = "unique_layer")
 
 
@@ -486,8 +520,62 @@ gapfill_internally <- function(survey_form,
   print(table(df$part_size_clay_source))
 
 
+  ## 4.6. Silt: combine columns ----
 
-  ## 4.6. Organic layer weight: combine columns ----
+  if (!"part_size_silt_orig" %in% names(df)) {
+    df$part_size_silt_orig <- df$part_size_silt
+  }
+
+  df <- df %>%
+    mutate(
+      part_size_silt_source = case_when(
+        !is.na(.data$part_size_silt) ~ "som (same year)",
+        !is.na(.data$part_size_silt_pfh_sameyear) ~ "pfh (same year)",
+        !is.na(.data$part_size_silt_som_otheryear) ~ "som (other year)",
+        !is.na(.data$part_size_silt_pfh_otheryear) ~ "pfh (other year)",
+        TRUE ~ NA_character_),
+      part_size_silt = coalesce(
+        .data$part_size_silt,
+        .data$part_size_silt_pfh_sameyear,
+        .data$part_size_silt_som_otheryear,
+        .data$part_size_silt_pfh_otheryear)) %>%
+    select(-part_size_silt_pfh_sameyear,
+           -part_size_silt_som_otheryear,
+           -part_size_silt_pfh_otheryear)
+
+  cat("Data sources 'part_size_silt' after internal gap-filling:\n")
+  print(table(df$part_size_silt_source))
+
+
+  ## 4.7. Sand: combine columns ----
+
+  if (!"part_size_sand_orig" %in% names(df)) {
+    df$part_size_sand_orig <- df$part_size_sand
+  }
+
+  df <- df %>%
+    mutate(
+      part_size_sand_source = case_when(
+        !is.na(.data$part_size_sand) ~ "som (same year)",
+        !is.na(.data$part_size_sand_pfh_sameyear) ~ "pfh (same year)",
+        !is.na(.data$part_size_sand_som_otheryear) ~ "som (other year)",
+        !is.na(.data$part_size_sand_pfh_otheryear) ~ "pfh (other year)",
+        TRUE ~ NA_character_),
+      part_size_sand = coalesce(
+        .data$part_size_sand,
+        .data$part_size_sand_pfh_sameyear,
+        .data$part_size_sand_som_otheryear,
+        .data$part_size_sand_pfh_otheryear)) %>%
+    select(-part_size_sand_pfh_sameyear,
+           -part_size_sand_som_otheryear,
+           -part_size_sand_pfh_otheryear)
+
+  cat("Data sources 'part_size_sand' after internal gap-filling:\n")
+  print(table(df$part_size_sand_source))
+
+
+
+  ## 4.8. Organic layer weight: combine columns ----
 
   if (!"organic_layer_weight_orig" %in% names(df)) {
     df$organic_layer_weight_orig <- df$organic_layer_weight
@@ -609,6 +697,10 @@ gapfill_internally <- function(survey_form,
                   mean(organic_carbon_total, na.rm = TRUE),
                 part_size_clay =
                   mean(part_size_clay, na.rm = TRUE),
+                part_size_silt =
+                  mean(part_size_silt, na.rm = TRUE),
+                part_size_sand =
+                  mean(part_size_sand, na.rm = TRUE),
                 bulk_density =
                   mean(bulk_density, na.rm = TRUE),
                 coarse_fragment_vol =
@@ -618,49 +710,6 @@ gapfill_internally <- function(survey_form,
 
     # No need to aggregate per plot layer
     # since we cannot use data from other surveys (different layer composition)
-
-
-
-
-
-
-    # # Aggregate per unique layer (plot_id x code_layer)
-    # # across different survey years
-    # # To gap-fill data not from the same survey_year
-    #
-    # som_pedogenic_otheryear <- som_pedogenic %>%
-    #   mutate(unique_layer = paste0(code_country, "_",
-    #                                code_plot, "_",
-    #                                code_layer)) %>%
-    #   group_by(unique_layer,
-    #            code_country, code_plot, code_layer) %>%
-    #   summarise(layer_limit_superior =
-    #               mean(layer_limit_superior, na.rm = TRUE),
-    #             layer_limit_inferior =
-    #               mean(layer_limit_inferior, na.rm = TRUE),
-    #             horizon_clay =
-    #               mean(horizon_clay, na.rm = TRUE),
-    #             bulk_density =
-    #               mean(bulk_density, na.rm = TRUE),
-    #             coarse_fragment_vol =
-    #               mean(coarse_fragment_vol, na.rm = TRUE),
-    #             .groups = "drop") %>%
-    #   as.data.frame %>%
-    #   mutate(layer_limit_superior = ifelse(is.nan(layer_limit_superior),
-    #                                        NA, layer_limit_superior),
-    #          layer_limit_inferior = ifelse(is.nan(layer_limit_inferior),
-    #                                        NA, layer_limit_inferior),
-    #          horizon_clay = ifelse(is.nan(horizon_clay),
-    #                                NA, horizon_clay),
-    #          bulk_density = ifelse(is.nan(bulk_density),
-    #                                NA, bulk_density),
-    #          coarse_fragment_vol = ifelse(is.nan(coarse_fragment_vol),
-    #                                       NA, coarse_fragment_vol))
-    #
-    # # horizon_c_organic_total should not be assessed based on values from
-    # # other survey years
-
-
 
 
 
@@ -690,11 +739,17 @@ gapfill_internally <- function(survey_form,
                          coarse_fragment_vol_som_sameyear =
                            coarse_fragment_vol,
                          part_size_clay_som_sameyear =
-                           part_size_clay) %>%
+                           part_size_clay,
+                         part_size_silt_som_sameyear =
+                           part_size_silt,
+                         part_size_sand_som_sameyear =
+                           part_size_sand) %>%
                   select(unique_layer_repetition,
                          bulk_density_som_sameyear,
                          coarse_fragment_vol_som_sameyear,
-                         part_size_clay_som_sameyear),
+                         part_size_clay_som_sameyear,
+                         part_size_silt_som_sameyear,
+                         part_size_sand_som_sameyear),
                 by = "unique_layer_repetition")
 
 
@@ -810,7 +865,53 @@ gapfill_internally <- function(survey_form,
 
 
 
-    ## 2.5. Organic layer weight ----
+    ## 2.5. Silt: combine columns ----
+
+    if (!"horizon_silt" %in% names(df)) {
+      df$horizon_silt_orig <- df$horizon_silt
+    }
+
+    df <- df %>%
+      mutate(
+        part_size_silt_source = case_when(
+          !is.na(.data$horizon_silt) ~ "pfh (same year)",
+          !is.na(.data$part_size_silt_som_sameyear) ~ "som (same year)",
+          TRUE ~ NA_character_),
+        horizon_silt = coalesce(
+          .data$horizon_silt,
+          .data$part_size_silt_som_sameyear)) %>%
+      select(-part_size_silt_som_sameyear)
+
+    cat("Data sources 'part_size_silt' after internal gap-filling:\n")
+    print(table(df$part_size_silt_source))
+
+
+
+    ## 2.6. Sand: combine columns ----
+
+    if (!"horizon_sand" %in% names(df)) {
+      df$horizon_sand_orig <- df$horizon_sand
+    }
+
+    df <- df %>%
+      mutate(
+        part_size_sand_source = case_when(
+          !is.na(.data$horizon_sand) ~ "pfh (same year)",
+          !is.na(.data$part_size_sand_som_sameyear) ~ "som (same year)",
+          TRUE ~ NA_character_),
+        horizon_sand = coalesce(
+          .data$horizon_sand,
+          .data$part_size_sand_som_sameyear)) %>%
+      select(-part_size_sand_som_sameyear)
+
+    cat("Data sources 'part_size_sand' after internal gap-filling:\n")
+    print(table(df$part_size_sand_source))
+
+
+
+
+
+    ## 2.7. Organic layer weight ----
 
     df <- df %>%
       mutate(layer_thickness = ifelse(!is.na(horizon_limit_up) &

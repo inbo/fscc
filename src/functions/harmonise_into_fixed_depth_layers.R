@@ -8,7 +8,9 @@ harmonise_into_fixed_depth_layers <-
                           "horizon_coarse_weight",
                           "code_horizon_coarse_vol",
                           "horizon_c_organic_total",
-                          "horizon_clay")) {
+                          "horizon_clay",
+                          "horizon_silt",
+                          "horizon_sand")) {
 
   source("./src/functions/expand_unique_survey_vec_adjacent_years.R")
 
@@ -29,13 +31,17 @@ harmonise_into_fixed_depth_layers <-
                        "horizon_coarse_weight",
                        "code_horizon_coarse_vol",
                        "horizon_c_organic_total",
-                       "horizon_clay"))) {
+                       "horizon_clay",
+                       "horizon_silt",
+                       "horizon_sand"))) {
 
         parameters <- c("bulk_density",
                         "coarse_fragment_vol",
                       #  "organic_layer_weight",
                         "organic_carbon_total",
-                        "part_size_clay")
+                        "part_size_clay",
+                        "part_size_silt",
+                        "part_size_sand")
       }
   }
 
