@@ -12,6 +12,7 @@ get_stratifiers <- function(level) {
             require("mpspline2"),
             require("sf"))
 
+  source("./src/functions/as_sf.R")
   source("./src/functions/get_env.R")
 
   d_forest_type <-
@@ -69,9 +70,10 @@ get_stratifiers <- function(level) {
   so_prf_adds <-
     openxlsx::read.xlsx(paste0("./data/additional_data/",
                                "SO_PRF_ADDS.xlsx"),
-                        sheet = 2) %>%
+                        sheet = 1) %>%
     rename(bs_class = "BS.(high/low)",
-           plot_id = PLOT_ID)
+           plot_id = PLOT_ID) %>%
+    filter(!is.na(plot_id))
 
   df_strat <- so_prf_adds %>%
     mutate(soil_wrb = paste0(RSGu, "_",
@@ -81,6 +83,7 @@ get_stratifiers <- function(level) {
                              DEPTHSTOCK, "_",
                              bs_class, "_",
                              EFTC, "_",
+                             unified_humus, "_",
                              remark)) %>%
     group_by(plot_id) %>%
     # Sometimes there are different options, e.g. plot_id 60_9
@@ -96,6 +99,7 @@ get_stratifiers <- function(level) {
                       "depth_stock",
                       "bs_class",
                       "code_forest_type",
+                      "humus_type",
                       "remark_harmonisation_fscc"),
              sep = "_") %>%
     left_join(data_availability_so %>%
@@ -114,8 +118,6 @@ get_stratifiers <- function(level) {
 
 
   # Add coordinates
-
-  source("./src/functions/as_sf.R")
 
   df_strat_sf <- df_strat %>%
     left_join(get_env("coordinates_so"), by = "plot_id") %>%
@@ -146,22 +148,22 @@ get_stratifiers <- function(level) {
               by = join_by(code_tree_species == code)) %>%
     rename(main_tree_species = description) %>%
     # Add humus type
-    left_join(get_env("so_prf") %>%
-                select(plot_id, code_humus) %>%
-                filter(code_humus != 99) %>%
-                filter(!is.na(code_humus)) %>%
-                group_by(plot_id, code_humus) %>%
-                summarise(count = n(),
-                          .groups = "drop") %>%
-                group_by(plot_id) %>%
-                arrange(-count) %>%
-                slice_head() %>%
-                ungroup() %>%
-                select(plot_id, code_humus),
-              by = "plot_id") %>%
-    left_join(d_humus,
-              by = join_by(code_humus == code)) %>%
-    rename(humus_type = description) %>%
+    # left_join(get_env("so_prf") %>%
+    #             select(plot_id, code_humus) %>%
+    #             filter(code_humus != 99) %>%
+    #             filter(!is.na(code_humus)) %>%
+    #             group_by(plot_id, code_humus) %>%
+    #             summarise(count = n(),
+    #                       .groups = "drop") %>%
+    #             group_by(plot_id) %>%
+    #             arrange(-count) %>%
+    #             slice_head() %>%
+    #             ungroup() %>%
+    #             select(plot_id, code_humus),
+    #           by = "plot_id") %>%
+    # left_join(d_humus,
+    #           by = join_by(code_humus == code)) %>%
+    # rename(humus_type = description) %>%
     # Add parent_material
     left_join(get_env("so_prf") %>%
                 select(plot_id, code_parent_material_1) %>%
@@ -283,7 +285,7 @@ get_stratifiers <- function(level) {
            code_wrb_qualifier_1,
            code_wrb_spezifier_1,
            code_forest_type,
-           code_humus,
+           #code_humus,
            code_parent_material_1,
            code_tree_species)
 
@@ -387,6 +389,10 @@ get_stratifiers <- function(level) {
     left_join(d_humus,
               by = join_by(code_humus == code)) %>%
     rename(humus_type = description) %>%
+    mutate(humus_type = case_when(
+      humus_type == "Amphi (or Amphihumus)" ~ "Amphi",
+      humus_type %in% c("Histomull", "Histomoder") ~ "Peat",
+      TRUE ~ humus_type)) %>%
     # Add parent_material
     left_join(get_env("s1_prf") %>%
                 select(plot_id, code_parent_material_1) %>%
