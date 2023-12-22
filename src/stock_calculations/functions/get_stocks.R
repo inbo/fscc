@@ -31,17 +31,17 @@
 #'                      density_per_three_cm = TRUE)
 
 get_stocks <- function(survey_form,
-                        data_frame = NULL,
-                        parameter = "organic_carbon_total",
-                        constant_subsoil = TRUE,
-                        graph = FALSE,
-                        density_per_three_cm = FALSE,
-                        save_to_env = TRUE,
-                        save_to_gdrive = TRUE) {
+                       data_frame = NULL,
+                       parameter = "organic_carbon_total",
+                       constant_subsoil = TRUE,
+                       graph = FALSE,
+                       density_per_three_cm = FALSE,
+                       add_stratifiers = TRUE,
+                       save_to_env = TRUE,
+                       save_to_gdrive = TRUE) {
 
-  # 1. Preparations ----
 
-  ## 1.1. Load packages and functions ----
+  # Load packages and functions ----
 
   stopifnot(require("tidyverse"),
             require("assertthat"),
@@ -54,22 +54,145 @@ get_stocks <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
   source("./src/functions/save_to_google_drive.R")
+  source("./src/functions/as_character_summary.R")
+  source("./src/functions/get_stratifiers.R")
 
-  cat(paste0(" \nCalculate '", parameter, "' stocks for '",
-             survey_form, "'.\n \n"))
 
-  ## 1.2. Retrieve data ----
+  # Define data ----
 
-  if (is.null(data_frame)) {
-    df <- get_env(survey_form)
-  } else {
-    df <- data_frame
+  if (length(unlist(str_split(survey_form, "_"))) == 1 &&
+      is.na(data_frame)) {
+
+    survey_form_orig <- survey_form
+
+    code_survey <- survey_form
+
+    survey_forms <- paste0(code_survey,
+                           c("_som", "_pfh"))
+
   }
 
-  code_survey <- unlist(str_split(survey_form, "_"))[1]
+  if (length(unlist(str_split(survey_form, "_"))) == 2) {
+
+    survey_form_orig <- survey_form
+
+    code_survey <- unlist(str_split(survey_form, "_"))[1]
+
+    survey_forms <- survey_form
+  }
+
+  cat(paste0(" \nCalculate '", parameter, "' stocks for ",
+             as_character_summary(survey_forms), ".\n \n"))
 
 
-  ## 1.3. Assert that the input parameters are correct ----
+
+  if (add_stratifiers == TRUE) {
+
+    if (code_survey == "s1") {
+      df_strat <- get_stratifiers(level = "LI")
+    }
+
+    if (code_survey == "so") {
+      df_strat <- get_stratifiers(level = "LII")
+    }
+
+    df_strat <- df_strat %>%
+      select(plot_id, longitude_dec, latitude_dec,
+             wrb_soil_group, forest_type, humus_type,
+             parent_material, biogeo,
+             main_tree_species, bs_class)
+  }
+
+
+
+  parameter_table <- data.frame(
+    som_parameter = c(
+      "extrac_pb", "extrac_zn", "part_size_clay", "part_size_silt", "exch_mn",
+      "carbonates", "extrac_al", "exch_mg", "exch_fe", "extrac_na",
+      "exch_ca", "ph_cacl2", "n_total", "extrac_k", "exch_al",
+      "tot_mg", "exch_k", "extrac_s", "organic_carbon_total", "exch_na",
+      "extrac_cr", "extrac_fe", "tot_k", "ph_h2o", "part_size_sand",
+      "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
+      "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
+      "extrac_fe", "tot_ca", "p_ox", "exch_acidiy", "tot_na",
+      "tot_mn", "tot_fe", "tot_al",
+      "moisture_content", "bulk_density", "rea_al", "rea_fe",
+      "organic_layer_weight"),
+    pfh_parameter = c(
+      NA, NA, "horizon_clay", "horizon_silt", NA,
+      "horizon_caco3_total", NA, "horizon_exch_mg", NA, NA,
+      "horizon_exch_ca", NA, "horizon_n_total", NA, NA,
+      NA, "horizon_exch_k", NA, "horizon_c_organic_total", "horizon_exch_na",
+      NA, NA, NA, "horizon_ph", "horizon_sand",
+      NA, NA, NA, NA, NA,
+      NA, NA, NA, NA, NA,
+      NA, NA, NA, NA, NA,
+      NA, NA, NA,
+      NA, "bulk_density", NA, NA,
+      "organic_layer_weight"),
+    unit = c(
+      "mg kg-1", "mg kg-1", "%wt", "%wt", "cmol+ kg-1",
+      "g kg-1", "mg kg-1", "cmol+ kg-1", "cmol+ kg-1", "mg kg-1",
+      "cmol+ kg-1", "-", "g kg-1", "mg kg-1", "cmol+ kg-1",
+      "mg kg-1", "cmol+ kg-1", "mg kg-1", "g kg-1", "cmol+ kg-1",
+      "mg kg-1", "mg kg-1", "mg kg-1", "-", "%wt",
+      "mg kg-1", "cmol+ kg-1", "mg kg-1", "mg kg-1", "mg kg-1",
+      "mg kg-1", "mg kg-1", "mg kg-1", "mg kg-1", "mg kg-1",
+      "mg kg-1", "mg kg-1", "-", "cmol+ kg-1", "mg kg-1",
+      "mg kg-1", "mg kg-1", "mg kg-1",
+      "%wt", "kg m-3", "mg kg-1", "mg kg-1",
+      "kg m-2"),
+    # Only for variables for which stocks can be calculated
+    unit_density_per_cm = c(
+      "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA, "1E4 mol+ ha-1 cm-1",
+      "t ha-1 cm-1", "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "1E4 mol+ ha-1 cm-1",
+      "kg ha-1 cm-1",
+      "1E4 mol+ ha-1 cm-1", NA, "t ha-1 cm-1", "kg ha-1 cm-1",
+      "1E4 mol+ ha-1 cm-1",
+      "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "t ha-1 cm-1",
+      "1E4 mol+ ha-1 cm-1",
+      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA,
+      "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
+      "kg ha-1 cm-1",
+      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
+      "kg ha-1 cm-1",
+      "kg ha-1 cm-1", "kg ha-1 cm-1", NA, "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1",
+      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
+      NA, NA, "kg ha-1 cm-1", "kg ha-1 cm-1",
+      NA),
+    # Only for variables for which stocks can be calculated
+    shorter_name = c(
+      "extrac_pb", "extrac_zn", NA, NA, "exch_mn",
+      "caco3", "extrac_al", "exch_mg", "exch_fe", "extrac_na",
+      "exch_ca", NA, "n", "extrac_k", "exch_al",
+      "tot_mg", "exch_k", "extrac_s", "c", "exch_na",
+      "extrac_cr", "extrac_fe", "tot_k", NA, NA,
+      "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
+      "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
+      "extrac_fe", "tot_ca", NA, "exch_acidiy", "tot_na",
+      "tot_mn", "tot_fe", "tot_al",
+      NA, NA, "rea_al", "rea_fe",
+      NA
+    ))
+
+
+
+
+  # Evaluate for each survey_form ----
+
+  # 1. Preparations ----
+
+  for (survey_form in survey_forms) {
+
+  ## 1.1. Retrieve data ----
+
+    if (is.null(data_frame)) {
+      df <- get_env(survey_form)
+    } else {
+      df <- data_frame
+    }
+
+  ## 1.2. Assert that the input parameters are correct ----
 
   assertthat::assert_that(survey_form %in% c("s1_som",
                                              "s1_pfh",
@@ -141,71 +264,6 @@ get_stocks <- function(survey_form,
   # Rename the variable to a harmonised name
   # and retrieve its unit
 
-  parameter_table <- data.frame(
-    som_parameter = c(
-      "extrac_pb", "extrac_zn", "part_size_clay", "part_size_silt", "exch_mn",
-      "carbonates", "extrac_al", "exch_mg", "exch_fe", "extrac_na",
-      "exch_ca", "ph_cacl2", "n_total", "extrac_k", "exch_al",
-      "tot_mg", "exch_k", "extrac_s", "organic_carbon_total", "exch_na",
-      "extrac_cr", "extrac_fe", "tot_k", "ph_h2o", "part_size_sand",
-      "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
-      "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
-      "extrac_fe", "tot_ca", "p_ox", "exch_acidiy", "tot_na",
-      "tot_mn", "tot_fe", "tot_al",
-      "moisture_content", "bulk_density", "rea_al", "rea_fe",
-      "organic_layer_weight"),
-    pfh_parameter = c(
-      NA, NA, "horizon_clay", "horizon_silt", NA,
-      "horizon_caco3_total", NA, "horizon_exch_mg", NA, NA,
-      "horizon_exch_ca", NA, "horizon_n_total", NA, NA,
-      NA, "horizon_exch_k", NA, "horizon_c_organic_total", "horizon_exch_na",
-      NA, NA, NA, "horizon_ph", "horizon_sand",
-      NA, NA, NA, NA, NA,
-      NA, NA, NA, NA, NA,
-      NA, NA, NA, NA, NA,
-      NA, NA, NA,
-      NA, "bulk_density", NA, NA,
-      "organic_layer_weight"),
-    unit = c(
-      "mg kg-1", "mg kg-1", "%wt", "%wt", "cmol+ kg-1",
-      "g kg-1", "mg kg-1", "cmol+ kg-1", "cmol+ kg-1", "mg kg-1",
-      "cmol+ kg-1", "-", "g kg-1", "mg kg-1", "cmol+ kg-1",
-      "mg kg-1", "cmol+ kg-1", "mg kg-1", "g kg-1", "cmol+ kg-1",
-      "mg kg-1", "mg kg-1", "mg kg-1", "-", "%wt",
-      "mg kg-1", "cmol+ kg-1", "mg kg-1", "mg kg-1", "mg kg-1",
-      "mg kg-1", "mg kg-1", "mg kg-1", "mg kg-1", "mg kg-1",
-      "mg kg-1", "mg kg-1", "-", "cmol+ kg-1", "mg kg-1",
-      "mg kg-1", "mg kg-1", "mg kg-1",
-      "%wt", "kg m-3", "mg kg-1", "mg kg-1",
-      "kg m-2"),
-    # Only for variables for which stocks can be calculated
-    unit_density_per_cm = c(
-      "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA, "1E4 mol+ ha-1 cm-1",
-      "t ha-1 cm-1", "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1",
-      "1E4 mol+ ha-1 cm-1", NA, "t ha-1 cm-1", "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1",
-      "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "t ha-1 cm-1", "1E4 mol+ ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA,
-      "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", NA, "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-      NA, NA, "kg ha-1 cm-1", "kg ha-1 cm-1",
-      NA),
-    # Only for variables for which stocks can be calculated
-    shorter_name = c(
-      "extrac_pb", "extrac_zn", NA, NA, "exch_mn",
-      "caco3", "extrac_al", "exch_mg", "exch_fe", "extrac_na",
-      "exch_ca", NA, "n", "extrac_k", "exch_al",
-      "tot_mg", "exch_k", "extrac_s", "c", "exch_na",
-      "extrac_cr", "extrac_fe", "tot_k", NA, NA,
-      "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
-      "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
-      "extrac_fe", "tot_ca", NA, "exch_acidiy", "tot_na",
-      "tot_mn", "tot_fe", "tot_al",
-      NA, NA, "rea_al", "rea_fe",
-      NA
-    ))
-
   ind_som <- which(parameter == parameter_table$som_parameter)
   ind_pfh <- which(parameter == parameter_table$pfh_parameter)
   ind <- unique(c(ind_som, ind_pfh))
@@ -236,7 +294,7 @@ get_stocks <- function(survey_form,
   assertthat::assert_that(all(na.omit(df[[parameter]]) >= 0))
 
 
-  ## 1.4. Add eff_soil_depth if needed ----
+  ## 1.2. Add eff_soil_depth if needed ----
 
   if (!"eff_soil_depth" %in% names(df)) {
 
@@ -281,7 +339,7 @@ get_stocks <- function(survey_form,
                 by = "plot_id")
   }
 
-  ## 1.5. Final data preparations ----
+  ## 1.3. Final data preparations ----
 
   df_working <- df %>%
     arrange(country,
@@ -290,6 +348,8 @@ get_stocks <- function(survey_form,
             repetition,
             layer_number) %>%
     ungroup() %>%
+    # Add survey_form
+    mutate(survey_form = survey_form) %>%
     # If the effective soil depth is deeper than 100 cm or unknown (NA):
     # assume it is 100 cm (for stocks)
     mutate(soil_depth =
@@ -317,7 +377,7 @@ get_stocks <- function(survey_form,
                               rowMeans(cbind(depth_top, depth_bottom)),
                               NA))
 
-  ## 1.6. Create function format_stocks ----
+  ## 1.4. Create function format_stocks ----
 
   format_stocks <- function(data_frame,
                             var_name = shorter_var_name) {
@@ -362,7 +422,8 @@ get_stocks <- function(survey_form,
     # Filter out redundant layers
     # (i.e. layers not needed to compose the complete profile)
     filter(!is.na(.data$layer_number)) %>%
-    select(partner_short,
+    select(survey_form,
+           partner_short,
            plot_id,
            profile_id,
            partner_code,
@@ -822,13 +883,13 @@ get_stocks <- function(survey_form,
                df_below_ground)
   }
 
-  if (save_to_gdrive == TRUE) {
-
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form, "_below_ground"),
-                         df_object_to_save = format_stocks(df_below_ground),
-                         path_name = "./output/stocks/")
-  }
+  # if (save_to_gdrive == TRUE) {
+  #
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form, "_below_ground"),
+  #                        df_object_to_save = format_stocks(df_below_ground),
+  #                        path_name = "./output/stocks/")
+  # }
 
 
 
@@ -882,18 +943,12 @@ get_stocks <- function(survey_form,
 
     # Assert that all the depth layers are below-ground
 
-    # if (!prof_id_i %in% c("1995_7_139_1",
-    #                       "1995_7_208_1",
-    #                       "2008_13_164_1",
-    #                       "2008_13_1161_1")) {
-
       assertthat::assert_that(
         all(prof$depth_top >= 0) &&
           all(prof$depth_bottom >= 0),
         msg = paste0("Not all layer limits are below-ground ",
                      "(i.e. not below 0) for the profile '",
                      prof_id_i, "'."))
-    #}
 
     # Issue:
     # Not possible to calculate splines in case of overlapping layers in
@@ -950,12 +1005,7 @@ get_stocks <- function(survey_form,
 
     if ((nlay_below_ground >= 2) &&
         (min(prof$depth_top) == 0) &&
-        (unique(prof$soil_depth) > 0)) { # &&
-        # The issue with this profile needs to be solved
-        # (!prof_id_i %in% c("1995_7_139_1",
-        #                    "1995_7_208_1",
-        #                    "2008_13_164_1",
-        #                    "2008_13_1161_1"))) {
+        (unique(prof$soil_depth) > 0)) {
 
       profile_stock_output_i <-
         spline2stock(prof = prof,
@@ -972,7 +1022,8 @@ get_stocks <- function(survey_form,
         max()
 
       profile_stocks_i <-
-        data.frame(partner_short = unique(df_profile_i$partner_short),
+        data.frame(survey_form = unique(df_profile_i$survey_form),
+                   partner_short = unique(df_profile_i$partner_short),
                    plot_id = plot_id_i,
                    profile_id = prof_id_i,
                    survey_year = unique(df_profile_i$survey_year),
@@ -982,7 +1033,7 @@ get_stocks <- function(survey_form,
                    repetition = unique(df_profile_i$repetition),
                    contains_peat = any(df_profile_i$layer_type == "peat"),
                    obs_depth = max_obs_depth,
-                   use_stock_until_30 = (max_obs_depth < 30),
+                   use_stock_topsoil = (max_obs_depth < 30),
                    soil_depth = soil_depth_i,
                    profile_stock_output_i)
 
@@ -1009,17 +1060,17 @@ get_stocks <- function(survey_form,
                profile_stocks_below_ground)
   }
 
-  if (save_to_gdrive == TRUE) {
-
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form,
-                                  "_profile_",
-                                  shorter_var_name,
-                                  "_stocks_below_ground"),
-                         df_object_to_save =
-                           format_stocks(profile_stocks_below_ground),
-                         path_name = "./output/stocks/")
-  }
+  # if (save_to_gdrive == TRUE) {
+  #
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form,
+  #                                 "_profile_",
+  #                                 shorter_var_name,
+  #                                 "_stocks_below_ground"),
+  #                        df_object_to_save =
+  #                          format_stocks(profile_stocks_below_ground),
+  #                        path_name = "./output/stocks/")
+  # }
 
 
 
@@ -1027,7 +1078,7 @@ get_stocks <- function(survey_form,
 
   plot_stocks_below_ground <- profile_stocks_below_ground %>%
     filter(stock_10 > 0) %>%
-    group_by(partner_short, partner_code, code_country, code_plot,
+    group_by(survey_form, partner_short, partner_code, code_country, code_plot,
              plot_id, survey_year) %>%
     summarise(stock_below_ground_avg =
                 round(mean(stock_below_ground, na.rm = TRUE), 2),
@@ -1054,8 +1105,8 @@ get_stocks <- function(survey_form,
                 round(mean(soil_depth, na.rm = TRUE), 2),
               contains_peat =
                 any(contains_peat == TRUE),
-              use_stock_until_30 =
-                any(use_stock_until_30 == TRUE),
+              use_stock_topsoil =
+                any(use_stock_topsoil == TRUE),
               rmse_mpspline_max =
                 max(rmse_mpspline, na.rm = TRUE),
               .groups = "drop") %>%
@@ -1076,17 +1127,17 @@ get_stocks <- function(survey_form,
                plot_stocks_below_ground)
   }
 
-  if (save_to_gdrive == TRUE) {
-
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form,
-                                  "_plot_",
-                                  shorter_var_name,
-                                  "_stocks_below_ground"),
-                         df_object_to_save =
-                           format_stocks(plot_stocks_below_ground),
-                         path_name = "./output/stocks/")
-  }
+  # if (save_to_gdrive == TRUE) {
+  #
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form,
+  #                                 "_plot_",
+  #                                 shorter_var_name,
+  #                                 "_stocks_below_ground"),
+  #                        df_object_to_save =
+  #                          format_stocks(plot_stocks_below_ground),
+  #                        path_name = "./output/stocks/")
+  # }
 
 
 
@@ -1117,7 +1168,8 @@ get_stocks <- function(survey_form,
     mutate(code_layer = ifelse(.data$code_layer == "OL1",
                                "OL",
                                .data$code_layer)) %>%
-    select(partner_short,
+    select(survey_form,
+           partner_short,
            plot_id,
            profile_id,
            partner_code,
@@ -1161,12 +1213,12 @@ get_stocks <- function(survey_form,
                df_forest_floor)
   }
 
-  if (save_to_gdrive == TRUE) {
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form, "_forest_floor"),
-                         df_object_to_save = format_stocks(df_forest_floor),
-                         path_name = "./output/stocks/")
-  }
+  # if (save_to_gdrive == TRUE) {
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form, "_forest_floor"),
+  #                        df_object_to_save = format_stocks(df_forest_floor),
+  #                        path_name = "./output/stocks/")
+  # }
 
 
 
@@ -1196,7 +1248,8 @@ get_stocks <- function(survey_form,
       # Combine stocks in OL, OFH and O per profile
 
       profile_stocks_i <-
-        data.frame(partner_short = unique(df_profile_i$partner_short),
+        data.frame(survey_form = unique(df_profile_i$survey_form),
+                   partner_short = unique(df_profile_i$partner_short),
                    plot_id = as.character(unique(df_profile_i$plot_id)),
                    profile_id = as.character(unique(df_profile_i$profile_id)),
                    survey_year = unique(df_profile_i$survey_year),
@@ -1260,16 +1313,16 @@ get_stocks <- function(survey_form,
                profile_stocks_forest_floor)
   }
 
-  if (save_to_gdrive == TRUE) {
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form,
-                                  "_profile_",
-                                  shorter_var_name,
-                                  "_stocks_forest_floor"),
-                         df_object_to_save =
-                           format_stocks(profile_stocks_forest_floor),
-                         path_name = "./output/stocks/")
-  }
+  # if (save_to_gdrive == TRUE) {
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form,
+  #                                 "_profile_",
+  #                                 shorter_var_name,
+  #                                 "_stocks_forest_floor"),
+  #                        df_object_to_save =
+  #                          format_stocks(profile_stocks_forest_floor),
+  #                        path_name = "./output/stocks/")
+  # }
 
 
 
@@ -1279,7 +1332,7 @@ get_stocks <- function(survey_form,
   plot_stocks_forest_floor <-
     profile_stocks_forest_floor %>%
     filter(stock_forest_floor >= 0) %>%
-    group_by(partner_short, partner_code, code_country, code_plot,
+    group_by(survey_form, partner_short, partner_code, code_country, code_plot,
              plot_id, survey_year) %>%
     summarise(stock_forest_floor_avg =
                 round(mean(stock_forest_floor, na.rm = TRUE), 2),
@@ -1317,17 +1370,19 @@ get_stocks <- function(survey_form,
                plot_stocks_forest_floor)
   }
 
-  if (save_to_gdrive == TRUE) {
+  # if (save_to_gdrive == TRUE) {
+  #
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form,
+  #                                 "_plot_",
+  #                                 shorter_var_name,
+  #                                 "_stocks_forest_floor"),
+  #                        df_object_to_save =
+  #                          format_stocks(plot_stocks_forest_floor),
+  #                        path_name = "./output/stocks/")
+  # }
 
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form,
-                                  "_plot_",
-                                  shorter_var_name,
-                                  "_stocks_forest_floor"),
-                         df_object_to_save =
-                           format_stocks(plot_stocks_forest_floor),
-                         path_name = "./output/stocks/")
-  }
+
 
   cat(" \n--------------------------------------------------------\n")
 
@@ -1337,7 +1392,42 @@ get_stocks <- function(survey_form,
 
 
   # 4. Combine below-ground and forest floor ----
-  ## 4.1. Join below-ground and forest floor ----
+  ## 4.1. Combine below-ground and forest floor layers ----
+
+  df_layer <-
+    bind_rows(df_below_ground %>%
+                mutate(repetition = as.character(repetition)) %>%
+                select(-avail_thick,
+                       -avail_toc,
+                       -avail_bd,
+                       -avail_cf),
+              df_forest_floor %>%
+                relocate(density, .before = stock_layer) %>%
+                mutate(repetition = as.character(repetition)) %>%
+                select(-avail_thick,
+                       -avail_toc,
+                       -avail_bd,
+                       -avail_org_layer_weight)) %>%
+    mutate(profile_id_form = paste0(survey_form, "_",
+                                    profile_id)) %>%
+    relocate(profile_id_form, .after = profile_id) %>%
+    arrange(partner_short,
+            code_plot,
+            survey_year,
+            profile_id,
+            layer_number)
+
+
+  # Save the df_below_ground dataset (all data, also missing data)
+
+  if (save_to_env == TRUE) {
+    assign_env(paste0(survey_form, "_layers"),
+               df_layer)
+  }
+
+
+
+  ## 4.2. Join below-ground and forest floor profile stocks ----
 
   cat(paste0(" \nCombine below-ground and forest floor stocks.\n"))
 
@@ -1371,24 +1461,24 @@ get_stocks <- function(survey_form,
                profile_stocks)
   }
 
-  if (save_to_gdrive == TRUE) {
-
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form,
-                                  "_profile_",
-                                  shorter_var_name,
-                                  "_stocks"),
-                         df_object_to_save =
-                           format_stocks(profile_stocks),
-                         path_name = "./output/stocks/")
-  }
-
-
+  # if (save_to_gdrive == TRUE) {
+  #
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form,
+  #                                 "_profile_",
+  #                                 shorter_var_name,
+  #                                 "_stocks"),
+  #                        df_object_to_save =
+  #                          format_stocks(profile_stocks),
+  #                        path_name = "./output/stocks/")
+  # }
 
 
 
 
-  ## 4.2. Aggregate per plot ----
+
+
+  ## 4.3. Aggregate per plot ----
 
   plot_stocks <- profile_stocks %>%
     filter(stock_10 > 0) %>%
@@ -1444,8 +1534,8 @@ get_stocks <- function(survey_form,
                        NA),
               contains_peat =
                 any(contains_peat == TRUE),
-              use_stock_until_30 =
-                any(use_stock_until_30 == TRUE),
+              use_stock_topsoil =
+                any(use_stock_topsoil == TRUE),
               rmse_mpspline_max =
                 max(rmse_mpspline, na.rm = TRUE),
               .groups = "drop") %>%
@@ -1469,17 +1559,20 @@ get_stocks <- function(survey_form,
                plot_stocks)
   }
 
-  if (save_to_gdrive == TRUE) {
+  # if (save_to_gdrive == TRUE) {
+  #
+  #   save_to_google_drive(objects_to_save =
+  #                          paste0(survey_form,
+  #                                 "_plot_",
+  #                                 shorter_var_name,
+  #                                 "_stocks"),
+  #                        df_object_to_save =
+  #                          format_stocks(plot_stocks),
+  #                        path_name = "./output/stocks/")
+  # }
 
-    save_to_google_drive(objects_to_save =
-                           paste0(survey_form,
-                                  "_plot_",
-                                  shorter_var_name,
-                                  "_stocks"),
-                         df_object_to_save =
-                           format_stocks(plot_stocks),
-                         path_name = "./output/stocks/")
-  }
+
+
   cat(" \n--------------------------------------------------------\n")
 
   # Number of plots with stocks
@@ -1508,5 +1601,144 @@ get_stocks <- function(survey_form,
           summarise(n = n()) %>%
           filter(n > 1) %>%
           nrow)
+
+} # End of loop over survey_forms
+
+
+
+  # Layers: compile and save data ----
+
+if (length(survey_forms) == 2) {
+
+  df_layer <-
+    bind_rows(assign_env(paste0(code_survey, "_som_layers")),
+              assign_env(paste0(code_survey, "_pfh_layers"))) %>%
+    arrange(partner_short,
+            code_plot,
+            survey_year,
+            profile_id,
+            layer_number)
+
+}
+
+  # Save the df_layer dataset
+
+  if (save_to_env == TRUE) {
+    assign_env(paste0(survey_form_orig, "_layers"),
+               df_layer)
+  }
+
+  if (save_to_gdrive == TRUE) {
+    save_to_google_drive(objects_to_save =
+                           paste0(survey_form_orig, "_layers"),
+                         df_object_to_save = format_stocks(df_layer),
+                         path_name = "./output/stocks/")
+  }
+
+
+  # Profile stocks: compile and save data ----
+
+  if (length(survey_forms) == 2) {
+
+    profile_stocks <-
+      bind_rows(assign_env(paste0(code_survey, "_som_profile_",
+                                  shorter_var_name, "_stocks")) %>%
+                  mutate(repetition = as.character(repetition)),
+                assign_env(paste0(code_survey, "_pfh_profile_",
+                                  shorter_var_name, "_stocks")) %>%
+                  mutate(repetition = as.character(repetition))) %>%
+      arrange(partner_short,
+              code_plot,
+              survey_year,
+              profile_id)
+  }
+
+  profile_stocks <- profile_stocks %>%
+    as_tibble() %>%
+    mutate(profile_id_form = paste0(survey_form, "_",
+                                    profile_id)) %>%
+    relocate(profile_id_form, .after = profile_id)
+
+
+  if (add_stratifiers == TRUE) {
+
+    profile_stocks <- profile_stocks %>%
+      left_join(s1_strat,
+                by = "plot_id")
+
+  }
+
+  # Save the profile_stocks dataset
+
+  if (save_to_env == TRUE) {
+    assign_env(paste0(survey_form_orig, "_profile_",
+                      shorter_var_name, "_stocks"),
+               profile_stocks)
+  }
+
+  if (save_to_gdrive == TRUE) {
+    save_to_google_drive(objects_to_save =
+                           paste0(survey_form_orig, "_profile_",
+                                  shorter_var_name, "_stocks"),
+                         df_object_to_save = format_stocks(profile_stocks),
+                         path_name = "./output/stocks/")
+  }
+
+
+
+
+  # Plot stocks: compile and save data ----
+
+  if (length(survey_forms) == 2) {
+
+    plot_stocks <-
+      bind_rows(assign_env(paste0(code_survey, "_som_profile_",
+                                  shorter_var_name, "_stocks")) %>%
+                  mutate(repetition = as.character(repetition)),
+                assign_env(paste0(code_survey, "_pfh_profile_",
+                                  shorter_var_name, "_stocks")) %>%
+                  mutate(repetition = as.character(repetition))) %>%
+      arrange(partner_short,
+              code_plot,
+              survey_year,
+              profile_id)
+  }
+
+  plot_stocks <- plot_stocks %>%
+    as_tibble() %>%
+    mutate(profile_id_form = paste0(survey_form, "_",
+                                    profile_id)) %>%
+    relocate(profile_id_form, .after = profile_id)
+
+
+  if (add_stratifiers == TRUE) {
+
+    plot_stocks <- plot_stocks %>%
+      left_join(s1_strat,
+                by = "plot_id")
+
+  }
+
+  # Save the profile_stocks dataset
+
+  if (save_to_env == TRUE) {
+    assign_env(paste0(survey_form_orig, "_profile_",
+                      shorter_var_name, "_stocks"),
+               plot_stocks)
+  }
+
+  if (save_to_gdrive == TRUE) {
+    save_to_google_drive(objects_to_save =
+                           paste0(survey_form_orig, "_profile_",
+                                  shorter_var_name, "_stocks"),
+                         df_object_to_save = format_stocks(plot_stocks),
+                         path_name = "./output/stocks/")
+  }
+
+
+
+
+
+
 
 }
