@@ -35,6 +35,12 @@ level <- "LII"
 
 # 3. Calculate stocks ----
 
+# Import data
+
+source("./src/functions/read_processed.R")
+read_processed(save_to_env = TRUE)
+
+
 
 if (level == "LI") {
 
@@ -262,10 +268,26 @@ if (level == "LI") {
                        path_name = "layer1_data")
 
   s1_strat <- s1_strat %>%
-    select(plot_id, longitude_dec, latitude_dec,
-           wrb_soil_group, forest_type, humus_type, biogeo,
+    select(plot_id, longitude_dec, latitude_dec, slope, eff_soil_depth,
+           wrb_soil_group, forest_type, humus_type,
+           parent_material, biogeo,
            main_tree_species, bs_class)
 
+  colSums(!is.na(s1_strat))
+
+
+  # Add stratifiers to the data
+
+  df_stocks_plot_li <- df_stocks_plot_li %>%
+    left_join(s1_strat,
+              by = "plot_id")
+
+
+  df_stocks_plot_li <- df_stocks_plot_li %>%
+    mutate(humus_type = case_when(
+      humus_type == "Amphi (or Amphihumus)" ~ "Amphi",
+      humus_type %in% c("Histomull", "Histomoder") ~ "Peat",
+      TRUE ~ humus_type))
 }
 
 
@@ -278,11 +300,31 @@ if (level == "LII") {
   save_to_google_drive(objects_to_save = "so_strat",
                        path_name = "layer1_data")
 
-
   so_strat <- so_strat %>%
-    select(plot_id, longitude_dec, latitude_dec,
-           wrb_soil_group, forest_type, humus_type, biogeo,
+    select(plot_id, longitude_dec, latitude_dec, slope, eff_soil_depth,
+           rooting_depth,
+           wrb_soil_group, forest_type, humus_type,
+           parent_material, biogeo,
            main_tree_species, bs_class)
+
+  colSums(!is.na(so_strat))
+
+
+  # Add stratifiers to the data
+
+  df_stocks_plot_lii <- df_stocks_plot_lii %>%
+    left_join(so_strat,
+              by = "plot_id")
+
+
+
+  # Format and print the names for attribute catalogue:
+
+  names_list <-
+    sort(unique(c(names(so_strat))))
+
+  cat(paste0("-   ", names_list, ": \n "), sep = "\n")
+
 
   df_layer_lii <- df_layer_lii %>%
     left_join(so_strat,
@@ -591,6 +633,17 @@ save_excel(df_stocks_plot_lii_output,
            file = paste0(dir, "so_plot_soc_stocks.xlsx"))
 
 
+# Format and print the names for attribute catalogue:
+
+names_list <-
+  sort(unique(c(names(df_stocks_li_output), names(df_stocks_plot_li_output),
+                names(df_stocks_lii_output), names(df_stocks_plot_lii_output))))
+
+cat(paste0("-   **", names_list, "** - "), sep = "\n")
+
+
+
+
 ## 6.9. Additional manual corrections ----
 
 path <- "./data/additional_data/additional_manual_corrections_fscc.xlsx"
@@ -625,6 +678,122 @@ save_excel(df_to_correct %>%
 
 # 7. Statistics ----
 
+# C stocks until 100
+
+data_frame <-
+  bind_rows(df_stocks_li %>%
+              filter(use_stock_topsoil == FALSE) %>%
+              select(plot_id, c_stock),
+            df_stocks_lii %>%
+              filter(use_stock_topsoil == FALSE) %>%
+              select(plot_id, c_stock)) %>%
+  mutate(all = "All")
+
+response <- "c_stock"
+
+group <- "all"
+
+rcompanion_groupwiseMean(
+  group = group,
+  var = response,
+  data = data_frame,
+  conf = 0.95,
+  digits = 5,
+  R = 9100,
+  traditional = FALSE,
+  bca = TRUE,
+  na.rm = TRUE)
+
+#    n   Mean Conf.level Bca.lower Bca.upper
+# 9097 134.26       0.95     131.5    137.34
+
+
+# Below-ground mineral C stocks until 100
+
+min_below_ground <-
+  bind_rows(df_stocks_li %>%
+              filter(use_stock_topsoil == FALSE) %>%
+              filter(contains_peat == FALSE) %>%
+              select(plot_id, c_stock_below_ground),
+            df_stocks_lii %>%
+              filter(use_stock_topsoil == FALSE) %>%
+              filter(contains_peat == FALSE) %>%
+              select(plot_id, c_stock_below_ground)) %>%
+  pull(c_stock_below_ground) %>%
+  median
+
+# Below-ground mineral C stocks until 30
+
+min_below_ground_topsoil <-
+  bind_rows(df_stocks_li %>%
+              filter(contains_peat == FALSE) %>%
+              select(plot_id, c_stock_below_ground_topsoil),
+            df_stocks_lii %>%
+              filter(contains_peat == FALSE) %>%
+              select(plot_id, c_stock_below_ground_topsoil)) %>%
+  pull(c_stock_below_ground_topsoil) %>%
+  median
+
+min_below_ground_topsoil / min_below_ground * 100
+
+# Below-ground peat C stocks until 100
+
+peat_below_ground <-
+  bind_rows(df_stocks_li %>%
+              filter(use_stock_topsoil == FALSE) %>%
+              filter(contains_peat == TRUE) %>%
+              select(plot_id, c_stock_below_ground),
+            df_stocks_lii %>%
+              filter(use_stock_topsoil == FALSE) %>%
+              filter(contains_peat == TRUE) %>%
+              select(plot_id, c_stock_below_ground)) %>%
+  pull(c_stock_below_ground) %>%
+  median
+
+# Below-ground peat C stocks until 30
+
+peat_below_ground_topsoil <-
+  bind_rows(df_stocks_li %>%
+              filter(contains_peat == TRUE) %>%
+              select(plot_id, c_stock_below_ground_topsoil),
+            df_stocks_lii %>%
+              filter(contains_peat == TRUE) %>%
+              select(plot_id, c_stock_below_ground_topsoil)) %>%
+  pull(c_stock_below_ground_topsoil) %>%
+  median
+
+peat_below_ground_topsoil / peat_below_ground * 100
+
+
+
+# Forest floor
+
+  bind_rows(df_stocks_li %>%
+              # mutate(c_stock_forest_floor =
+              #          ifelse(is.na(c_stock_forest_floor),
+              #                 0,
+              #                 .data$c_stock_forest_floor)) %>%
+              select(plot_id, c_stock_forest_floor),
+            df_stocks_lii %>%
+                # mutate(c_stock_forest_floor =
+                #          ifelse(is.na(c_stock_forest_floor),
+                #                 0,
+                #                 .data$c_stock_forest_floor)) %>%
+              select(plot_id, c_stock_forest_floor)) %>%
+    filter(!is.na(c_stock_forest_floor)) %>%
+    pull(c_stock_forest_floor) %>%
+    median
+
+
+
+
+
+
+
+# To do: NA c stocks forest floor should be 0!
+
+
+
 
 
 
@@ -633,11 +802,28 @@ save_excel(df_to_correct %>%
 
 ## 8.1. Make a graph per plot_id ----
 
-plot_ids <- unique(df_layer$plot_ids)
+# Input
+
+df_layer <- df_layer_lii
+df_stocks <- df_stocks_lii
+
+# plot_ids <- unique(df_stocks_lii$plot_id)
+# Arrange data
+
+plot_ids <- unique(df_layer$plot_id)
 
 # Evaluate for each of the plot surveys
 
 for (i in seq_along(plot_ids)) {
+
+    df_stocks_lii %>%
+    filter(plot_id == plot_ids[22]) %>%
+    distinct(profile_id, .keep_all = TRUE) %>%
+    mutate(survey_id = paste0(survey_form, "_",
+                              survey_year)) %>%
+    distinct(survey_id, .keep_all = TRUE)
+
+
 
   profiles_i <- df_layer %>%
     filter(plot_id == plot_ids[i]) %>%
@@ -654,10 +840,90 @@ for (i in seq_along(plot_ids)) {
     df_stock_j <- df_stocks %>%
       filter(profile_id == prof_id_i)
 
-
-
   }
   }
+
+
+
+## 8.2. Violin plots per stratifier ----
+
+stopifnot(require("tidyverse"),
+          require("assertthat"),
+          require("aqp"),
+          require("ggplot2"),
+          require("boot"),
+          require("rempsyc"),
+          # require("INBOtheme"),
+          require("ggtext"))
+
+assert_that(all(c("wrb_soil_group",
+                  "forest_type",
+                  "humus_type",
+                  "biogeo") %in% names(df_stocks_plot_lii)))
+
+data_frame <- df_stocks_plot_lii
+response <- "stock"
+group <- "forest_type"
+path_export <- "./output/stocks/"
+
+source("./src/functions/graph_violin.R")
+
+graph_violin(data_frame = df_stocks_plot_lii,
+             response = "c_stock",
+             group = "forest_type",
+             path_export = "./output/stocks/")
+
+graph_violin(data_frame = df_stocks_plot_lii,
+             response = "c_stock",
+             group = "wrb_soil_group",
+             path_export = "./output/stocks/")
+
+
+
+graph_violin(data_frame = df_stocks_plot_li %>%
+               filter(!is.na(c_stock_forest_floor)),
+             data_frame_2 = df_stocks_plot_lii %>%
+               filter(!is.na(c_stock_forest_floor)),
+             response = "c_stock_forest_floor",
+             group = "humus_type",
+             path_export = "./output/stocks/")
+
+graph_violin(data_frame = df_stocks_plot_li %>%
+               rename(biogeographical_region = biogeo),
+             data_frame_2 = df_stocks_plot_lii %>%
+               rename(biogeographical_region = biogeo),
+             response = "c_stock_topsoil",
+             group = "biogeographical_region",
+             path_export = "./output/stocks/")
+
+graph_violin(data_frame = df_stocks_plot_li,
+             data_frame_2 = df_stocks_plot_lii,
+             response = "c_stock_topsoil",
+             group = "wrb_soil_group",
+             path_export = "./output/stocks/")
+
+
+
+
+## 8.3. Make a map ----
+
+# (incomplete)
+
+data_lii <- df_stocks_plot_lii %>%
+  group_by(plot_id) %>%
+  slice(which.max(survey_year)) %>%
+  filter(!is.na(latitude_dec) &
+           !is.na(longitude_dec)) %>%
+  as_sf
+
+map_icpf2(layers = "data_lii",
+         variab = "c_stock",
+         title = "Most recent carbon stock (Level II)",
+         legend_title = "t C ha-1",
+         export_name = "20231213_c_stock_most_recent_so",
+         export_folder = "./output/stocks/")
+
+
 
 
 
