@@ -5,16 +5,13 @@
 
 # List required packages ----
 
-stopifnot(require("sf"))
-stopifnot(require("tidyverse"))
-stopifnot(require("terra"))
-stopifnot(require("maptiles"))
-stopifnot(require("mapview"))
-stopifnot(require("leaflet"))
-stopifnot(require("htmltools"))
-stopifnot(require("leafem"))
-stopifnot(require("crosstalk"))
-stopifnot(require("DT"))
+stopifnot(require("sf"),
+          require("openxlsx"),
+          require("tidyverse"),
+          require("terra"),
+          require("htmltools"),
+          require("crosstalk"),
+          require("DT"))
 
 # Source and create functions ----
 
@@ -27,7 +24,7 @@ source("./src/functions/as_sf.R")
 
 source("./src/functions/dec_coordinate.R")
 
-extra_data_poland_LII <- 
+extra_data_poland_LII <-
   openxlsx::read.xlsx(paste0("./data/additional_data/partner_comm/",
                              "SO_PLOT_poland_LII_nathalie.xlsx"),
                       sheet = 1) %>%
@@ -54,7 +51,7 @@ extra_so_plot_1995 <- extra_data_poland_LII %>%
 extra_so_plot_1999 <- extra_data_poland_LII %>%
   filter(survey_year == 1999)
 
-ks_data <- 
+ks_data <-
   openxlsx::read.xlsx(paste0("./data/additional_data/partner_comm/",
                              "all code plot, coordinations, PL KS - LI.xlsx"),
                       sheet = 1) %>%
@@ -141,9 +138,9 @@ links_poland_LII_2000 <-
             na.strings = "")
 
 show_conversion_needs <- function(col) {
-  
+
   print(names(links_poland_LII_2000)[col])
-  
+
   print(sort(unique(na.omit(as.numeric(gsub("^53_", "",
                                             links_poland_LII_2000[, col]))))))
   print(all(
@@ -191,7 +188,7 @@ ks_data_spat <- as_sf(ks_data)
 st_distance(extra_so_plot_1995 %>%
               filter(plot_id == "53_111") %>%
               as_sf,
-            ks_data_spat[which(ks_data_spat$plot_id %in% 	
+            ks_data_spat[which(ks_data_spat$plot_id %in%
                                  c("53_801", "53_809", "53_810")), ])
 
 st_distance(extra_so_plot_1995 %>%
@@ -271,7 +268,7 @@ poland_LII_harmonisation_table_2 <-
                    latitude_dec = NA,
                    longitude_dec = NA))
 
-  
+
 write.csv2(poland_LII_harmonisation_table_2,
            paste0("./data/additional_data/plot_coord_harmonisation_keys/",
                   "LII_53_plot_coord_harmonisation_key_Poland.csv"),
@@ -289,7 +286,7 @@ write.csv2(poland_LII_harmonisation_table_2,
 
 source("./src/functions/dec_coordinate.R")
 
-ks_sheet_1 <- 
+ks_sheet_1 <-
   openxlsx::read.xlsx(paste0("./data/additional_data/partner_comm/",
                              "all code plot, coordinations, PL KS - LI.xlsx"),
                       sheet = 1) %>%
@@ -299,7 +296,7 @@ ks_sheet_1 <-
   rename(plot_id = "Code.plot") %>%
   mutate(plot_id = paste0("53_", plot_id))
 
-ks_sheet_2 <- 
+ks_sheet_2 <-
   openxlsx::read.xlsx(paste0("./data/additional_data/partner_comm/",
                              "all code plot, coordinations, PL KS - LI.xlsx"),
                       sheet = 2) %>%
@@ -467,16 +464,16 @@ so_table %>%
   select(code_layer, organic_carbon_total, n_total)
 
 # Create data frames with unique plot_id values from each table
-s1_unique <- s1_table %>% 
-  distinct(plot_id) %>% 
+s1_unique <- s1_table %>%
+  distinct(plot_id) %>%
   filter(!is.na(plot_id) & (plot_id != "NA")) %>%
-  mutate(s1_table = plot_id) %>% 
+  mutate(s1_table = plot_id) %>%
   select(plot_id, s1_table)
 
-so_unique <- so_table %>% 
-  distinct(plot_id) %>% 
+so_unique <- so_table %>%
+  distinct(plot_id) %>%
   filter(!is.na(plot_id) & (plot_id != "NA")) %>%
-  mutate(so_table = plot_id) %>% 
+  mutate(so_table = plot_id) %>%
   select(plot_id, so_table)
 
 # Merge the two data frames using left_join
@@ -553,18 +550,18 @@ ks_sheet_2$plot_id[which(!ks_sheet_2$plot_id %in%
 # in y1_pl1 2013
 
 # Create data frames with unique plot_id values from each table
-y1_2013_unique <- y1_pl1 %>% 
+y1_2013_unique <- y1_pl1 %>%
   filter(last_year == 2013) %>%
-  distinct(plot_id) %>% 
+  distinct(plot_id) %>%
   filter(!is.na(plot_id) & (plot_id != "NA")) %>%
-  mutate(plot_id_2013 = plot_id) %>% 
+  mutate(plot_id_2013 = plot_id) %>%
   select(plot_id, plot_id_2013)
 
-y1_2018_unique <- y1_pl1 %>% 
+y1_2018_unique <- y1_pl1 %>%
   filter(last_year == 2018) %>%
-  distinct(plot_id) %>% 
+  distinct(plot_id) %>%
   filter(!is.na(plot_id) & (plot_id != "NA")) %>%
-  mutate(plot_id_2018 = plot_id) %>% 
+  mutate(plot_id_2018 = plot_id) %>%
   select(plot_id, plot_id_2018)
 
 # Merge the two data frames using left_join
@@ -579,19 +576,19 @@ merged_table %>%
 
 
 
-y1_2013_unique <- y1_pl1 %>% 
+y1_2013_unique <- y1_pl1 %>%
   filter(last_year == 2013) %>%
-  distinct(plot_id, .keep_all = TRUE) %>% 
+  distinct(plot_id, .keep_all = TRUE) %>%
   filter(!is.na(plot_id) & (plot_id != "NA")) %>%
-  rename(plot_id_2013 = plot_id) %>% 
+  rename(plot_id_2013 = plot_id) %>%
   select(plot_id_2013, latitude_dec, longitude_dec) %>%
   as_sf
 
-y1_2018_unique <- y1_pl1 %>% 
+y1_2018_unique <- y1_pl1 %>%
   filter(last_year == 2018) %>%
-  distinct(plot_id, .keep_all = TRUE) %>% 
+  distinct(plot_id, .keep_all = TRUE) %>%
   filter(!is.na(plot_id) & (plot_id != "NA")) %>%
-  rename(plot_id_2018 = plot_id) %>% 
+  rename(plot_id_2018 = plot_id) %>%
   select(plot_id_2018, latitude_dec, longitude_dec) %>%
   as_sf
 
@@ -703,11 +700,11 @@ poland_LI_harmonisation_table_2_2 <-
             by = "plot_id") %>%
   select(partner_code, survey_code, survey_year, code_plot_orig,
          plot_id_orig, code_plot, plot_id, latitude_dec, longitude_dec)
-  
+
 poland_LI_harmonisation_table <-
   rbind(poland_LI_harmonisation_table,
         poland_LI_harmonisation_table_2_2)
-  
+
 write.csv2(poland_LI_harmonisation_table,
            paste0("./data/additional_data/plot_coord_harmonisation_keys/",
                   "LI_53_plot_coord_harmonisation_key_Poland.csv"),
@@ -722,7 +719,7 @@ write.csv2(poland_LI_harmonisation_table,
 df_table_uk_s1 <-
   get_plot_coord_colocation_table(code_survey = "s1",
                                   partner_code = 6,
-                                  dist_threshold = 1)
+                                  dist_threshold = 10)
 
 write.csv2(df_table_uk_s1,
            paste0("./output/spatial_plot_id_links/",
@@ -772,6 +769,9 @@ y1_pl1 %>%
 ### Create harmonisation table ----
 
 vec_moved_plots <- links_uk_LI_10 %>%
+  # coordinates reported in survey years 2008 appear to be incorrect
+  select(-ends_with("_2008")) %>%
+  filter(if_any(matches("[[:digit:]]"), ~ !is.na(.))) %>%
   mutate(code_plot = as.numeric(gsub("^6_", "", all_equal_survey))) %>%
   filter(code_plot <= 167) %>%
   group_by(all_equal_survey) %>%
@@ -781,133 +781,79 @@ vec_moved_plots <- links_uk_LI_10 %>%
   arrange(code_plot) %>%
   rename(plot_id = all_equal_survey) %>%
   select(plot_id) %>%
-  as.vector() %>%
-  unlist()
-
+  pull()
 
 survey_years <- c(1994, 1995)
 
-uk_LI_harmonisation_table_94 <-
-  rbind(select(s1_pls[which(s1_pls$plot_id %in% vec_moved_plots &
-                              s1_pls$survey_year %in% survey_years), ],
-               plot_id, latitude_dec, longitude_dec, survey_year),
-        select(s1_prf[which(s1_prf$plot_id %in% vec_moved_plots &
-                              s1_prf$survey_year %in% survey_years), ],
-               plot_id, latitude_dec, longitude_dec, survey_year)) %>%
-  mutate(comb = paste0(plot_id, "_",
-                       latitude_dec, "_",
-                       longitude_dec, "_",
-                       survey_year)) %>%
-  distinct(comb, .keep_all = TRUE) %>%
-  select(-comb) %>%
-  bind_rows(select(mutate(s1_som[which(s1_som$plot_id %in% vec_moved_plots &
-                                  s1_som$survey_year %in% survey_years), ],
-                   latitude_dec = NA,
-                   longitude_dec = NA),
-            plot_id, latitude_dec, longitude_dec, survey_year)) %>%
-  mutate(comb = paste0(plot_id, "_", survey_year)) %>%
-  distinct(comb, .keep_all = TRUE) %>%
-  select(-comb) %>%
-  mutate(plot_id_orig = plot_id) %>%
-  mutate(code_plot_orig = as.numeric(gsub("^6_", "", plot_id_orig))) %>%
-  arrange(code_plot_orig) %>%
-  mutate(year_suffix = substr(survey_year, 3, 4)) %>%
-  mutate(code_plot = str_pad(as.character(code_plot_orig),
-                             width = 4, pad = "0")) %>%
-  mutate(code_plot = paste0(year_suffix, code_plot)) %>%
-  select(-year_suffix) %>%
-  mutate(partner_code = 6) %>%
-  mutate(plot_id = paste0(partner_code, "_", code_plot)) %>%
-  mutate(survey_code = "y1_s1") %>%
-  mutate(survey_year = paste0(survey_years, collapse = "_")) %>%
-  select(partner_code, survey_code, survey_year, code_plot_orig,
-         plot_id_orig, code_plot, plot_id, latitude_dec, longitude_dec)
+# Not needed to convert plot codes for these survey years,
+# since they correspond with the same plot codes in other LI surveys
 
-survey_years <- c(2005, 2006)
+survey_years <- c(2005, 2006, 2008)
+
+# It seems that all data from these survey years were actually sampled in the
+# same survey year (2006, and 2005 for plot 6_75, which never moved so doesn't
+# need to be changed), and that only the info from the most recent
+# change_date is correct
 
 uk_LI_harmonisation_table_06 <-
   rbind(select(s1_pls[which(s1_pls$plot_id %in% vec_moved_plots &
                               s1_pls$survey_year %in% survey_years), ],
-               plot_id, latitude_dec, longitude_dec, survey_year),
+               plot_id, latitude_dec, longitude_dec, survey_year,
+               change_date, code_plot, code_country, partner_code),
         select(s1_prf[which(s1_prf$plot_id %in% vec_moved_plots &
                               s1_prf$survey_year %in% survey_years), ],
-               plot_id, latitude_dec, longitude_dec, survey_year)) %>%
+               plot_id, latitude_dec, longitude_dec, survey_year,
+               change_date, code_plot, code_country, partner_code)) %>%
+  mutate(longitude_dec = round(as.numeric(longitude_dec), 5),
+         latitude_dec = round(as.numeric(latitude_dec), 5)) %>%
+  group_by(plot_id) %>%
+  slice_max(order_by =
+              as.Date(change_date, format = "%Y-%m-%d")) %>%
+  ungroup() %>%
   mutate(comb = paste0(plot_id, "_",
-                       latitude_dec, "_",
-                       longitude_dec, "_",
-                       survey_year)) %>%
+                       round(as.numeric(latitude_dec), 5), "_",
+                       round(as.numeric(longitude_dec), 5), "_",
+                       survey_year))
+
+# Assert that all the coordinates and survey_years are unique per plot_id
+
+assertthat::assert_that(
+  nrow(uk_LI_harmonisation_table_06 %>%
+         distinct(comb)) ==
+    nrow(uk_LI_harmonisation_table_06 %>%
+           distinct(plot_id)))
+
+uk_LI_harmonisation_table_06 <- uk_LI_harmonisation_table_06 %>%
   distinct(comb, .keep_all = TRUE) %>%
   select(-comb) %>%
   mutate(plot_id_orig = plot_id) %>%
   mutate(code_plot_orig = as.numeric(gsub("^6_", "", plot_id_orig))) %>%
   arrange(code_plot_orig) %>%
-  mutate(year_suffix = substr(survey_year, 3, 4)) %>%
-  mutate(code_plot = str_pad(as.character(code_plot_orig),
-                             width = 4, pad = "0")) %>%
-  mutate(code_plot = paste0(year_suffix, code_plot)) %>%
-  select(-year_suffix) %>%
-  mutate(partner_code = 6) %>%
-  mutate(plot_id = paste0(partner_code, "_", code_plot)) %>%
+  mutate(code_plot = 6000000 + code_plot_orig) %>%
+  mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
   mutate(survey_code = "y1_s1") %>%
   mutate(survey_year = paste0(survey_years, collapse = "_")) %>%
   select(partner_code, survey_code, survey_year, code_plot_orig,
          plot_id_orig, code_plot, plot_id, latitude_dec, longitude_dec)
 
-survey_years <- c(2008)
-
-uk_LI_harmonisation_table_08 <-
-  rbind(select(s1_pls[which(s1_pls$plot_id %in% vec_moved_plots &
-                              s1_pls$survey_year %in% survey_years), ],
-               plot_id, latitude_dec, longitude_dec, survey_year),
-        select(s1_prf[which(s1_prf$plot_id %in% vec_moved_plots &
-                              s1_prf$survey_year %in% survey_years), ],
-               plot_id, latitude_dec, longitude_dec, survey_year)) %>%
-  mutate(comb = paste0(plot_id, "_",
-                       latitude_dec, "_",
-                       longitude_dec, "_",
-                       survey_year)) %>%
-  distinct(comb, .keep_all = TRUE) %>%
-  select(-comb) %>%
-  bind_rows(select(mutate(s1_som[which(s1_som$plot_id %in% vec_moved_plots &
-                                         s1_som$survey_year %in% survey_years), ],
-                          latitude_dec = NA,
-                          longitude_dec = NA),
-                   plot_id, latitude_dec, longitude_dec, survey_year)) %>%
-  mutate(comb = paste0(plot_id, "_", survey_year)) %>%
-  distinct(comb, .keep_all = TRUE) %>%
-  select(-comb) %>%
-  mutate(plot_id_orig = plot_id) %>%
-  mutate(code_plot_orig = as.numeric(gsub("^6_", "", plot_id_orig))) %>%
-  arrange(code_plot_orig) %>%
-  mutate(year_suffix = substr(survey_year, 3, 4)) %>%
-  mutate(code_plot = str_pad(as.character(code_plot_orig),
-                             width = 4, pad = "0")) %>%
-  mutate(code_plot = paste0(year_suffix, code_plot)) %>%
-  select(-year_suffix) %>%
-  mutate(partner_code = 6) %>%
-  mutate(plot_id = paste0(partner_code, "_", code_plot)) %>%
-  mutate(survey_code = "y1_s1") %>%
-  mutate(survey_year = paste0(survey_years, collapse = "_")) %>%
-  select(partner_code, survey_code, survey_year, code_plot_orig,
-         plot_id_orig, code_plot, plot_id, latitude_dec, longitude_dec)
 
 # plot 83 has incorrect coordinates in 2008
-uk_LI_harmonisation_table_83 <-
-  s1_pls %>%
-  filter(plot_id == "6_83") %>%
-  filter(survey_year == 2006) %>%
-  select(survey_year, latitude_dec, longitude_dec) %>%
-  mutate(partner_code = 6,
-         survey_code = "y1_s1",
-         survey_year = 2008,
-         code_plot_orig = "83",
-         plot_id_orig = "6_83",
-         code_plot = code_plot_orig,
-         plot_id = plot_id_orig) %>%
-  relocate(latitude_dec, .after = last_col()) %>%
-  relocate(longitude_dec, .after = last_col())
+# uk_LI_harmonisation_table_83 <-
+#   s1_pls %>%
+#   filter(plot_id == "6_83") %>%
+#   filter(survey_year == 2006) %>%
+#   select(survey_year, latitude_dec, longitude_dec) %>%
+#   mutate(partner_code = 6,
+#          survey_code = "y1_s1",
+#          survey_year = 2008,
+#          code_plot_orig = "83",
+#          plot_id_orig = "6_83",
+#          code_plot = code_plot_orig,
+#          plot_id = plot_id_orig) %>%
+#   relocate(latitude_dec, .after = last_col()) %>%
+#   relocate(longitude_dec, .after = last_col())
 
-# plots 401 and 402 have incorrect degrees longitude in 
+# plots 401 and 402 have incorrect degrees longitude in
 # Assumption (based on FSCDB.LI.1) that negative values are correct
 # -> rely on s1_prf
 # (Alternative: rely on y1_pl1 and s1_pls)
@@ -916,6 +862,8 @@ uk_LI_harmonisation_table_401402 <-
   s1_prf %>%
   filter(plot_id %in% c("6_401", "6_402")) %>%
   select(survey_year, latitude_dec, longitude_dec, plot_id, code_plot) %>%
+  mutate(longitude_dec = round(as.numeric(longitude_dec), 5),
+         latitude_dec = round(as.numeric(latitude_dec), 5)) %>%
   mutate(partner_code = 6,
          survey_code = "y1_s1",
          survey_year = 1994,
@@ -925,19 +873,18 @@ uk_LI_harmonisation_table_401402 <-
          plot_id_orig, code_plot, plot_id, latitude_dec, longitude_dec)
 
 uk_LI_harmonisation_table <-
-  rbind(uk_LI_harmonisation_table_94,
-        uk_LI_harmonisation_table_06,
-        uk_LI_harmonisation_table_08,
-        uk_LI_harmonisation_table_83,
-        uk_LI_harmonisation_table_401402) %>%
-  mutate(latitude_dec = as.numeric(latitude_dec),
-         longitude_dec = as.numeric(longitude_dec))
+  rbind(uk_LI_harmonisation_table_06,
+        uk_LI_harmonisation_table_401402)
 
-write.csv2(uk_LI_harmonisation_table,
-           paste0("./data/additional_data/plot_coord_harmonisation_keys/",
-                  "LI_6_plot_coord_harmonisation_key_UK.csv"),
-           row.names = FALSE,
-           na = "")
+write.table(uk_LI_harmonisation_table,
+            file =
+              paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                     "LI_6_plot_coord_harmonisation_key_UK.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
 
 
 # Level II UK ----
@@ -1128,7 +1075,7 @@ uk_LII_harmonisation_table_si_2 <-
          code_plot = as.numeric(gsub("^6_", "", plot_id))) %>%
   select(partner_code, survey_code, survey_year, code_plot_orig,
          plot_id_orig, code_plot, plot_id, latitude_dec, longitude_dec)
-  
+
 
 uk_LII_harmonisation_table <-
   rbind(uk_LII_harmonisation_table_95,
@@ -1164,7 +1111,7 @@ which_code_survey <- function(df, code_survey) {
 
 for (i in seq_along(unique(s1_som$partner_code))) {
   partner_code_i <- unique(s1_som$partner_code)[i]
-  
+
   if (!partner_code_i %in% c(6, 53)) {
   partner_i <- d_partner$desc_short[which(d_partner$code == partner_code_i)]
   print(partner_i)
@@ -1176,12 +1123,12 @@ for (i in seq_along(unique(s1_som$partner_code))) {
 
   df_table_sub <-
     df_table[which_code_survey(df_table, code_survey = "s1"), ]
-  
+
   if (any(is.na(df_table_sub$all_equal_survey)) ||
       any(df_table_sub$plot_id_survey_duplicated == TRUE)) {
-    
+
     # Save the table for the given partner
-    
+
     write.csv2(df_table,
                paste0("./output/spatial_plot_id_links/",
                       "links_plot_id_location_",
@@ -1197,24 +1144,24 @@ for (i in seq_along(unique(s1_som$partner_code))) {
 
 for (i in seq_along(unique(so_som$partner_code))) {
   partner_code_i <- unique(so_som$partner_code)[i]
-  
+
   if (!partner_code_i %in% c(6, 53)) {
     partner_i <- d_partner$desc_short[which(d_partner$code == partner_code_i)]
     print(partner_i)
-    
+
     df_table <-
       get_plot_coord_colocation_table(code_survey = "so",
                                       partner_code = partner_code_i,
                                       dist_threshold = 10)
-    
+
     df_table_sub <-
       df_table[which_code_survey(df_table, code_survey = "so"), ]
-    
+
     if (any(is.na(df_table_sub$all_equal_survey)) ||
         any(df_table_sub$plot_id_survey_duplicated == TRUE)) {
-      
+
       # Save the table for the given partner
-      
+
       write.csv2(df_table,
                  paste0("./output/spatial_plot_id_links/",
                         "links_plot_id_location_",
@@ -1231,12 +1178,12 @@ get_plot_location_table <- function(code_survey,
                                     partner_code) {
   level <- ifelse(code_survey == "s1", "LI", "LII")
   partner_short <- d_partner$desc_short[which(d_partner$code == partner_code)]
-  
+
   list_tables <- list.files("./output/spatial_plot_id_links/")
   list_tables <-
     list_tables[which(!list_tables %in%
                         c("links_plot_id_location_poland_s1_so_1995.csv"))]
-  
+
 
   # Function to check if a string contains both terms (ignoring case)
   contains_terms <- function(string) {
@@ -1273,13 +1220,13 @@ get_plot_location_table <- function(code_survey,
                                          level, "."))
   }
 
-  df_table <- 
+  df_table <-
     read.csv2(paste0("./output/spatial_plot_id_links/",
                      file_name),
             na.strings = "")
 
   return(df_table)
-  
+
   } else {
     return(NA)
   }
@@ -1292,41 +1239,41 @@ for (i in seq_along(unique(s1_som$partner_code))) {
   partner_code_i <- unique(s1_som$partner_code)[i]
     partner_i <- d_partner$desc_short[which(d_partner$code == partner_code_i)]
     print(partner_i)
-    
+
    df_table <- get_plot_location_table(partner_code = partner_code_i,
                                        code_survey = "s1")
-   
+
    if (!is.data.frame(df_table)) {
      cat(paste0("No plot location table found for ",
                 partner_i, " in '", code_survey,
                 "'.\n"))
    } else {
-     
+
      if (any(df_table$plot_id_survey_duplicated[
        which(!is.na(df_table$plot_id_survey_duplicated))] == TRUE)) {
-       
+
        ind_plot_id_dupl <- which(df_table$plot_id_survey_duplicated == TRUE)
        df_table$dist_plot_move_meter <- NA
-       
+
        for (i in ind_plot_id_dupl) {
-         
+
          ind_reference <- which(df_table$all_equal_survey ==
                                   df_table$all_equal_survey[i] &
                                   df_table$plot_id_survey_duplicated == FALSE)
-         
+
          df_sub_spat <- df_table[c(ind_reference, i), ] %>%
            mutate(latitude_dec = latitude_most_abundant) %>%
            mutate(longitude_dec = longitude_most_abundant) %>%
            as_sf
-         
+
          df_table$dist_plot_move_meter[i] <-
            as.numeric(st_distance(df_sub_spat[1, ],
                                   df_sub_spat[2, ]))
        }
      }
-     
+
      # Save the table for the given partner
-     
+
      write.csv2(df_table,
                 paste0("./output/spatial_plot_id_links/",
                        "links_plot_id_location_",
@@ -1334,8 +1281,8 @@ for (i in seq_along(unique(s1_som$partner_code))) {
                        "_LI_10.csv"),
                 row.names = FALSE,
                 na = "")
-     
-     
+
+
    }
 }
 
@@ -1346,20 +1293,20 @@ df_move_distances_s1 <- data.frame(plot_id = NULL,
                                    dist_plot_move_meter = NULL)
 
 for (i in seq_along(unique(s1_som$partner_code))) {
-  
+
   partner_code_i <- unique(s1_som$partner_code)[i]
   partner_i <- d_partner$desc_short[which(d_partner$code == partner_code_i)]
   print(partner_i)
-  
+
   df_table <- get_plot_location_table(partner_code = partner_code_i,
                                       code_survey = "s1")
-  
+
   if (!is.data.frame(df_table)) {
     cat(paste0("No plot location table found for ",
                partner_i, " in '", code_survey,
                "'.\n"))
   } else {
-    
+
     if (any(!is.na(df_table$dist_plot_move_meter))) {
 
       df_move_distances_s1 <-
@@ -1383,22 +1330,22 @@ df_move_distances_so <- data.frame(plot_id = NULL,
                                    dist_plot_move_meter = NULL)
 
 for (i in seq_along(unique(so_som$partner_code))) {
-  
+
   partner_code_i <- unique(so_som$partner_code)[i]
   partner_i <- d_partner$desc_short[which(d_partner$code == partner_code_i)]
   print(partner_i)
-  
+
   df_table <- get_plot_location_table(partner_code = partner_code_i,
                                       code_survey = "so")
-  
+
   if (!is.data.frame(df_table)) {
     cat(paste0("No plot location table found for ",
                partner_i, " in '", code_survey,
                "'.\n"))
   } else {
-    
+
     if (any(!is.na(df_table$dist_plot_move_meter))) {
-      
+
       df_move_distances_so <-
         rbind(df_move_distances_so,
               data.frame(plot_id =
@@ -1451,32 +1398,32 @@ if (!is.data.frame(df_table)) {
              partner_i, " in '", code_survey,
              "'.\n"))
 } else {
-  
+
   if (any(df_table$plot_id_survey_duplicated[
     which(!is.na(df_table$plot_id_survey_duplicated))] == TRUE)) {
-    
+
     ind_plot_id_dupl <- which(df_table$plot_id_survey_duplicated == TRUE)
     df_table$dist_plot_move_meter <- NA
-    
+
     for (i in ind_plot_id_dupl) {
-      
+
       ind_reference <- which(df_table$all_equal_survey ==
                                df_table$all_equal_survey[i] &
                                df_table$plot_id_survey_duplicated == FALSE)
-      
+
       df_sub_spat <- df_table[c(ind_reference, i), ] %>%
         mutate(latitude_dec = latitude_most_abundant) %>%
         mutate(longitude_dec = longitude_most_abundant) %>%
         as_sf
-      
+
       df_table$dist_plot_move_meter[i] <-
         as.numeric(st_distance(df_sub_spat[1, ],
                                df_sub_spat[2, ]))
     }
   }
-  
+
   # Save the table for the given partner
-  
+
   write.csv2(df_table,
              paste0("./output/spatial_plot_id_links/",
                     "links_plot_id_location_",
@@ -1559,44 +1506,6 @@ mapshot(mapView(table_sweden_combined,
 
 # Level I Germany ----
 
-y1_pl1 %>%
-  filter(code_country == 4) %>%
-  distinct(unique_survey, .keep_all = TRUE) %>%
-  mutate(partner_year = paste0(partner_code, "_", survey_year)) %>%
-  group_by(partner_year) %>%
-  summarise(count = n()) %>%
-  View
-  # So the LII partner codes stem from the BioSoil survey
-
-s1_som %>%
-  filter(code_country == 4) %>%
-  distinct(plot_id, .keep_all = TRUE) %>%
-  group_by(code_plot) %>%
-  summarise(count = n()) %>%
-  arrange(code_plot) %>%
-  filter(count > 1) %>%
-  View
-  # All code_plots are unique within s1
-
-data_availability_s1 %>%
-  filter(code_country == 4) %>%
-  distinct(plot_id, .keep_all = TRUE) %>%
-  group_by(code_plot) %>%
-  summarise(count = n(), .groups = "drop") %>%
-  arrange(code_plot) %>%
-  filter(count > 1) %>%
-  View
-  # All code_plots are unique within s1
-
-y1_pl1 %>%
-  filter(code_country == 4) %>%
-  distinct(plot_id, .keep_all = TRUE) %>%
-  group_by(code_plot) %>%
-  summarise(count = n()) %>%
-  arrange(code_plot) %>%
-  filter(count > 1) %>%
-  View
-
 vec_partner_codes_german_LI <-
   bind_rows(
     data_availability_s1 %>%
@@ -1612,6 +1521,291 @@ vec_partner_codes_german_LI <-
   distinct(partner_code) %>%
   filter(partner_code != 98) %>%
   pull(partner_code)
+
+
+# Issue with non-unique German LI plots:
+
+  # When linking BioSoil data with ICP-Forests data by PLOTIDs, we found
+  # identical plot codes in the German federal states: 401 (Baden-Württemberg),
+  # 410 (Nordrhein-Westfalen) and 414 (Sachsen-Anhalt). For instance, plot
+  # code 267 is present in the three federal states (BPLOTIDs = 401_267,
+  # 410_267 and 414_267) but conforms to 4_267 as PLOTID when only the country
+  # is considered. Duplicates are found in Germany for 12 other plot codes
+  # (i.e. 283, 286, 287, 288, 300, 306, 307, 259, 260, 266, 267, 284, 285)
+  # and care should be taken when linking soil data with plot or species
+  # information using the former PLOTIDs.
+
+
+source("./src/functions/dec_coordinate.R")
+
+german_non_unique_plots <-
+  bind_rows(
+    # s1_pls
+    openxlsx::read.xlsx(paste0("./data/additional_data/",
+                               "S1_subset_BIOSOIL_non_unique_code_plots_",
+                               "germany.xlsx"),
+                        sheet = 1) %>%
+      rename(code_plot_orig = "code_plot.(original)") %>%
+      rename(partner_code_biosoil = "BIOSOILCOUNTRY") %>%
+      mutate(survey_form = "s1_pls") %>%
+      mutate(latitude_dec =
+               round(sapply(latitude, dec_coordinate, error_report = FALSE),
+                     5),
+             longitude_dec =
+               round(sapply(longitude, dec_coordinate, error_report = FALSE),
+                     5)) %>%
+      mutate(key =
+               paste0(code_plot_orig, "_",
+                      as.character(round(longitude_dec, 2)), "_",
+                      as.character(round(latitude_dec, 2)))) %>%
+      rename(code_plot_sugg = "suggestion.for.new.code_plot") %>%
+      distinct(key, partner_code_biosoil, .keep_all = TRUE) %>%
+      select(key, survey_form, partner_code_biosoil, code_plot_sugg),
+    # s1_prf
+    openxlsx::read.xlsx(paste0("./data/additional_data/",
+                               "S1_subset_BIOSOIL_non_unique_code_plots_",
+                               "germany.xlsx"),
+                        sheet = 2) %>%
+      select(-which(duplicated(names(.)))) %>%
+      rename(code_plot_orig = "code_plot.(original)") %>%
+      rename(partner_code_biosoil = "BIOSOILCOUNTRY") %>%
+      mutate(survey_form = "s1_prf") %>%
+      mutate(latitude_dec =
+               purrr::map(latitude,
+                          ~ ifelse(!is.na(.x),
+                                   round(
+                                     dec_coordinate(.x, error_report = FALSE),
+                                     5),
+                                   NA_real_)),
+             longitude_dec =
+               purrr::map(longitude,
+                          ~ ifelse(!is.na(.x),
+                                   round(
+                                     dec_coordinate(.x, error_report = FALSE),
+                                     5),
+                                   NA_real_))) %>%
+      mutate(key =
+               paste0(code_plot_orig, "_",
+                      profile_pit_id, "_",
+                      survey_year, "_",
+                      survey_form)) %>%
+      rename(code_plot_sugg = "suggested.from.new.plot.code") %>%
+      distinct(key, partner_code_biosoil, .keep_all = TRUE) %>%
+      select(key, survey_form, partner_code_biosoil, code_plot_sugg),
+    # s1_som
+    openxlsx::read.xlsx(paste0("./data/additional_data/",
+                               "S1_subset_BIOSOIL_non_unique_code_plots_",
+                               "germany.xlsx"),
+                        sheet = 3) %>%
+      rename(code_plot_orig = "code_plot.(original)") %>%
+      rename(partner_code_biosoil = "BIOSOILCOUNTRY") %>%
+      mutate(survey_form = "s1_som") %>%
+      mutate(repetition = ifelse(repetition == -9999,
+                                 1,
+                                 repetition)) %>%
+      mutate(key =
+               paste0(code_plot_orig, "_",
+                      repetition, "_",
+                      survey_year, "_",
+                      survey_form)) %>%
+      rename(code_plot_sugg = "suggested.new.code_plot") %>%
+      distinct(key, partner_code_biosoil, .keep_all = TRUE) %>%
+      select(key, survey_form, partner_code_biosoil, code_plot_sugg),
+    # s1_pfh
+    openxlsx::read.xlsx(paste0("./data/additional_data/",
+                               "S1_subset_BIOSOIL_non_unique_code_plots_",
+                               "germany.xlsx"),
+                        sheet = 4) %>%
+      rename(code_plot_orig = "code_plot.(original)") %>%
+      rename(partner_code_biosoil = "BIOSOILCOUNTRY") %>%
+      mutate(survey_form = "s1_pfh") %>%
+      mutate(key =
+               paste0(code_plot_orig, "_",
+                      profile_pit_id, "_",
+                      survey_year, "_",
+                      survey_form)) %>%
+      rename(code_plot_sugg = "suggested.new.code_plot") %>%
+      distinct(key, partner_code_biosoil, .keep_all = TRUE) %>%
+      select(key, survey_form, partner_code_biosoil, code_plot_sugg))
+
+
+german_plot_ids_non_unique <-
+  c("4_259", "4_260", "4_266", "4_267", "4_283", "4_284", "4_285",
+    "4_286", "4_287", "4_288", "4_300", "4_306", "4_307")
+
+german_plot_codes_non_unique <-
+  gsub("^4_", "", german_plot_ids_non_unique)
+
+german_plots_current <-
+  bind_rows(
+    y1_pl1 %>%
+      filter(plot_id %in% german_plot_ids_non_unique) %>%
+      mutate(survey_form = "y1_pl1") %>%
+      mutate(survey_year = last_year) %>%
+      mutate(repetition = NA_character_) %>%
+      mutate(longitude_dec = round(as.numeric(longitude_dec), 5),
+             latitude_dec = round(as.numeric(latitude_dec), 5)) %>%
+      mutate(unique_survey_repetition = paste0(plot_id,
+                                               survey_year,
+                                               repetition)) %>%
+      distinct(unique_survey_repetition, .keep_all = TRUE) %>%
+      mutate(key =
+               paste0(code_plot, "_",
+                      as.character(round(longitude_dec, 2)), "_",
+                      as.character(round(latitude_dec, 2)))) %>%
+      mutate(key_per_survey_form =
+               paste0(code_plot, "_",
+                      as.character(round(longitude_dec, 2)), "_",
+                      as.character(round(latitude_dec, 2)))) %>%
+      select(survey_form, partner_code, plot_id, survey_year, repetition,
+             longitude_dec, latitude_dec, key, key_per_survey_form,
+             change_date),
+    s1_pls %>%
+      filter(plot_id %in% german_plot_ids_non_unique) %>%
+      mutate(survey_form = "s1_pls") %>%
+      mutate(repetition = NA_character_) %>%
+      mutate(longitude_dec = round(as.numeric(longitude_dec), 5),
+             latitude_dec = round(as.numeric(latitude_dec), 5)) %>%
+      mutate(unique_survey_repetition = paste0(plot_id,
+                                               survey_year,
+                                               repetition)) %>%
+      distinct(unique_survey_repetition, .keep_all = TRUE) %>%
+      mutate(key =
+               paste0(code_plot, "_",
+                      as.character(round(longitude_dec, 2)), "_",
+                      as.character(round(latitude_dec, 2)))) %>%
+      mutate(key_per_survey_form =
+               paste0(code_plot, "_",
+                      as.character(round(longitude_dec, 2)), "_",
+                      as.character(round(latitude_dec, 2)))) %>%
+      select(survey_form, partner_code, plot_id, survey_year, repetition,
+             longitude_dec, latitude_dec, key, key_per_survey_form,
+             change_date),
+    s1_prf %>%
+      filter(plot_id %in% german_plot_ids_non_unique) %>%
+      mutate(survey_form = "s1_prf") %>%
+      mutate(repetition = as.character(profile_pit_id)) %>%
+      mutate(longitude_dec = round(as.numeric(longitude_dec), 5),
+             latitude_dec = round(as.numeric(latitude_dec), 5)) %>%
+      mutate(unique_survey_repetition = paste0(plot_id,
+                                               survey_year,
+                                               repetition)) %>%
+      distinct(unique_survey_repetition, .keep_all = TRUE) %>%
+      mutate(key =
+               paste0(code_plot, "_",
+                      repetition, "_",
+                      survey_year, "_",
+                      survey_form)) %>%
+      mutate(key_per_survey_form =
+               paste0(code_plot, "_",
+                      repetition, "_",
+                      survey_year)) %>%
+      select(survey_form, partner_code, plot_id, survey_year, repetition,
+             longitude_dec, latitude_dec, key, key_per_survey_form,
+             change_date),
+    s1_som %>%
+      filter(plot_id %in% german_plot_ids_non_unique) %>%
+      mutate(survey_form = "s1_som") %>%
+      mutate(repetition = as.character(repetition)) %>%
+      mutate(longitude_dec = NA_integer_,
+             latitude_dec = NA_integer_) %>%
+      mutate(unique_survey_repetition = paste0(plot_id,
+                                               survey_year,
+                                               repetition)) %>%
+      distinct(unique_survey_repetition, .keep_all = TRUE) %>%
+      mutate(key =
+               paste0(code_plot, "_",
+                      repetition, "_",
+                      survey_year, "_",
+                      survey_form)) %>%
+      mutate(key_per_survey_form =
+               paste0(code_plot, "_",
+                      repetition, "_",
+                      survey_year)) %>%
+      select(survey_form, partner_code, plot_id, survey_year, repetition,
+             longitude_dec, latitude_dec, key, key_per_survey_form,
+             change_date),
+    s1_pfh %>%
+      filter(plot_id %in% german_plot_ids_non_unique) %>%
+      mutate(survey_form = "s1_pfh") %>%
+      mutate(repetition = as.character(profile_pit_id)) %>%
+      mutate(longitude_dec = NA_integer_,
+             latitude_dec = NA_integer_) %>%
+      mutate(unique_survey_repetition = paste0(plot_id,
+                                               survey_year,
+                                               repetition)) %>%
+      distinct(unique_survey_repetition, .keep_all = TRUE) %>%
+      mutate(key =
+               paste0(code_plot, "_",
+                      repetition, "_",
+                      survey_year, "_",
+                      survey_form)) %>%
+      mutate(key_per_survey_form =
+               paste0(code_plot, "_",
+                      repetition, "_",
+                      survey_year)) %>%
+      select(survey_form, partner_code, plot_id, survey_year, repetition,
+             longitude_dec, latitude_dec, key, key_per_survey_form,
+             change_date)) %>%
+  mutate(code_plot = as.numeric(gsub("^4_", "", plot_id))) %>%
+  left_join(german_non_unique_plots %>%
+              select(-survey_form),
+            by = "key") %>%
+  mutate(partner_code_biosoil =
+           ifelse(key == "286_9.69_51.89" &
+                    is.na(partner_code_biosoil),
+                  401,
+                  partner_code_biosoil)) %>%
+  arrange(code_plot,
+          partner_code_biosoil,
+          survey_year) %>%
+  mutate(code_plot_new =
+           ifelse(partner_code_biosoil == 410,
+                  .data$code_plot,
+                  4000000 + 1000 * .data$partner_code_biosoil +
+                    .data$code_plot)) %>%
+  select(-code_plot_sugg) %>%
+  mutate(code_country = 4) %>%
+  rename(code_plot_orig = code_plot) %>%
+  rename(code_plot = code_plot_new) %>%
+  rename(plot_id_orig = plot_id) %>%
+  mutate(plot_id = paste0(code_country, "_", code_plot))
+
+german_coord <-
+  german_plots_current %>%
+  select(plot_id, longitude_dec, latitude_dec, change_date) %>%
+  filter(!is.na(longitude_dec) &
+           !is.na(latitude_dec)) %>%
+  mutate(comb = paste0(plot_id, "_",
+                       longitude_dec, "_",
+                       latitude_dec)) %>%
+  distinct(comb, .keep_all = TRUE) %>%
+  group_by(plot_id) %>%
+  slice_max(order_by =
+              as.Date(change_date, format = "%Y-%m-%d")) %>%
+  ungroup() %>%
+  select(-comb, -change_date)
+
+german_plots_current <- german_plots_current %>%
+  select(-longitude_dec, -latitude_dec) %>%
+  left_join(german_coord,
+            by = "plot_id") %>%
+  select(code_country, survey_form, survey_year, code_plot_orig,
+         plot_id_orig, repetition, code_plot, plot_id, partner_code_biosoil,
+         everything())
+
+
+write.table(german_plots_current,
+            file =
+              paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                          "LI_4_plot_coord_harmonisation_key_Germany.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
+
+
 
 
 # Spain ----
