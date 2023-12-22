@@ -60,7 +60,7 @@ sync_local_data(list_subfolders_data = "raw_data",
 
 # Input level ----
 
-level <- "LII"
+level <- "LI"
 
 
 # Define surveys and survey forms within level
@@ -99,8 +99,6 @@ list_survey_forms <- unlist(
 ## 3.1. Use read_raw function ----
 # Firstly read "y1" and "si", as their coordinates are used to list coordinates
 # of "s1" and "so"
-
-cat("Import raw data\n")
 
 source("./src/functions/read_raw.R")
 
