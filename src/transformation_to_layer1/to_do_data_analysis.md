@@ -21,6 +21,7 @@ Please add any observed data issues to this file
 * survey_year in "som" and "pfh" does not always correspond with the actual sampling year (i.e. sometimes lab analysis year). Correct by means of survey_year in "prf" and "pls"
 * Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.
 * Make a separate script for LI versus LII, in which you can choose the survey form (so_som, so_pfh, s1_som, s1_pfh) and the variable to calculate stocks from. Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.
+* Improve internal gap-filling based on sw_swc (link between records)
 
 
 * ~~in s1_som files, for all MINERAL horizons, set organic_layer_weight==NA if bulk density value is given.~~ (Note: completed)
