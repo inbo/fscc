@@ -2,6 +2,8 @@
 save_excel <- function(x,
                        file) {
 
+  stopifnot(require("openxlsx"))
+
   wb <- createWorkbook()
   addWorksheet(wb, "Data")
   writeData(wb, 1, x)
