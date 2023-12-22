@@ -14,23 +14,69 @@ stopifnot(require("sf"),
 
 # 1. Import data ----
 
-## 1.1. Raster: European Soil Database ----
-#       (WRB-LEV1)
+## 1.1. Raster: WRB-LEV1 (European Soil Database) ----
 
 path_soil_database <-
   paste0("./data/additional_data/shapefiles/European Soil Database/",
-         "SoilDB_rasters/wrblv1.tif")
+         "SoilDB_rasters/")
 
-soil_rsg <- terra::rast(path_soil_database)
-terra::crs(soil_rsg)
+soil_wrb_lev1 <- terra::rast(paste0(path_soil_database,
+                                    "wrblv1.tif"))
+terra::crs(soil_wrb_lev1)
 
-legend <-
-  read.csv(paste0("./data/additional_data/shapefiles/European Soil Database/",
-                  "SoilDB_rasters/wrb-lev1-dictionary.csv"), sep = ";")
+legend_wrb_lev1 <- read.csv(paste0(path_soil_database,
+                                   "wrb-lev1-dictionary.csv"), sep = ";")
 
 
 
-## 1.2. "s1" plots ----
+
+## 1.2. Raster: WRB-ADJ1 (European Soil Database) ----
+
+soil_wrb_adj1 <- terra::rast(paste0(path_soil_database,
+                                    "wrbadj1.tif"))
+terra::crs(soil_wrb_adj1)
+
+legend_wrb_adj1 <- read.csv(paste0(path_soil_database,
+                                   "wrb-adj1-dictionary.csv"), sep = ";")
+
+
+## 1.3. Raster: WRB-ADJ2 (European Soil Database) ----
+
+soil_wrb_adj2 <- terra::rast(paste0(path_soil_database,
+                                    "wrbadj2.tif"))
+terra::crs(soil_wrb_adj2)
+
+# Use legend_wrb_adj1
+
+
+
+## 1.4. Raster: WRB-FULL (European Soil Database) ----
+
+soil_wrb_full <- terra::rast(paste0(path_soil_database,
+                                    "wrbfu.tif"))
+terra::crs(soil_wrb_full)
+
+legend_wrb_full <- read.csv(paste0(path_soil_database,
+                                   "wrb-full-dictionary.csv"), sep = ";")
+
+
+
+
+
+## 1.5. Raster: FAO90-FULL (European Soil Database) ----
+
+soil_fao90_full <- terra::rast(paste0(path_soil_database,
+                                      "fao90fu.tif"))
+terra::crs(soil_fao90_full)
+
+legend_fao90_full <- read.csv(paste0(path_soil_database,
+                                     "fao90-full-dictionary.csv"), sep = ";")
+
+
+
+
+
+## 1.6. "s1" plots ----
 
 source("./src/functions/dec_coordinate.R")
 source("./src/functions/as_sf.R")
@@ -54,20 +100,77 @@ st_crs(s1_missing_wrb_sf)
 
 # 2. Extract raster values to vector points ----
 
+## 2.1. WRB-LEV1 ----
+
 s1_extracted <-
-  suppressWarnings(terra::extract(soil_rsg, terra::vect(s1_missing_wrb_sf),
+  suppressWarnings(terra::extract(soil_wrb_lev1,
+                                  terra::vect(s1_missing_wrb_sf),
                                   ID = FALSE))
 
 s1_missing_wrb$wrb_lev1 <- s1_extracted[, 1]
 
+
+## 2.2. WRB-ADJ1 ----
+
+s1_extracted <-
+  suppressWarnings(terra::extract(soil_wrb_adj1,
+                                  terra::vect(s1_missing_wrb_sf),
+                                  ID = FALSE))
+
+s1_missing_wrb$wrb_adj1 <- s1_extracted[, 1]
+
+
+## 2.3. WRB-ADJ2 ----
+
+s1_extracted <-
+  suppressWarnings(terra::extract(soil_wrb_adj2,
+                                  terra::vect(s1_missing_wrb_sf),
+                                  ID = FALSE))
+
+assertthat::assert_that(all(is.na(pull(unique(s1_extracted))) |
+                              pull(unique(s1_extracted)) %in%
+                              seq(1, 6)))
+
+# This layer does not contain any data
+
+
+## 2.4. WRB-FULL ----
+
+s1_extracted <-
+  suppressWarnings(terra::extract(soil_wrb_full,
+                                  terra::vect(s1_missing_wrb_sf),
+                                  ID = FALSE))
+
+s1_missing_wrb$wrb_full <- s1_extracted[, 1]
+
+## 2.5. FAO90-FULL ----
+
+s1_extracted <-
+  suppressWarnings(terra::extract(soil_fao90_full,
+                                  terra::vect(s1_missing_wrb_sf),
+                                  ID = FALSE))
+
+s1_missing_wrb$fao90_full <- s1_extracted[, 1]
+
+
+
+
 s1_wrb <- s1_missing_wrb %>%
-  mutate(wrb_lev1 = as.character(wrb_lev1))
+  # Convert to characters
+  mutate_at(vars(wrb_lev1, wrb_adj1, wrb_full, fao90_full), as.character) %>%
+  # Convert records that contain number "6" to "6"
+  mutate(across(c(wrb_lev1, wrb_adj1, wrb_full, fao90_full),
+                ~ if_else(grepl("6", .), "6", .)))
+
+
 
 
 # 3. Fill data gaps ----
 
 s1_wrb_gaps <- s1_wrb %>%
-  filter(is.na(wrb_lev1)) %>%
+  filter(is.na(wrb_lev1) |
+           is.na(wrb_adj1) |
+           is.na(wrb_full)) %>%
   as_sf
 
   # Gaps for:
@@ -75,33 +178,118 @@ s1_wrb_gaps <- s1_wrb %>%
   # - five Swedish plots → no data because right outside the edge with the
   #   sea (in comparison with raster). Reasonable to take the WRB nearby.
 
-# Make a map to explore the Swedish data gaps
+
+
+# WRB-LEV1: Make a map to explore the Swedish data gaps
 
 dev.new()
 
 # Plot the raster with focus on Swedish plots
-terra::plot(soil_rsg, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
+terra::plot(soil_wrb_lev1, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
 
 # Add points on top of the raster
 terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
 
 # Add labels based on the plot_id column
 terra::text(terra::vect(s1_wrb_gaps),
-            labels = s1_wrb_gaps$plot_id, pos = 1, col = "blue", cex = 0.8,
-            add = TRUE)
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+# WRB-ADJ1: Make a map to explore the Swedish data gaps
+
+dev.new()
+
+# Plot the raster with focus on Swedish plots
+terra::plot(soil_wrb_adj1, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+# WRB-FULL: Make a map to explore the Swedish data gaps
+
+dev.new()
+
+# Plot the raster with focus on Swedish plots
+terra::plot(soil_wrb_full, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+
+
+# FAO90-FULL: Make a map to explore the Swedish data gaps
+
+dev.new()
+
+# Plot the raster with focus on Swedish plots
+terra::plot(soil_fao90_full, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+
+
+
+
 
 # The five Swedish data gaps can be filled easily based on the map
 
 s1_wrb <- s1_wrb %>%
+  # WRB-LEV1
   mutate(wrb_lev1 = case_when(
     plot_id %in% c("13_12987", "13_22447") ~ "PZ",
     plot_id == "13_17887" ~ "CM",
     plot_id %in% c("13_17841", "13_17526") ~ "LP",
     TRUE ~ wrb_lev1)) %>%
-  left_join(legend,
+  left_join(legend_wrb_lev1 %>%
+              rename(wrb_soil_group = RSG),
             by = join_by("wrb_lev1" == "WRB.LEV1")) %>%
-  rename(code_wrb_soil_group = wrb_lev1) %>%
-  rename(wrb_soil_group = RSG)
+  # WRB-ADJ1
+  mutate(wrb_adj1 = ifelse(is.na(wrb_adj1),
+                           "dy",
+                           .data$wrb_adj1)) %>%
+  left_join(legend_wrb_adj1 %>%
+              rename(wrb_qualifier_1 = qualifier_1),
+            by = join_by("wrb_adj1" == "WRB.ADJ1")) %>%
+  # WRB-FULL
+  mutate(wrb_full = case_when(
+    plot_id %in% c("13_12987", "13_22447") ~ "PZha",
+    plot_id == "13_17887" ~ "CMdy",
+    plot_id %in% c("13_17841", "13_17526") ~ "LPdy",
+    TRUE ~ wrb_full)) %>%
+  left_join(legend_wrb_full %>%
+              rename(wrb_full_class = wrb_full),
+            by = join_by("wrb_full" == "WRB.FULL")) %>%
+  # FAO90-FULL
+  mutate(fao90_full = case_when(
+    plot_id %in% c("13_12987", "13_22447") ~ "PZh",
+    plot_id == "13_17887" ~ "CMd",
+    plot_id %in% c("13_17841", "13_17526") ~ "LPd",
+    TRUE ~ fao90_full)) %>%
+  left_join(legend_fao90_full %>%
+              rename(fao90_full_class = fao90_full),
+            by = join_by("fao90_full" == "FAO90.FULL")) %>%
+  relocate(wrb_lev1, wrb_adj1, wrb_full, fao90_full, .after = fao90_full_class)
+
 
 
 
