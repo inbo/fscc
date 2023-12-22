@@ -131,9 +131,9 @@ vec_short <- vec[2:length(vec)]
   # (inconsistency or NA)
 
     if (error_report == TRUE) {
-return(c(coord_dec, coord_error))
+        return(c(round(coord_dec, 5), coord_error))
     } else {
-        return(coord_dec)
+        return(round(coord_dec, 5))
       }
 
 }
