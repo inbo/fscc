@@ -13,16 +13,18 @@ harmonise_into_fixed_depth_layers <-
                           "horizon_sand")) {
 
   source("./src/functions/expand_unique_survey_vec_adjacent_years.R")
+  source("./src/functions/harmonise_layer_to_depths.R")
 
-  # pfh or som?
+  code_survey <- unlist(str_split(survey_form_df, "_"))[1]
+  survey_form_type <- unlist(str_split(survey_form_df, "_"))[2]
 
-  if ("horizon_limit_up" %in% names(data_frame)) {
-    survey_form_type <- "pfh"
+  # pfh or som or swc?
+
+  if (survey_form_type == "pfh") {
     assertthat::assert_that(is.null(target_layers_df))
   } else
 
-  if ("layer_limit_superior" %in% names(data_frame)) {
-      survey_form_type <- "som"
+  if (survey_form_type == "som") {
       assertthat::assert_that(!is.null(target_layers_df))
 
       if (identical(parameters,
@@ -43,18 +45,31 @@ harmonise_into_fixed_depth_layers <-
                         "part_size_silt",
                         "part_size_sand")
       }
+  } else
+
+  if (survey_form_type == "swc") {
+
+    if (identical(parameters,
+                  c("horizon_bulk_dens_measure",
+                    "horizon_bulk_dens_est",
+                    "horizon_coarse_weight",
+                    "code_horizon_coarse_vol",
+                    "horizon_c_organic_total",
+                    "horizon_clay",
+                    "horizon_silt",
+                    "horizon_sand"))) {
+
+      parameters <- c("bulk_density")
+    }
   }
 
-  # code_survey
-
-  code_survey <- unlist(str_split(survey_form_df, "_"))[1]
 
 
   # Arrange input data ----
 
   # If "pfh"
 
-  if ("horizon_limit_up" %in% names(data_frame)) {
+  if (survey_form_type == "pfh") {
 
   # Combine the two bulk density columns into one bulk_density column
   # Priority: horizon_bulk_dens_measure
@@ -79,6 +94,8 @@ harmonise_into_fixed_depth_layers <-
   }
 
 
+  if (survey_form_type == "pfh" || survey_form_type == "som") {
+
   # Filter for non-redundant layers
 
   data_frame <- data_frame %>%
@@ -96,6 +113,14 @@ harmonise_into_fixed_depth_layers <-
   parameters_category <- parameters[grep("code", parameters)]
   parameters_numeric <- parameters[grep("code", parameters, invert = TRUE)]
 
+  }
+
+  if (survey_form_type == "swc") {
+    parameters_numeric <- parameters
+    parameters_category <- NULL
+  }
+
+
 
 
 
@@ -103,7 +128,7 @@ harmonise_into_fixed_depth_layers <-
 
   ## Target: fixed-depth layers ----
 
-  if (survey_form_type == "pfh" &&
+  if ((survey_form_type == "pfh" || survey_form_type == "swc") &&
       is.null(target_layers_df)) {
 
   # Import theoretical depths in "som" survey forms
@@ -114,24 +139,61 @@ harmonise_into_fixed_depth_layers <-
     select(code_layer, layer_limit_superior, layer_limit_inferior) %>%
     filter(!is.na(layer_limit_superior) & !is.na(layer_limit_inferior))
 
+  if ("unique_survey_profile" %in% names(data_frame)) {
 
-  df_target <- data_frame %>%
-    distinct(unique_survey_profile) %>%
-    # Create fixed depth layers for each unique profile
-    group_by(unique_survey_profile) %>%
-    do(expand.grid(code_layer =
-                     c("O", "M05", "M51", "M01", "M12", "M24", "M48"))) %>%
-    ungroup() %>%
-    # Add depths
-    left_join(fixed_depths, by = "code_layer") %>%
-    # Split unique_survey_profile
-    mutate(unique_survey_profile_to_separate = unique_survey_profile) %>%
-    separate(unique_survey_profile_to_separate,
-             into = c("code_country", "survey_year",
-                      "code_plot", "profile_pit_id"),
-             sep = "_") %>%
-    # Add logical for forest floor as layer type
-    mutate(forest_floor = FALSE)
+    df_target <- data_frame %>%
+      distinct(unique_survey_profile) %>%
+      # Create fixed depth layers for each unique profile
+      group_by(unique_survey_profile) %>%
+      do(expand.grid(code_layer =
+                       c("O", "M05", "M51", "M01", "M12", "M24", "M48"))) %>%
+      ungroup() %>%
+      # Add depths
+      left_join(fixed_depths, by = "code_layer") %>%
+      # Split unique_survey_profile
+      mutate(unique_survey_profile_to_separate = unique_survey_profile) %>%
+      separate(unique_survey_profile_to_separate,
+               into = c("code_country", "survey_year",
+                        "code_plot", "profile_pit_id"),
+               sep = "_") %>%
+      # Add logical for forest floor as layer type
+      mutate(forest_floor = FALSE)
+
+  } else {
+
+    df_target <- data_frame %>%
+      distinct(unique_survey) %>%
+      # Create fixed depth layers for each unique profile
+      group_by(unique_survey) %>%
+      do(expand.grid(code_layer =
+                       c("O", "M05", "M51", "M01", "M12", "M24", "M48"))) %>%
+      ungroup() %>%
+      # Add depths
+      left_join(fixed_depths, by = "code_layer") %>%
+      # Split unique_survey
+      mutate(unique_survey_to_separate = unique_survey) %>%
+      separate(unique_survey_to_separate,
+               into = c("code_country", "survey_year",
+                        "code_plot"),
+               sep = "_") %>%
+      # Add logical for forest floor as layer type
+      mutate(forest_floor = FALSE)
+
+  }
+
+  if (!"unique_survey_profile" %in% names(df_target)) {
+
+    data_frame <- data_frame %>%
+      rename(horizon_limit_up = ring_depth_upper) %>%
+      rename(horizon_limit_low = ring_depth_lower) %>%
+      rename(horizon_master = code_depth_layer) %>%
+      rename(unique_survey_profile = unique_survey)
+
+    df_target <- df_target %>%
+      rename(unique_survey_profile = unique_survey)
+
+  }
+
 
   # Add new empty columns to the data frame
   df_target[parameters] <- NA
@@ -147,7 +209,9 @@ harmonise_into_fixed_depth_layers <-
 
   # For each of the profiles
 
+
   unique_profiles <- unique(df_target$unique_survey_profile)
+
 
   for (i in seq_along(unique_profiles)) {
 
@@ -155,10 +219,7 @@ harmonise_into_fixed_depth_layers <-
     vec_prof <- which(df_target$unique_survey_profile == profile_id)
 
     vec_prof_df <- which(data_frame$unique_survey_profile == profile_id)
-    df_sub <- data_frame[vec_prof_df, ] %>%
-      ungroup() %>%
-      as.data.frame %>%
-      as_tibble
+    df_sub <- data_frame[vec_prof_df, ]
 
     ind_to_remove <- NULL
     extra_rows <- NULL
@@ -168,7 +229,9 @@ harmonise_into_fixed_depth_layers <-
 
     if (all(is.na(df_sub$horizon_limit_up)) ||
         all(is.na(df_sub$horizon_limit_low))) {
+
       ind_to_remove <- vec_prof
+
     } else {
 
 
@@ -609,7 +672,6 @@ harmonise_into_fixed_depth_layers <-
 
 
 
-  source("./src/functions/harmonise_layer_to_depths.R")
 
 
   # Harmonise data ----
@@ -617,7 +679,7 @@ harmonise_into_fixed_depth_layers <-
 
   ## Target: fixed-depth layers ----
 
-  if (survey_form_type == "pfh") {
+  if (survey_form_type == "pfh" || survey_form_type == "swc") {
 
   # For each of the profiles
 
@@ -718,7 +780,8 @@ harmonise_into_fixed_depth_layers <-
 
               # Categorical parameters
 
-              if (parameters[k] %in% parameters_category) {
+              if (!is.null(parameters_category) &&
+                  parameters[k] %in% parameters_category) {
 
                 df_target[j, col_fixed] <-
                   harmonise_layer_to_depths(limit_sup = limit_sup,

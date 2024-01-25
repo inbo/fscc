@@ -164,45 +164,54 @@ harmonise_layer_to_depths <- function(limit_sup,
 
   if (nrow(df_sub_selected) >= 2) {
 
-    ind_sup <-
-      which(df_sub_selected$horizon_limit_up ==
-              min(df_sub_selected$horizon_limit_up))
-
-    ind_inf <-
-      which(df_sub_selected$horizon_limit_low ==
-              max(df_sub_selected$horizon_limit_low))
-
 
     for (l in seq_len(nrow(df_sub_selected))) {
 
-      # Superior layer
+      # Case 1: original depth range too high but not too low
+      # (as compared to target limit_sup and limit_inf)
 
-      if (l %in% ind_sup) {
+      if (df_sub_selected$horizon_limit_up[l] < limit_sup &&
+          !(df_sub_selected$horizon_limit_low[l] > limit_inf)) {
 
         df_sub_selected$weight_aid[l] <-
           diff(c(limit_sup, df_sub_selected$horizon_limit_low[l])) *
           df_sub_selected$bd_gapfilled[l]
 
-      } else
+      }
 
-        # Inferior layer
+      # Case 2: original depth range too low but not too high
+      # (as compared to target limit_sup and limit_inf)
 
-        if (l %in% ind_inf) {
+      if (!(df_sub_selected$horizon_limit_up[l] < limit_sup) &&
+          df_sub_selected$horizon_limit_low[l] > limit_inf) {
 
-          df_sub_selected$weight_aid[l] <-
-            diff(c(df_sub_selected$horizon_limit_up[l],
-                   min(limit_inf, df_sub_selected$horizon_limit_low[l]))) *
-            df_sub_selected$bd_gapfilled[l]
+        df_sub_selected$weight_aid[l] <-
+          diff(c(df_sub_selected$horizon_limit_up[l], limit_inf)) *
+          df_sub_selected$bd_gapfilled[l]
+      }
 
-          # Layers in between
-        } else {
+      # Case 3: original depth range too low and too high
+      # (as compared to target limit_sup and limit_inf)
 
-          df_sub_selected$weight_aid[l] <-
-            diff(c(df_sub_selected$horizon_limit_up[l],
-                   df_sub_selected$horizon_limit_low[l])) *
-            df_sub_selected$bd_gapfilled[l]
+      if (df_sub_selected$horizon_limit_up[l] < limit_sup &&
+          df_sub_selected$horizon_limit_low[l] > limit_inf) {
 
-        }
+        df_sub_selected$weight_aid[l] <-
+          diff(c(limit_sup, limit_inf)) *
+          df_sub_selected$bd_gapfilled[l]
+      }
+
+      # Case 4: original depth range not too low and not too high
+      # (as compared to target limit_sup and limit_inf)
+
+      if (!(df_sub_selected$horizon_limit_up[l] < limit_sup) &&
+          !(df_sub_selected$horizon_limit_low[l] > limit_inf)) {
+
+        df_sub_selected$weight_aid[l] <-
+          diff(c(df_sub_selected$horizon_limit_up[l],
+                 df_sub_selected$horizon_limit_low[l])) *
+          df_sub_selected$bd_gapfilled[l]
+      }
     }
   }
 
@@ -238,6 +247,6 @@ harmonise_layer_to_depths <- function(limit_sup,
       }
   }
 
-  return(result)
+  return(round(result, 2))
 
 }
