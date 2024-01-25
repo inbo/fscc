@@ -27,7 +27,10 @@ dec_coordinate <- function(coord, error_report = TRUE) {
   # NAs are introduced by coercion (which implies that the first value of "vec"
   # is an NA in case the coordinate is negative)
 
-suppressWarnings(vec <- as.numeric(strsplit(as.character(coord), "")[[1]]))
+suppressWarnings(
+  vec <- as.numeric(strsplit(as.character(format(coord, scientific = FALSE)),
+                             "")[[1]])
+  )
 
   # Create "vec_short" which contains the values without the initial NA
   # (when negative)
@@ -115,7 +118,7 @@ vec_short <- vec[2:length(vec)]
     coord_error <- NA
 
     if (mm > 59 || ss > 59) {
-      coord_error <- "Error: not in possible range (0 - 59)"
+      coord_error <- "Error: outside range (0 - 59)"
       }
 
   # Sum up the final decimal coordinate
