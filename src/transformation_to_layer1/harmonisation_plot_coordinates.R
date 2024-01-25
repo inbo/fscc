@@ -279,6 +279,66 @@ write.csv2(poland_LII_harmonisation_table_2,
 
 
 
+
+# Update 20240125
+
+source("./src/functions/dec_coordinate.R")
+
+key_poland <-
+  bind_rows(
+    read.csv2(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                     "LII_53_plot_coord_harmonisation_key_Poland.csv")) %>%
+      mutate(code_plot = ifelse(code_plot_orig == 112,
+                                820,
+                                code_plot),
+             plot_id = ifelse(code_plot_orig == 112,
+                              "53_820",
+                              plot_id),
+             latitude_dec = ifelse(code_plot_orig == 112,
+                                   dec_coordinate("501345", error_report = FALSE),
+                                   latitude_dec),
+             longitude_dec = ifelse(code_plot_orig == 112,
+                                    dec_coordinate("175615", error_report = FALSE),
+                                    longitude_dec)) %>%
+      filter(!(survey_code == "si" &
+                 code_plot_orig == 308)) %>%
+      filter(!(survey_code == "so" &
+                 code_plot_orig == 816)),
+    data.frame(
+      partner_code = 53,
+      survey_code = "so",
+      survey_year = "2017",
+      code_plot_orig = 801,
+      plot_id_orig = "53_801",
+      code_plot = 801,
+      plot_id = "53_801",
+      latitude_dec = dec_coordinate("494001", error_report = FALSE),
+      longitude_dec = dec_coordinate("185804", error_report = FALSE)),
+    data.frame(
+      partner_code = 53,
+      survey_code = "so",
+      survey_year = "2017",
+      code_plot_orig = 816,
+      plot_id_orig = "53_816",
+      code_plot = 816,
+      plot_id = "53_816",
+      latitude_dec = dec_coordinate("492049", error_report = FALSE),
+      longitude_dec = dec_coordinate("205004", error_report = FALSE)))
+
+
+write.table(key_poland,
+            file = paste0("./data/additional_data/",
+                          "plot_coord_harmonisation_keys/",
+                          "LII_53_plot_coord_harmonisation_key_Poland.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
+
+
+
+
 # Level I Poland ----
 
 # Import coordinates of Krzysztof
@@ -308,7 +368,8 @@ ks_sheet_2 <-
            sapply(longitude_ddmmss, dec_coordinate, error_report = FALSE)) %>%
   select(-LONGITUDE, -LATITUDE, -longitude_ddmmss, -latitude_ddmmss) %>%
   rename(plot_id = "CODE_PLOT") %>%
-  mutate(plot_id = paste0("53_", plot_id))
+  mutate(plot_id = paste0("53_", plot_id)) %>%
+  mutate(plot_id = str_replace(plot_id, "^53_0", "53_"))
 
 
 # Create plot coordinate co-location table
@@ -334,13 +395,13 @@ df_table_test_10 %>%
   summarise(across(everything(), ~ length(unique(.[!is.na(.)]))))
 
 df_table <- df_table_test_2000 %>%
-  mutate(ks_sheet_2_bis = gsub("^53_0", "53_", ks_sheet_2)) %>%
+  # mutate(ks_sheet_2_bis = gsub("^53_0", "53_", ks_sheet_2)) %>%
   mutate(plot_id = ifelse((!is.na(all_equal_survey) &
-                           !is.na(ks_sheet_2_bis) &
-                           (all_equal_survey == ks_sheet_2_bis)),
+                           !is.na(ks_sheet_2) &
+                           (all_equal_survey == ks_sheet_2)),
                           ks_sheet_2,
                           NA)) %>%
-  select(-ks_sheet_2_bis) %>%
+  # select(-ks_sheet_2_bis) %>%
   mutate(arrange_col = as.numeric(gsub("^53_", "", ks_sheet_2))) %>%
   mutate(arrange_col_2 = as.numeric(gsub("^53_", "", ks_sheet_1))) %>%
   arrange(arrange_col, arrange_col_2) %>%
@@ -712,6 +773,249 @@ write.csv2(poland_LI_harmonisation_table,
            na = "")
 
 # TO DO: check what to do with the 1995 data.
+
+
+
+
+
+
+
+# Update 20240125
+# The different plot_ids in the system installment forms as compared to the
+# solid soil surveys are because:
+# - the system installment plot_ids (3001 etc) represent the ICP Forests codes
+# - the solid soil surveys represent the NFI plot codes (120923 etc)
+
+# Links established by FSCC in Aug 2023:
+
+key_poland_fscc <-
+  read.csv2(paste0("./data/additional_data/plot_coord_harmonisation_keys/",
+                   "LI_53_plot_coord_harmonisation_key_Poland_Aug2023.csv")) %>%
+  filter(survey_code == "y1" &
+           survey_year == 2013) %>%
+  select(code_plot_orig, code_plot) %>%
+  arrange(code_plot_orig)
+
+
+# Links provided by J. Czerepko on 2 Jan 2024
+
+key_poland_jc <-
+  read_excel("./data/additional_data/PL_Biodiversity_with NFI ID.xls") %>%
+  rename(code_plot_orig = "PLOTID") %>%
+  rename(code_plot = "PL NFI PLOTID") %>%
+  mutate(code_plot_orig = as.numeric(code_plot_orig),
+         code_plot = as.numeric(code_plot)) %>%
+  select(code_plot_orig, code_plot) %>%
+  arrange(code_plot_orig)
+
+
+key_poland <- key_poland_fscc %>%
+  rename(code_plot_fscc = code_plot) %>%
+  full_join(key_poland_jc %>%
+              rename(code_plot_jc = code_plot),
+            by = "code_plot_orig") %>%
+  arrange(code_plot_orig)
+
+# Some plots have a link established by us, but not by JC.
+# Double check these.
+
+unclear_y1_plots <- key_poland %>%
+  filter(!is.na(code_plot_fscc) &
+           is.na(code_plot_jc)) %>%
+  pull(code_plot_orig)
+
+y1_plots <-
+  read.csv("./data/raw_data/y1/y1_pl1.csv", sep = ";") %>%
+  filter(code_country == 53) %>%
+  filter(code_plot %in% unclear_y1_plots) %>%
+  add_dec_coord_columns %>%
+  select(code_plot, latitude_dec, longitude_dec)
+
+
+unclear_s1_plots <- key_poland %>%
+  filter(!is.na(code_plot_fscc) &
+           is.na(code_plot_jc)) %>%
+  pull(code_plot_fscc)
+
+s1_plots <- ks_sheet_2 %>%
+  mutate(code_plot = as.numeric(str_replace(plot_id, "^53_", ""))) %>%
+  filter(code_plot %in% unclear_s1_plots) %>%
+  select(code_plot, latitude_dec, longitude_dec)
+
+unclear_plots <- key_poland %>%
+  filter(!is.na(code_plot_fscc) &
+           is.na(code_plot_jc)) %>%
+  left_join(y1_plots %>%
+              rename(code_plot_orig = code_plot) %>%
+              rename(longitude_dec_y1 = longitude_dec) %>%
+              rename(latitude_dec_y1 = latitude_dec),
+            by = "code_plot_orig") %>%
+  left_join(s1_plots %>%
+              rename(code_plot_fscc = code_plot),
+            by = "code_plot_fscc") %>%
+  mutate(dist = NA)
+
+source("./src/functions/as_sf.R")
+
+for (i in seq_len(nrow(unclear_plots))) {
+
+  coord_y1_i <- unclear_plots[i, ] %>%
+    select(latitude_dec_y1, longitude_dec_y1) %>%
+    rename(longitude_dec = longitude_dec_y1) %>%
+    rename(latitude_dec = latitude_dec_y1) %>%
+    as_sf
+
+  coord_s1_i <- unclear_plots[i, ] %>%
+    select(latitude_dec, longitude_dec) %>%
+    as_sf
+
+  unclear_plots$dist[i] <-
+    round(as.numeric(st_distance(coord_y1_i, coord_s1_i)))
+
+}
+
+# All of the plot locations are within maximum 187 meter from each other
+# So it makes sense to conclude that they refer to the same plot.
+
+# Merge the columns into one
+
+key_poland2 <- key_poland %>%
+  mutate(diff = ifelse(code_plot_fscc != code_plot_jc,
+                       "different",
+                       NA)) %>%
+  mutate(dupl = ifelse(!is.na(code_plot_fscc) &
+                         (duplicated(code_plot_fscc) |
+                         duplicated(code_plot_fscc, fromLast = TRUE)),
+                       "duplicated",
+                       NA)) %>%
+  mutate(dupl2 = ifelse(!is.na(code_plot_jc) &
+                         (duplicated(code_plot_jc) |
+                            duplicated(code_plot_jc, fromLast = TRUE)),
+                       "duplicated",
+                       NA))
+
+assertthat::assert_that(all(is.na(key_poland2$dupl)),
+                        all(is.na(key_poland2$dupl2)))
+
+# Some of the matches differ
+
+unclear_plots <-
+  key_poland2 %>%
+  select(-dupl, -dupl2) %>%
+  filter(!is.na(diff)) %>%
+  select(-diff) %>%
+  # Add coordinates code_plot_orig
+  left_join(
+    read.csv("./data/raw_data/y1/y1_pl1.csv", sep = ";") %>%
+      filter(code_country == 53) %>%
+      add_dec_coord_columns %>%
+      select(code_plot, latitude_dec, longitude_dec) %>%
+      rename(code_plot_orig = code_plot),
+    by = "code_plot_orig") %>%
+  # Add coordinates code_plot_fscc
+  left_join(
+    ks_sheet_2 %>%
+      mutate(code_plot = as.numeric(str_replace(plot_id, "^53_", ""))) %>%
+      select(code_plot, latitude_dec, longitude_dec) %>%
+      rename(code_plot_fscc = code_plot) %>%
+      rename(longitude_dec_fscc = longitude_dec) %>%
+      rename(latitude_dec_fscc = latitude_dec),
+    by = "code_plot_fscc") %>%
+  # Add coordinates code_plot_jc
+  left_join(
+    ks_sheet_2 %>%
+      mutate(code_plot = as.numeric(str_replace(plot_id, "^53_", ""))) %>%
+      select(code_plot, latitude_dec, longitude_dec) %>%
+      rename(code_plot_jc = code_plot) %>%
+      rename(longitude_dec_jc = longitude_dec) %>%
+      rename(latitude_dec_jc = latitude_dec),
+    by = "code_plot_jc") %>%
+  mutate(dist_orig_to_fscc_m = NA,
+         dist_orig_to_jc_m = NA)
+
+source("./src/functions/as_sf.R")
+
+for (i in seq_len(nrow(unclear_plots))) {
+
+  coord_orig_i <- unclear_plots[i, ] %>%
+    select(latitude_dec, longitude_dec) %>%
+    as_sf
+
+  coord_fscc_i <- unclear_plots[i, ] %>%
+    select(latitude_dec_fscc, longitude_dec_fscc) %>%
+    rename(longitude_dec = longitude_dec_fscc) %>%
+    rename(latitude_dec = latitude_dec_fscc) %>%
+    as_sf
+
+  unclear_plots$dist_orig_to_fscc_m[i] <-
+    round(as.numeric(st_distance(coord_orig_i, coord_fscc_i)))
+
+  if (!is.na(unclear_plots$longitude_dec_jc[i]) &&
+      !is.na(unclear_plots$latitude_dec_jc[i])) {
+
+    coord_jc_i <- unclear_plots[i, ] %>%
+      select(latitude_dec_jc, longitude_dec_jc) %>%
+      rename(longitude_dec = longitude_dec_jc) %>%
+      rename(latitude_dec = latitude_dec_jc) %>%
+      as_sf
+
+    unclear_plots$dist_orig_to_jc_m[i] <-
+      round(as.numeric(st_distance(coord_orig_i, coord_jc_i)))
+
+  }
+}
+
+write.table(unclear_plots,
+            file = paste0("./data/additional_data/",
+                          "LI_53_unclear_nfi_icp_matches_poland.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
+
+key_poland2 <- key_poland %>%
+  # Assumption: conflicting plot codes are correct in _fscc and wrong in _jc
+  mutate(code_plot = coalesce(code_plot_fscc,
+                              code_plot_jc)) %>%
+  mutate(dupl = ifelse(duplicated(code_plot), "dupl", NA)) %>%
+  mutate(dupl = ifelse(duplicated(code_plot, fromLast = TRUE),
+                       "dupl2", dupl)) %>%
+  # Assumption: duplicated matches are correct in _fscc and wrong in _jc
+  filter(is.na(dupl) |
+           !is.na(code_plot_fscc)) %>%
+  select(-dupl, -code_plot_fscc, -code_plot_jc) %>%
+  mutate(partner_code = 53,
+         survey_code = "y1",
+         survey_year = 2013,
+         plot_id_orig = paste0("53_", code_plot_orig),
+         plot_id = paste0("53_", code_plot)) %>%
+  # Add coordinates code_plot_jc
+  left_join(
+    ks_sheet_2 %>%
+      mutate(code_plot = as.numeric(str_replace(plot_id, "^53_", ""))) %>%
+      select(code_plot, latitude_dec, longitude_dec),
+    by = "code_plot") %>%
+  # Some NFI plots do not appear in the harmonised list with s1 coordinates,
+  # but they don't appear in "s1" so it is not a problem
+  filter(!is.na(longitude_dec) &
+           !is.na(latitude_dec)) %>%
+  relocate(code_plot_orig, .before = plot_id_orig) %>%
+  relocate(code_plot, .before = plot_id) %>%
+  arrange(code_plot_orig)
+
+
+write.table(key_poland2,
+            file = paste0("./data/additional_data/",
+                          "plot_coord_harmonisation_keys/",
+                          "LI_53_plot_coord_harmonisation_key_Poland.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
+
+
 
 
 # Level I UK ----
@@ -1754,7 +2058,7 @@ german_plots_current <-
   mutate(partner_code_biosoil =
            ifelse(key == "286_9.69_51.89" &
                     is.na(partner_code_biosoil),
-                  401,
+                  410,
                   partner_code_biosoil)) %>%
   arrange(code_plot,
           partner_code_biosoil,
@@ -1770,6 +2074,10 @@ german_plots_current <-
   rename(code_plot = code_plot_new) %>%
   rename(plot_id_orig = plot_id) %>%
   mutate(plot_id = paste0(code_country, "_", code_plot))
+
+# y1_pl1 is currently clearly incomplete. The mentioned plots probably mostly
+# refer to BioSoil-code 410, and a few 414.
+
 
 german_coord <-
   german_plots_current %>%
