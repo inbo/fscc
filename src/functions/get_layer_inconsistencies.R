@@ -179,7 +179,7 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
     prf <-
       openxlsx::read.xlsx(paste0("./data/additional_data/",
                                  "SO_PRF_ADDS.xlsx"),
-                          sheet = 2) %>%
+                          sheet = 1) %>%
       rename(plot_id = PLOT_ID) %>%
       mutate(eff_soil_depth = as.numeric(DEPTHSTOCK))
   }
@@ -3608,7 +3608,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       prf <-
         openxlsx::read.xlsx(paste0("./data/additional_data/",
                                    "SO_PRF_ADDS.xlsx"),
-                            sheet = 2) %>%
+                            sheet = 1) %>%
         rename(plot_id = PLOT_ID) %>%
         mutate(eff_soil_depth = as.numeric(DEPTHSTOCK))
     }

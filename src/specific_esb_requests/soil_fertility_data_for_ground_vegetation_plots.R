@@ -76,16 +76,16 @@ progress_bar <- txtProgressBar(min = 0,
                                max = nrow(plots_vegetation), style = 3)
 
 for (i in seq_len(nrow(plots_vegetation))) {
-  
+
   plot_id_i <- plots_vegetation$plot_id[i]
-  
+
   # If the plot_id appears in "so"
-  
+
   if (!identical(which(so_som_working$plot_id == plot_id_i),
                  integer(0))) {
-  
+
 ## 4.1. 0 - 10 cm depth layer ----
-  
+
     # Some of the below-ground fixed-depth layers are not "conform"
     # the theoretical depths (e.g. 4_503)
     # Therefore, harmonise the layers covering the 0 - 10 cm depth range
@@ -96,11 +96,11 @@ for (i in seq_len(nrow(plots_vegetation))) {
     # - the portion of each layer's depth range contributing to the
     #   0 - 10 cm depth range;
     # as a weighting factor
-    
+
     # Select the layers covering the 0 - 10 cm depth range
-    
+
     limit_range <- seq(10, 0)
-    
+
     df_sub <- so_som_working %>%
       filter(.data$plot_id == plot_id_i) %>%
       filter(!is.na(layer_limit_superior) &
@@ -108,15 +108,15 @@ for (i in seq_len(nrow(plots_vegetation))) {
       rowwise() %>%
       filter(any(limit_range > .data$layer_limit_superior &
                    limit_range < .data$layer_limit_inferior))
-    
+
     # Apply the function harmonise_layer_to_depths.
     # This function selects layers within the specified depth range
     # and calculates a weighted average based on the soil mass
     # contribution (overlapping depth range x bulk density) of each layer
     # to the specified depth range.
-    
+
     source("./src/functions/harmonise_layer_to_depths.R")
-    
+
     df_0_10 <- df_sub %>%
       group_by(unique_survey_repetition, plot_id, survey_year) %>%
       reframe(organic_carbon_total_avg =
@@ -217,12 +217,12 @@ for (i in seq_len(nrow(plots_vegetation))) {
               # Add survey years
               survey_years =
                 paste(sort(unique(.data$survey_year)), collapse = "_"))
-  
-  
+
+
   # If any 0 - 10 cm layers were reported for the given plot_id
-  
+
   if (nrow(df_0_10) > 0) {
-    
+
   plots_vegetation$c_to_n_0_10[i] <-
     ifelse(is.na(df_0_10$organic_carbon_total_avg) |
              is.na(df_0_10$n_total_avg),
@@ -234,18 +234,18 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   -1,
                   round(df_0_10$organic_carbon_total_avg / df_0_10$n_total_avg,
                         2)))
-  
+
   plots_vegetation$ph_cacl2_0_10[i] <- round(df_0_10$ph_cacl2_avg, 2)
-  
+
   plots_vegetation$ph_h2o_0_10[i] <- round(df_0_10$ph_h2o_avg, 2)
-  
+
   plots_vegetation$survey_years[i] <- df_0_10$survey_years
-  
+
   }
-  
-  
+
+
 ## 4.2. Forest floor ----
-  
+
   df_ff <- so_som_working %>%
     filter(.data$plot_id == plot_id_i) %>%
     filter(.data$layer_type == "forest_floor") %>%
@@ -304,12 +304,12 @@ for (i in seq_len(nrow(plots_vegetation))) {
                 mean(organic_carbon_total_loq, na.rm = TRUE),
               n_total_loq =
                 mean(n_total_loq, na.rm = TRUE))
-  
-  
+
+
   # If any forest floor layers were reported for the given plot_id
-  
+
   if (nrow(df_ff) > 0) {
-  
+
   plots_vegetation$c_to_n_forest_floor[i] <-
     ifelse(is.na(df_ff$organic_carbon_total_avg) |
              is.na(df_ff$n_total_avg),
@@ -321,15 +321,15 @@ for (i in seq_len(nrow(plots_vegetation))) {
                   -1,
                   round(df_ff$organic_carbon_total_avg / df_ff$n_total_avg,
                         2)))
-  
+
   plots_vegetation$ph_cacl2_forest_floor[i] <- round(df_ff$ph_cacl2_avg, 2)
-  
+
   plots_vegetation$ph_h2o_forest_floor[i] <- round(df_ff$ph_h2o_avg, 2)
-  
+
   }
-  
+
   }
-  
+
   # Update progress bar
   setTxtProgressBar(progress_bar, i)
 }
@@ -350,7 +350,7 @@ plots_vegetation <- plots_vegetation %>%
 so_prf_adds <-
   openxlsx::read.xlsx(paste0("./data/additional_data/",
                              "SO_PRF_ADDS.xlsx"),
-                      sheet = 2) %>%
+                      sheet = 1) %>%
   rename(base_saturation_qualitative = "BS.(high/low)",
          plot_id = PLOT_ID) %>%
   filter(!is.na(.data$base_saturation_qualitative)) %>%
