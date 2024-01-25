@@ -102,7 +102,7 @@ distance_join <- function(sf1,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
-  
+
   # Load packages ----
 
   stopifnot(require("assertthat"),
@@ -117,7 +117,7 @@ distance_join <- function(sf1,
   sf2_input <- sf2
 
   # Retrieve sf survey forms from global environment if needed
-  
+
   if (is.character(sf1)) {
   sf1 <- get_env(sf1_input)
   }
@@ -164,7 +164,7 @@ distance_join <- function(sf1,
 
   assert_that(is.number(dist_threshold),
               dist_threshold >= 0,
-              noNA(dist_threshold),
+              !is.na(dist_threshold),
               msg = paste0("The object 'dist_threshold' should ",
                            "be a positive numeric."))
 
@@ -241,7 +241,7 @@ distance_join <- function(sf1,
       most_abundant_values <- as.integer(most_abundant_values)
     } else if (is.logical(x)) {
       most_abundant_values <- as.logical(most_abundant_values)
-    } 
+    }
     return(most_abundant_values)
   }
 
@@ -313,7 +313,7 @@ distance_join <- function(sf1,
 
   # return sf1
   return(sf1)
-  
+
   # Save sf dataframe to global environment
   # Check if the user wants to save to the global environment
   if (save_to_env) {
