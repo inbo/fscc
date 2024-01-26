@@ -15,14 +15,17 @@ Please add any observed data issues to this file
 * Harmonise “horizon_coarse_weight” if volumetric instead of wt% (e.g. Slovak Republic), as indicated by partners in PIRs.
 * Harmonise soil textures where needed (e.g. Wallonia) to 63 µm limit using R soil texture wizard
 * Check “other_obs” columns properly
-* Are coordinates fine? Was there a systematic coordinate issue in the Pyrennees in Spain? Correct coordinate sign mistakes (e.g. in Spain, where the minus sign was clearly sometimes forgotten, since it was there for other records of the same plot)
-* Update plot codes LI UK back to original for 1994
-* Solve issue with non-unique German plot codes in LI
 * survey_year in "som" and "pfh" does not always correspond with the actual sampling year (i.e. sometimes lab analysis year). Correct by means of survey_year in "prf" and "pls"
 * Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.
 * Make a separate script for LI versus LII, in which you can choose the survey form (so_som, so_pfh, s1_som, s1_pfh) and the variable to calculate stocks from. Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.
-* Improve internal gap-filling based on sw_swc (link between records)
-
+* Check if layer_type matches total organic carbon contents
+* Improve internal gap-filling for bulk densities and organic layer weights outside of plausible ranges
+* Pedotransfer functions/machine learning for bulk densities
+* Re-evaluate coarse fragments
+* Check for undetected unit problems (BioSoil), e.g. TOC in 54_212 should be ten times higher
+* Remove German LII records pfh
+* Internal gap-filling: also gap-fill across repetitions of certain layer 0 data (e.g. coarse fragments Slovakia)
+  
 
 * ~~in s1_som files, for all MINERAL horizons, set organic_layer_weight==NA if bulk density value is given.~~ (Note: completed)
   + ~~Folder with direct partner communication (AFSCDB.LII.2.1 subfolder) - at least Austria, Spain, bulk density and coarse fragments from Sweden… (Note: still necessary?)~~
@@ -59,7 +62,10 @@ Please add any observed data issues to this file
 * ~~Gap-filling forest types and WRB LI and humus + confirmation by national experts~~
 * ~~Remove incomplete unique profiles (e.g. profiles with only one forest floor layer)? Or do we keep it for plot-level integration (at least in “som” forms, i.e. with fixed depths)?~~
 * ~~Add list with structure similar to PIRs, in which specific data updates by FSCC can be listed (along with their reason and a "change_date"). These can then be applied in a way similar to updated values in the checked PIRs.~~
-
+* ~~Are coordinates fine? Was there a systematic coordinate issue in the Pyrennees in Spain? Correct coordinate sign mistakes (e.g. in Spain, where the minus sign was clearly sometimes forgotten, since it was there for other records of the same plot)~~
+* ~~Update plot codes LI UK back to original for 1994~~
+* ~~Solve issue with non-unique German plot codes in LI~~
+* ~~Improve internal gap-filling based on sw_swc (link between records)~~
 
 
 ~~## TO DO - Checked PIRs~~
