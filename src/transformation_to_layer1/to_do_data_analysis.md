@@ -23,9 +23,14 @@ Please add any observed data issues to this file
 * Pedotransfer functions/machine learning for bulk densities
 * Re-evaluate coarse fragments
 * Check for undetected unit problems (BioSoil), e.g. TOC in 54_212 should be ten times higher
-* Remove German LII records pfh
 * Internal gap-filling: also gap-fill across repetitions of certain layer 0 data (e.g. coarse fragments Slovakia)
+* Add columns with: original data; data source; upper boundary + lower boundary confidence interval
+* Internal gap-filling: update values for parameters that are considered constant
+* Organic layer weight: if unknown while layer limits are known: gap-fill by multiplying a median bulk density with the layer thickness
+* Harmonise scripts so that additional derived parameters are added in get_derived_variable_inconsistencies function
   
+
+
 
 * ~~in s1_som files, for all MINERAL horizons, set organic_layer_weight==NA if bulk density value is given.~~ (Note: completed)
   + ~~Folder with direct partner communication (AFSCDB.LII.2.1 subfolder) - at least Austria, Spain, bulk density and coarse fragments from Sweden… (Note: still necessary?)~~
@@ -66,6 +71,7 @@ Please add any observed data issues to this file
 * ~~Update plot codes LI UK back to original for 1994~~
 * ~~Solve issue with non-unique German plot codes in LI~~
 * ~~Improve internal gap-filling based on sw_swc (link between records)~~
+* ~~Remove German LII records pfh~~
 
 
 ~~## TO DO - Checked PIRs~~
@@ -94,7 +100,8 @@ Please add any observed data issues to this file
 * Propagate any uncertainty correctly.
 * Make functions to visualise output, e.g. violin plots per stratifier, overview graphs per plot_id, dynamic maps.
 * Calculate change in carbon stock per year.
-* Carbon stocks for carbon contents < LOQ?
+* Carbon stocks for carbon contents < LOQ? → based on upper below-ground layer?
+* Update subsoil carbon densities in line with assumption that subsoil carbon densities are constant.
 * ~~Machine-learning prediction of lowest point splines (depth of 100 cm)~~ + Monte Carlo uncertainty assessment?
 * ~~Convert scripts into a function.~~ Different methodological decisions should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be included as metadata in the output. Also include total uncertainty (including uncertainty from the spline fitting + spline extrapolation + propagated uncertainty from other sources) in the output.
 * ~~Calculate stocks based on "pfh" survey forms too. Compare stocks based on fixed-depth layers with those based on pedogenetic horizons.~~
