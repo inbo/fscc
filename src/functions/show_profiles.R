@@ -50,7 +50,8 @@ show_profiles <- function(code_survey,
     "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
     "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
     "extrac_fe", "tot_ca", "p_ox", "exch_acidiy", "tot_na",
-    "tot_mn", "tot_fe", "tot_al"),
+    "tot_mn", "tot_fe", "tot_al",
+    "bulk_density"),
   pfh_parameter = c(
     NA, NA, "horizon_clay", "horizon_silt", NA,
     "horizon_caco3_total", NA, "horizon_exch_mg", NA, NA,
@@ -60,12 +61,14 @@ show_profiles <- function(code_survey,
     NA, NA, NA, NA, NA,
     NA, NA, NA, NA, NA,
     NA, NA, NA, NA, NA,
-    NA, NA, NA))
+    NA, NA, NA,
+    "bulk_density")) #"horizon_bulk_dens_measure"))
 
   assertthat::assert_that(
     parameter %in% corresponding_parameters$som_parameter ||
       parameter %in% corresponding_parameters$pfh_parameter)
 
+  # If parameter is not reported in "pfh"
   not_in_pfh <- FALSE
 
   if (parameter %in% corresponding_parameters$som_parameter) {
@@ -105,6 +108,7 @@ show_profiles <- function(code_survey,
     mutate(bulk_density = ifelse(!is.na(.data$horizon_bulk_dens_measure),
                                  .data$horizon_bulk_dens_measure,
                                  .data$horizon_bulk_dens_est)) %>%
+    mutate(bulk_density = round(bulk_density)) %>%
     filter(!is.na(.data$layer_number)) %>%
     rename(profile_id = unique_survey_profile) %>%
     rename(depth_top = horizon_limit_up) %>%
@@ -132,7 +136,7 @@ show_profiles <- function(code_survey,
              layer_number_ff,
              layer_number_bg,
              # colour_moist_hex,
-             bulk_density,
+             # bulk_density,
              parameter_col)
 
     # names(pfh)[names(pfh) == "new_col"] <- parameter_som
@@ -154,7 +158,7 @@ show_profiles <- function(code_survey,
            layer_number_ff,
            layer_number_bg,
            # colour_moist_hex,
-           bulk_density,
+           # bulk_density,
            !!!parameter_pfh)
 
     # names(pfh)[names(pfh) == parameter_pfh] <- parameter_som
@@ -172,6 +176,7 @@ show_profiles <- function(code_survey,
     rename(depth_bottom = layer_limit_inferior) %>%
     mutate(repetition = as.character(.data$repetition),
            code_layer = as.character(.data$code_layer)) %>%
+    mutate(bulk_density = round(bulk_density)) %>%
     select(survey_form,
            plot_id,
            survey_year,
@@ -186,7 +191,7 @@ show_profiles <- function(code_survey,
            layer_number_ff,
            layer_number_bg,
            # colour_moist_hex,
-           bulk_density,
+           # bulk_density,
            !!!parameter_som)
 
   names(som)[names(som) == parameter_som] <- "parameter_col"
@@ -206,7 +211,7 @@ show_profiles <- function(code_survey,
     unique_survey_j <- unique_surveys_som_i[j]
 
     survey_expanded_j <-
-      expand_unique_survey_vec_adjacent_years(unique_survey_j, 3)
+      expand_unique_survey_vec_adjacent_years(unique_survey_j, 5)
 
     profiles_j <-
       bind_rows(som %>%
