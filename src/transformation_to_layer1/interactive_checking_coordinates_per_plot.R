@@ -78,6 +78,7 @@ stopifnot(require("sf"),
           require("leaflet"))
 
 compare_ranks <- function(df, additional_info) {
+
   # Extract the row with the specified rank
   focus_row <- df[df$rank == additional_info, ]
 
@@ -132,7 +133,7 @@ compare_ranks <- function(df, additional_info) {
 
 # 1. Input level ----
 
-level <- "LII"
+level <- "LI"
 
 
 
@@ -399,6 +400,9 @@ if (level == "LII") {
     filter(grepl("^so|^si", survey_form)) %>%
     filter(parameter %in% c("latitude", "longitude")) %>%
     filter(!is.na(updated_value)) %>%
+    select(survey_form, partner, partner_code, country,
+           code_country, survey_year, code_plot, plot_id, parameter,
+           updated_value) %>%
     pivot_wider(
       names_from = parameter,
       values_from = updated_value)
@@ -414,10 +418,11 @@ if (level == "LII") {
       si_plt %>%
         filter(plot_id %in% unique(coord_pir$plot_id)) %>%
         select(plot_id, longitude, latitude, change_date)) %>%
+    mutate(change_date = as.Date(change_date, format = "%Y-%m-%d")) %>%
     arrange(plot_id) %>%
     group_by(plot_id) %>%
-    slice_max(order_by =
-                as.Date(change_date, format = "%Y-%m-%d")) %>%
+    arrange(desc(change_date)) %>%
+    slice_head() %>%
     ungroup %>%
     select(-change_date)
 
@@ -440,6 +445,35 @@ if (level == "LII") {
            change_date)
 
 
+  # AFSCDB_LII_2_2
+
+  dir <- paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
+                "AFSCDB_LII_2_2_080515_som.csv")
+
+  plot_ids_afscdb <- read.csv(dir,
+                              sep = ";", na.strings = "") %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    distinct(plot_id) %>%
+    pull(plot_id)
+
+  dir <- paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
+                      "AFSCDB_LII_2_2_080515_pls.csv")
+
+  assertthat::assert_that(file.exists(dir),
+                          msg = paste0("'", dir, "' ",
+                                       "does not exist."))
+
+  coord_afscdb <- read.csv(dir,
+                           sep = ";", na.strings = "") %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    filter(plot_id %in% plot_ids_afscdb) %>%
+    mutate(survey_year = NA_integer_,
+           remark = NA,
+           change_date = NA_character_) %>%
+    filter(!is.na(longitude) &
+             !is.na(latitude)) %>%
+    select(code_country, plot_id, survey_year, longitude, latitude, remark,
+           change_date)
 
 
 
@@ -558,6 +592,18 @@ if (level == "LII") {
       # coord_pir
       coord_pir %>%
         mutate(source = "pir") %>%
+        filter(!plot_id %in% plots_to_ignore_lii) %>%
+        select(source,
+               code_country, plot_id, survey_year, longitude, latitude,
+               remark,
+               change_date),
+      # coord_afscdb
+      coord_afscdb %>%
+        mutate(source = "afscdb") %>%
+        mutate(code_country = as.integer(code_country)) %>%
+        mutate(change_date = ifelse(is.na(change_date),
+                                    as.character(as.Date("2008-05-15")),
+                                    change_date)) %>%
         filter(!plot_id %in% plots_to_ignore_lii) %>%
         select(source,
                code_country, plot_id, survey_year, longitude, latitude,
@@ -724,7 +770,9 @@ coord_sources <- coord_sources %>%
 
 
 plot_ids <- coord_sources %>%
-  filter(grepl("^s1|^so", source)) %>%
+  filter(grepl("^s1|^so|afscdb", source)) %>%
+  mutate(code_plot = as.numeric(str_extract(plot_id, "(?<=_)\\d+$"))) %>%
+  arrange(code_country, code_plot) %>%
   distinct(plot_id) %>%
   pull(plot_id)
 
@@ -736,6 +784,18 @@ for (i in seq_along(plot_ids)) {
   coord_sources_i <- coord_sources %>%
     filter(plot_id == plot_ids[i]) %>%
     arrange(desc(change_date))
+
+
+  # Manual corrections
+
+  if (plot_ids[i] == "53_816") {
+
+    coord_sources_i <- coord_sources_i %>%
+      # These coordinates are wrong
+      filter(survey_year != 2017)
+  }
+
+
 
   # Diagonal distance of bounding box
 
@@ -787,7 +847,7 @@ for (i in seq_along(plot_ids)) {
     # Subset of dataframe at most recent change_date
 
     change_date_recent_sx <- coord_sources_i %>%
-      filter(grepl("^s1|^so", source)) %>%
+      filter(grepl("^s1|^so|afscdb", source)) %>%
       slice_max(order_by =
                   as.Date(change_date, format = "%Y-%m-%d")) %>%
       distinct(change_date) %>%
@@ -864,7 +924,6 @@ for (i in seq_along(plot_ids)) {
             any(as.numeric(unlist(strsplit(survey_years, "_"))) > 2000)
         ) %>%
         ungroup() %>%
-
         mutate(
           rank_survey_recent = rank(desc(survey_recent),
                                     ties.method = "min"),
@@ -944,6 +1003,60 @@ for (i in seq_along(plot_ids)) {
                         # older coordinates
                         "blue"))
 
+
+
+      # Manually give priority to certain coordinate pairs of plots with
+      # otherwise the same coordinates like other plots
+
+      if (unlist(strsplit(plot_ids[i], "_"))[1] == 58 &
+          any(grepl("s1", coord_summ_i$sources))) {
+
+        # From direct communication with Czech partner:
+        # y1_pl1 is the most correct source
+
+        row_ind <- which(grepl("y1_pl1", coord_summ_i$sources))[1]
+        coord_summ_i$composite_index[row_ind] <- 0.99
+        coord_summ_i <- arrange(coord_summ_i, composite_index)
+
+      }
+
+      if (plot_ids[i] %in% c("59_167", "59_68") &
+          any(grepl("s1", coord_summ_i$sources))) {
+
+        coord_summ_i <- coord_summ_i %>%
+          mutate(composite_index =
+                   ifelse(grepl("fscdb", sources),
+                          0.99,
+                          composite_index)) %>%
+          arrange(composite_index)
+      }
+
+      if (plot_ids[i] %in% c("66_101", "66_102", "66_103", "66_104") &
+          any(grepl("so", coord_summ_i$sources))) {
+
+        coord_summ_i <- coord_summ_i %>%
+          mutate(composite_index =
+                   ifelse(grepl("si_plt", sources),
+                          0.99,
+                          composite_index)) %>%
+          arrange(composite_index)
+      }
+
+      if (plot_ids[i] == "7_16" &
+          any(grepl("so", coord_summ_i$sources))) {
+
+        coord_summ_i <- coord_summ_i %>%
+          mutate(composite_index =
+                   ifelse(grepl("pir", sources),
+                          0.99,
+                          composite_index)) %>%
+          arrange(composite_index)
+      }
+
+
+
+      # Check if there is a clear "winner" with the lowest composite_index
+      # ranking number
 
       if (nrow(coord_summ_i) == 1 ||
           sum(coord_summ_i$composite_index ==

@@ -32,6 +32,8 @@ add_dec_coord_columns <- function(data_frame) {
                                    longitude_dec_error != "NA",
                                  "Error: outside range (0 - 59)",
                                  NA)) %>%
+    mutate(longitude_dec = as.numeric(longitude_dec),
+           latitude_dec = as.numeric(latitude_dec)) %>%
     select(-latitude_dec_error,
            -longitude_dec_error)
 
