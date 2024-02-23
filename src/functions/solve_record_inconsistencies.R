@@ -28,6 +28,10 @@ source("./src/functions/get_env.R")
 source("./src/functions/assign_env.R")
 source("./src/functions/as_character_summary.R")
 
+  cat(paste0(" \nSolve issues with duplicate records in '",
+             survey_form, "'\n"))
+
+
 # Retrieve the survey_form data
 
 if (is.null(data_frame)) {
@@ -35,6 +39,22 @@ if (is.null(data_frame)) {
 } else {
   df <- data_frame
 }
+
+
+
+# Merge duplicate records so_som ----
+
+if (survey_form == "so_som") {
+
+  source("./src/functions/merge_duplicate_records.R")
+  df <- merge_duplicate_records(survey_form = "so_som",
+                                data_frame = df,
+                                merge = TRUE,
+                                save_to_env = FALSE)
+
+}
+
+
 
 # Add a column to indicate records to be removed
 
@@ -221,7 +241,7 @@ for (i in seq_along(profiles_to_combine)) {
                            "unique_survey_layer",
                            "unique_layer_repetition",
                            "unique_layer",
-                           "code_layer_original"),
+                           "code_layer_orig"),
               msg = paste0("Conflicting values for unique_survey_repetition '",
                            profiles_to_combine[i], "' for parameter '",
                            par_j, "'."))
@@ -297,6 +317,23 @@ if (!identical(profiles_h_to_remove_poland, character(0))) {
 
 }
 
+## Poland (2009) ----
+
+# Some Polish plot layers have the same upper and lower layer limit and
+# are further totally empty.
+# Remove those layers since redundant.
+
+layers_to_check <- df %>%
+  filter(code_country == 53) %>%
+  filter(layer_limit_superior == 0) %>%
+  filter(layer_limit_inferior == 0) %>%
+  filter(if_all(all_of(numeric_column_names), is.na)) %>%
+  pull(code_line)
+
+if (!identical(layers_to_check, character(0))) {
+
+  df$to_remove[which(df$code_line %in% layers_to_check)] <- TRUE
+}
 
 
 
@@ -410,13 +447,59 @@ for (i in seq_along(surveys_to_check)) {
 if (solve == TRUE) {
 df <- df %>%
   mutate(layer_type = as.character(.data$layer_type)) %>%
-  mutate(layer_type = ifelse(.data$code_layer == "H",
+  mutate(layer_type = ifelse(!is.na(.data$code_layer) &
+                               .data$code_layer == "H",
                              "forest_floor",
                              .data$layer_type))
 
 }
 
 } # End of "if so_som"
+
+
+
+
+
+# If so_pfh ----
+
+if (survey_form == "so_pfh") {
+
+  # Germany ----
+
+  # German records to be removed, as requested by German soil expert
+
+  ind_to_remove <-
+    which(df$code_country == 4 &
+            df$code_plot %in% c(611, 613) &
+            df$survey_year == 2008)
+
+  df$to_remove[ind_to_remove] <- TRUE
+
+  cat(paste0("Action: redundant German profiles to be removed from '",
+             survey_form, "'.\n\n"))
+
+
+  # Norway ----
+
+  # Norwegian records without any horizon_master, layer_limits,
+  # horizon_c_organic_total, bulk_density, texture data, are redundant
+
+  ind_to_remove <-
+    which(df$code_country == 55 &
+            df$code_plot == 4 &
+            df$survey_year == 1988 &
+            is.na(df$horizon_master) &
+            is.na(df$horizon_clay) &
+            is.na(df$horizon_c_organic_total))
+
+  df$to_remove[ind_to_remove] <- TRUE
+
+  cat(paste0("Action: redundant Norwegian layers to be removed from '",
+             survey_form, "'.\n\n"))
+
+}
+
+
 
 
 
@@ -558,6 +641,144 @@ if (survey_form == "s1_som") {
   }
 
 
+
+  ## UK ----
+
+  # #
+  # unique_profiles_to_check <- df %>%
+  #   filter(layer_type != "mineral") %>%
+  #   filter(is.na(layer_limit_superior) | layer_limit_superior < 0) %>%
+  #   group_by(unique_survey_repetition) %>%
+  #   reframe(contains_o = any(code_layer == "O"),
+  #           contains_h = any(code_layer == "H")) %>%
+  #   filter(contains_o == TRUE &
+  #            contains_h == TRUE) %>%
+  #   pull(unique_survey_repetition)
+  #
+  # unique_profiles_to_check <- df %>%
+  #   filter(unique_survey_repetition %in% unique_profiles_to_check) %>%
+  #   filter(layer_type != "mineral") %>%
+  #   filter(is.na(layer_limit_superior) | layer_limit_superior < 0) %>%
+  #   group_by(unique_survey_repetition) %>%
+  #   reframe(max_data_count =
+  #             max(colSums(!is.na(across(part_size_clay:p_ox))))) %>%
+  #   filter(max_count_dat)
+
+
+  # Some profiles with both an O and H layer, without layer limits.
+  # For all parameters, either O or H contains data,
+  # except in exch_acidiy: both layers contain the same value
+  # Action: merge them into one forest_floor O layer.
+
+  profiles_to_combine_uk <-
+    df %>%
+    filter(.data$code_country == 6) %>%
+    group_by(unique_survey_repetition) %>%
+    reframe(both_o_and_h =
+                any(.data$code_layer == "O") &
+                any(.data$code_layer == "H")) %>%
+    filter(.data$both_o_and_h == TRUE) %>%
+    pull(unique_survey_repetition)
+
+  profiles_to_combine_uk <- df %>%
+    filter(unique_survey_repetition %in% profiles_to_combine_uk) %>%
+    filter(code_layer %in% c("O", "H")) %>%
+    group_by(unique_survey_repetition) %>%
+    reframe(max_count_data =
+             max(colSums(!is.na(across(all_of(numeric_column_names)))))) %>%
+    filter(max_count_data == 1) %>%
+    pull(unique_survey_repetition)
+
+  profiles_to_combine <- profiles_to_combine_uk
+
+  if (!identical(profiles_to_combine, character(0))) {
+
+    assertthat::assert_that(profiles_to_combine == "6_1994_636_1")
+
+    for (i in seq_along(profiles_to_combine)) {
+
+        ind_target <-
+          which(df$unique_survey_repetition %in% profiles_to_combine[i] &
+                  df$code_layer == "O")
+        ind_to_merge <-
+          which(df$unique_survey_repetition %in% profiles_to_combine[i] &
+                  df$code_layer == "H")
+
+      assertthat::assert_that(length(ind_target) == 1 &&
+                                length(ind_to_merge) == 1)
+
+      ind_dupl <- c(ind_target, ind_to_merge)
+
+      df$to_remove[ind_to_merge] <- TRUE
+
+      # Get the columns where values are the same for the duplicated rows
+      same_columns <-
+        sapply(df[ind_dupl, ], function(col) length(unique(col)) == 1)
+
+      # Extract the column names
+      same_column_names <- names(df)[same_columns]
+
+      # Columns which need to be merged
+      # (i.e. for which MAN != OPT, or MAN or OPT is NA):
+
+      df_pars_to_merge <- names(df)[!names(df) %in% same_column_names]
+
+      # Summarise each of these parameters
+
+      if (!identical(df_pars_to_merge, character(0))) {
+        for (j in seq_along(df_pars_to_merge)) {
+
+          par_j <- as.vector(df_pars_to_merge[j])
+          col_ind_j <- as.vector(which(names(df) == par_j))
+          values_j <- df[ind_dupl, col_ind_j] %>% pull
+
+
+          if (any(!is.na(values_j)) && any(is.na(values_j))) {
+            summary_value <- values_j[which(!is.na(values_j))]
+          } else
+
+            if (all(!is.na(values_j)) && (length(unique(values_j)) == 2)) {
+
+              assertthat::assert_that(
+                par_j %in% c("code_layer",
+                             "layer_number",
+                             "date_labor_analyses",
+                             "origin",
+                             "layer_type",
+                             "code_line",
+                             "line_nr",
+                             "qif_key",
+                             "unique_survey_layer",
+                             "unique_layer_repetition",
+                             "unique_layer",
+                             "code_layer_orig"),
+                msg =
+                  paste0("Conflicting values for unique_survey_repetition '",
+                             profiles_to_combine[i], "' for parameter '",
+                             par_j, "'."))
+
+              summary_value <- df[ind_target, col_ind_j]
+            }
+
+          # Paste the information in the MAN row
+
+          df[ind_target, col_ind_j] <- summary_value
+
+        } # End of for loop along parameters
+      }
+
+    } # End of for loop along profiles with duplicates
+
+    nrow <- length(which(df$to_remove == TRUE))
+
+    cat(paste0("The following profiles by UK (1994) ",
+               "contain duplicate organic layers:\n",
+               as_character_summary(profiles_to_combine), "\n\n",
+               "Action: duplicate records were merged.\n",
+               nrow, " redundant records (after merging) to be removed from '",
+               survey_form, "'.\n\n"))
+
+  }
 
 } # End of "if s1_som"
 
@@ -762,6 +983,49 @@ if (survey_form == "s1_pfh") {
         2007
     }
   }
+
+
+
+
+
+  ## Sweden/Spain ----
+
+  # Some profiles in Sweden and one profile in Spain consist of one horizon
+  # without any data
+
+  # This also includes two Swedish layers without horizon_master and layer
+  # limits
+
+  records_to_check <- df %>%
+    group_by(unique_survey_profile, plot_id) %>%
+    reframe(count = n(),
+            no_toc = all(is.na(horizon_c_organic_total)),
+            no_bd = all(is.na(horizon_bulk_dens_measure) |
+                          is.na(horizon_bulk_dens_est)),
+            no_coarse = all(is.na(horizon_coarse_weight)),
+            no_exch = all(is.na(horizon_exch_ca) &
+                            is.na(horizon_cec)),
+            no_layer = all((is.na(horizon_master) |
+                             horizon_master == "") &
+                             (is.na(horizon_limit_up) &
+                                is.na(horizon_limit_low)))) %>%
+    filter(count == 1 &
+             no_toc == TRUE &
+             no_bd == TRUE &
+             no_coarse == TRUE &
+             (no_exch == TRUE |
+                no_layer == TRUE))
+
+  if (nrow(records_to_check) > 0) {
+
+    df <- df %>%
+      mutate(to_remove =
+               ifelse(unique_survey_profile %in%
+                        pull(records_to_check, unique_survey_profile),
+                      TRUE,
+                      .data$to_remove))
+  }
+
 
 
 } # End of "if s1_pfh"
