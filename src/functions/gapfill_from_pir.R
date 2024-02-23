@@ -42,7 +42,7 @@ gapfill_from_pir <- function(code_survey,
   source("./src/functions/assign_env.R")
 
   cat(paste0(" \nGap-fill '", code_survey,
-             "'from PIRs (data corrected by partners)\n"))
+             "' from PIRs (data corrected by partners)\n"))
 
   # Arrange input dataframe(s) ----
 
@@ -90,31 +90,6 @@ gapfill_from_pir <- function(code_survey,
 
 
 
-  for (j in seq_along(survey_forms)) {
-
-    if (!is.null(data_frame)) {
-
-      df <- data_frame
-
-    } else {
-
-      df <- get_env(survey_forms[j])
-
-    }
-
-
-  # Gap-fill change_date if missing (e.g. in "so_prf")
-  # Assumption: 2009-12-06 (date on which database was established at PCC)
-
-    # if (!"change_date" %in% names(df)) {
-    #   df$change_date
-    # }
-
-  df <- df %>%
-    mutate(change_date = ifelse(is.na(.data$change_date),
-                                as.character(as.Date("2009-12-06")),
-                                .data$change_date))
-
 
   # Import original pir ----
 
@@ -127,9 +102,9 @@ gapfill_from_pir <- function(code_survey,
                                                "all_partners",
                                                ".xlsx")),
                             msg = paste0("'./output/pirs/20230302_pir/",
-                                               "20230302_inconsistency_report_",
-                                               "all_partners",
-                                               ".xlsx' does not exist."))
+                                         "20230302_inconsistency_report_",
+                                         "all_partners",
+                                         ".xlsx' does not exist."))
 
     pir_orig <-
       openxlsx::read.xlsx(paste0("./output/pirs/20230302_pir/",
@@ -174,142 +149,19 @@ gapfill_from_pir <- function(code_survey,
 
   # Import checked pir ----
 
+  source("./src/functions/get_pir.R")
+
   if (!exists("pir_checked") ||
       (exists("pir_checked") &&
-       any(!"data.frame" %in% class(pir_checked)))) {
+       any(!"data.frame" %in% class(pir_checked)) &&
+       !"rule_id" %in% names(pir_checked))) {
 
-    assertthat::assert_that(file.exists(paste0("./data/additional_data/",
-                                               "20230302_checked_pirs.xlsx")),
-                            msg = paste0("'./data/additional_data/",
-                                         "20230302_checked_pirs.xlsx' ",
-                                         "does not exist."))
+  pir_checked <- get_pir()
 
-  pir_checked <-
-    openxlsx::read.xlsx("./data/additional_data/20230302_checked_pirs.xlsx",
-                        sheet = 1)
-
-  # Checked pir uses "partner_code" + "code_plot" as "plot_id"
-  # We use "code_country" as "code_plot" as "plot_id"
-  # Correct this
-  pir_checked <- pir_checked %>%
-    mutate(plot_id = paste0(code_country, "_",
-                            code_plot)) %>%
-    mutate(plot_id_response = paste0(code_country, "_",
-                                     sub(".*_", "", plot_id_response)))
-
-  # Rename rule_id if needed
-  if ("rule_ID" %in% colnames(pir_checked)) {
-    pir_checked <- rename(pir_checked,
-                          rule_id = rule_ID)
-  }
-
-  # Remove " (estimated by FSCC)"
-  pir_checked <- pir_checked %>%
-    mutate(parameter_value = gsub(" \\(estimated by FSCC\\)",
-                                       "",
-                                       parameter_value))
-
-  # "1 - The reported value is extreme but correct"
-  # "2 - The correct value is resubmitted/the inconsistency is solved"
-  # "3 - The reported value is removed (e.g. resubmitted as NA)"
-  # "4 - No (good) data are available for this parameter"
-  # "5 - Other"
-
-  pir_checked$code_nfc_action_taken <-
-    gsub("^1.*", "1", pir_checked$code_nfc_action_taken)
-  pir_checked$code_nfc_action_taken <-
-    gsub("^2.*", "2", pir_checked$code_nfc_action_taken)
-  pir_checked$code_nfc_action_taken <-
-    gsub("^3.*", "3", pir_checked$code_nfc_action_taken)
-  pir_checked$code_nfc_action_taken <-
-    gsub("^4.*", "4", pir_checked$code_nfc_action_taken)
-  pir_checked$code_nfc_action_taken <-
-    gsub("^5.*", "5", pir_checked$code_nfc_action_taken)
-  pir_checked$code_nfc_action_taken <-
-    as.integer(pir_checked$code_nfc_action_taken)
-
-  assign_env("pir_checked",
-             pir_checked)
   }
 
 
 
-
-  # Manipulate checked pir ----
-
-  pir_checked_survey_form <-
-    pir_checked %>%
-    # Filter for inconsistencies of the given survey form
-    filter(.data$survey_form == survey_forms[j]) %>%
-    # Create column "unique_inconsistency_id"
-    mutate(unique_inconsistency_id =
-               paste0(survey_form, "_",
-                      partner_code, "_",
-                      plot_id, "_",
-                      survey_year, "_",
-                      code_layer_horizon_master, "_",
-                      repetition_profile_pit_id, "_",
-                      code_line, "_",
-                      parameter, "_",
-                      rule_id)) %>%
-    # Create column "unique_layer_repetition"
-    mutate(unique_layer_repetition =
-             paste0(code_country, "_",
-                    survey_year, "_",
-                    # code_plot corrected (e.g. pir feedback from Poland
-                    # for wrong code_plots)
-                    sub(".*_", "", plot_id_response), "_",
-                    code_layer_horizon_master, "_",
-                    repetition_profile_pit_id)) %>%
-    # Add a column with the original data
-    left_join(pir_orig %>%
-                  select(unique_inconsistency_id, parameter_value) %>%
-                  rename(parameter_value_orig = parameter_value),
-              by = "unique_inconsistency_id") %>%
-    mutate(parameter_value_orig = gsub(" \\(estimated by FSCC\\)",
-                                       "",
-                                       parameter_value_orig)) %>%
-    # Sometimes not clear whether the column "parameter_value" was updated
-    # by the partner. So possibly, "updated_value"" does not contain all
-    # newly delivered data from the pirs.
-    mutate(updated_value =
-             suppressWarnings(
-             # If they are basically different (more than 0.1 % difference)
-             ifelse((abs((as.numeric(parameter_value) /
-                           as.numeric(parameter_value_orig)) - 1) > 0.0001) &
-                    is.na(updated_value),
-                    parameter_value,
-                    updated_value))) %>%
-    # Sometimes not clear whether the column "parameter_value" was updated
-    # by the partner. So possibly, I wrongly placed the "parameter_value" info
-    # into the "updated_value" column because I wrongly assumed the values
-    # looked updated
-    filter(is.na(updated_value) |
-             updated_value != parameter_value_orig) %>%
-    # Filter for inconsistencies with an actual response
-    filter(!is.na(code_nfc_action_taken) &
-             !is.na(nfc_remark) &
-             !is.na(updated_value)) %>%
-    # Ignore code_nfc_action_taken if updated_value is empty
-    # (we can't do much with it anyway for now). Not relevant to add
-    # "confirmations" (e.g. extreme but correct values; no data available...)
-    # to the layer 1 data for now. We'll have to use statistics and
-    # objective expert reasons to exclude values.
-    filter(!is.na(updated_value)) %>%
-    # if "updated_value" says "data_to_be_removed", partners indicated
-    # that the value should be removed (i.e. replaced by NA)
-    mutate(updated_value =
-             ifelse(updated_value == "data_to_be_removed",
-                    NA,
-                    updated_value)) %>%
-    # Create a new column with the current data (before any update from pir)
-    mutate(parameter_value_current = NA) %>%
-     # Create a new column in which you can store whether you use the pir info
-    mutate(fscc_action = NA) %>%
-    # Relocate
-    relocate(plot_id_response, .before = code_nfc_action_taken) %>%
-    relocate(unique_inconsistency_id, .before = code_nfc_action_taken) %>%
-    relocate(unique_layer_repetition, .before = code_nfc_action_taken)
 
 
 
@@ -368,8 +220,8 @@ gapfill_from_pir <- function(code_survey,
           outcome <- TRUE
         }
 
-      # If the conversion to a numeric does not give warnings
-      # (which is also possible if the value is an NA)
+        # If the conversion to a numeric does not give warnings
+        # (which is also possible if the value is an NA)
       } else {
 
         # TRUE if both are numbers (not NAs) and roughly the same
@@ -384,8 +236,8 @@ gapfill_from_pir <- function(code_survey,
 
           if ((abs(as.numeric(value_1)) < tolerance &&
                abs(as.numeric(value_2)) < tolerance) ||
-            (abs((as.numeric(value_1) / as.numeric(value_2)) - 1) <
-              tolerance)) {
+              (abs((as.numeric(value_1) / as.numeric(value_2)) - 1) <
+               tolerance)) {
 
             outcome <- TRUE
           }
@@ -397,10 +249,7 @@ gapfill_from_pir <- function(code_survey,
 
 
 
-
-  # Replace values if not up to date ----
-
-  # Columns that should be converted to numeric class:
+  # Specify columns that should be converted to numeric class:
 
   numeric_columns <- c(
     "layer_limit_superior",
@@ -462,29 +311,242 @@ gapfill_from_pir <- function(code_survey,
     "horizon_bulk_dens_measure")
 
 
+
+
+
+
+  # Evaluate for each survey form ----
+
+  for (j in seq_along(survey_forms)) {
+
+    if (!is.null(data_frame) &&
+        is.data.frame(data_frame)) {
+
+      df <- data_frame
+
+    } else {
+
+      df <- get_env(survey_forms[j])
+
+    }
+
+
+  # Gap-fill change_date if missing (e.g. in "so_prf")
+  # Assumption: 2009-12-06 (date on which database was established at PCC)
+
+  df <- df %>%
+    mutate(change_date = ifelse(is.na(.data$change_date),
+                                as.character(as.Date("2009-12-06")),
+                                .data$change_date))
+
+
+
+
+  # Manipulate checked pir ----
+
+  pir_checked_survey_form <-
+    pir_checked %>%
+    # Filter for inconsistencies of the given survey form
+    filter(.data$survey_form == survey_forms[j]) %>%
+    # Create column "unique_inconsistency_id"
+    mutate(unique_inconsistency_id =
+               paste0(survey_form, "_",
+                      partner_code, "_",
+                      plot_id, "_",
+                      survey_year, "_",
+                      code_layer_horizon_master, "_",
+                      repetition_profile_pit_id, "_",
+                      code_line, "_",
+                      parameter, "_",
+                      rule_id)) %>%
+    # Create column "unique_layer_repetition"
+    mutate(unique_layer_repetition =
+             paste0(code_country, "_",
+                    survey_year, "_",
+                    # code_plot corrected (e.g. pir feedback from Poland
+                    # for wrong code_plots)
+                    sub(".*_", "", plot_id_response), "_",
+                    code_layer_horizon_master, "_",
+                    repetition_profile_pit_id)) %>%
+    # Add a column with the original data
+    left_join(pir_orig %>%
+                  select(unique_inconsistency_id, parameter_value) %>%
+                  rename(parameter_value_orig = parameter_value),
+              by = "unique_inconsistency_id") %>%
+    mutate(parameter_value_orig = gsub(" \\(estimated by FSCC\\)",
+                                       "",
+                                       parameter_value_orig)) %>%
+    # Sometimes not clear whether the column "parameter_value" was updated
+    # by the partner. So possibly, "updated_value"" does not contain all
+    # newly delivered data from the pirs.
+    mutate(updated_value =
+             suppressWarnings(
+             # If they are basically different (more than 0.1 % difference)
+             ifelse((abs((as.numeric(parameter_value) /
+                           as.numeric(parameter_value_orig)) - 1) > 0.0001) &
+                    is.na(updated_value),
+                    parameter_value,
+                    updated_value))) %>%
+    # Sometimes not clear whether the column "parameter_value" was updated
+    # by the partner. So possibly, I wrongly placed the "parameter_value" info
+    # into the "updated_value" column because I wrongly assumed the values
+    # looked updated
+    filter(is.na(updated_value) |
+             updated_value != parameter_value_orig) %>%
+    # Filter for inconsistencies with an actual response
+    filter(!is.na(code_nfc_action_taken)) %>%
+    # Ignore code_nfc_action_taken if updated_value is empty
+    # (we can't do much with it anyway for now). Not relevant to add
+    # "confirmations" (e.g. extreme but correct values; no data available...)
+    # to the layer 1 data for now. We'll have to use statistics and
+    # objective expert reasons to exclude values.
+    filter(!is.na(updated_value)) %>%
+    # if "updated_value" says "data_to_be_removed", partners indicated
+    # that the value should be removed (i.e. replaced by NA)
+    mutate(updated_value =
+             ifelse(updated_value == "data_to_be_removed",
+                    NA,
+                    updated_value)) %>%
+    # Create a new column with the current layer 0 data
+    # (before any update from pir)
+    mutate(parameter_value_current = NA) %>%
+     # Create a new column in which you can store whether you use the pir info
+    mutate(fscc_action = NA) %>%
+    # Relocate
+    relocate(plot_id_response, .before = code_nfc_action_taken) %>%
+    relocate(unique_inconsistency_id, .before = code_nfc_action_taken) %>%
+    relocate(unique_layer_repetition, .before = code_nfc_action_taken)
+
+
+
+  # Replace values if not up to date ----
+
   for (i in seq_len(nrow(pir_checked_survey_form))) {
 
     col_ind <- which(colnames(df) == pir_checked_survey_form$parameter[i])
     row_ind <- which(df$code_line ==
                        pir_checked_survey_form$code_line[i])
 
-    # if (!identical(row_ind, integer(0))) {
-    # if (length(row_ind) > 1) {
-    #   row_ind <- row_ind[which(df$code_line[row_ind] ==
-    #                              pir_checked_survey_form$code_line[i])]
-    # }
-    # }
+    # Sometimes code_line doesn't work:
+    # - if code_line changed for unclear reasons
+    # - if data were resubmitted under another survey_year
+
+    if (identical(row_ind, integer(0)) &&
+        pir_checked_survey_form$updated_value[i] != "record_to_be_removed") {
+
+      # Try to find the record using unique_layer_repetition or
+      # unique_survey_profile
+
+      assertthat::assert_that(
+        grepl("som|pfh|prf", pir_checked_survey_form$survey_form[i]))
+
+      key_i <- case_when(
+        grepl("prf", pir_checked_survey_form$survey_form[i]) ~
+          paste0(pir_checked_survey_form$code_country[i], "_",
+                 pir_checked_survey_form$survey_year[i], "_",
+                 sub(".*_", "",
+                     pir_checked_survey_form$plot_id_response[i]), "_",
+                 pir_checked_survey_form$repetition_profile_pit_id[i]),
+        grepl("som|pfh", pir_checked_survey_form$survey_form[i]) ~
+          pir_checked_survey_form$unique_layer_repetition[i])
+
+
+      if (grepl("prf", pir_checked_survey_form$survey_form[i])) {
+        row_ind <- which(df$unique_survey_profile == key_i)
+      }
+
+      if (grepl("pfh|som", pir_checked_survey_form$survey_form[i])) {
+        row_ind <- which(df$unique_layer_repetition == key_i)
+      }
+    }
+
+
+    if (identical(row_ind, integer(0)) &&
+        pir_checked_survey_form$updated_value[i] != "record_to_be_removed") {
+
+      # Try to find the record without the survey_year
+
+      assertthat::assert_that(
+        grepl("som|pfh|prf", pir_checked_survey_form$survey_form[i]))
+
+      key_i <- case_when(
+        grepl("prf", pir_checked_survey_form$survey_form[i]) ~
+          paste0(pir_checked_survey_form$code_country[i], "_",
+                 sub(".*_", "",
+                     pir_checked_survey_form$plot_id_response[i]), "_",
+                 pir_checked_survey_form$repetition_profile_pit_id[i]),
+        grepl("som|pfh", pir_checked_survey_form$survey_form[i]) ~
+          paste0(pir_checked_survey_form$code_country[i], "_",
+                 sub(".*_", "",
+                     pir_checked_survey_form$plot_id_response[i]), "_",
+                 pir_checked_survey_form$code_layer_horizon_master[i], "_",
+                 pir_checked_survey_form$repetition_profile_pit_id[i]))
+
+      if (grepl("prf", pir_checked_survey_form$survey_form[i])) {
+
+        match_col <- paste0(df$plot_id, "_",
+                            df$profile_pit_id)
+      }
+
+      if (grepl("pfh", pir_checked_survey_form$survey_form[i])) {
+
+        match_col <- paste0(df$plot_id, "_",
+                            df$horizon_master, "_",
+                            df$profile_pit_id)
+      }
+
+      if (grepl("som", pir_checked_survey_form$survey_form[i])) {
+
+        match_col <- paste0(df$plot_id, "_",
+                            df$code_layer, "_",
+                            df$repetition)
+      }
+
+      row_ind <- which(match_col == key_i)
+
+      if (!identical(row_ind, integer(0)) &&
+          length(row_ind) > 1) {
+
+        row_ind <- row_ind[which.min(abs(
+          df$survey_year[row_ind] - pir_checked_survey_form$survey_year[i]))]
+
+        assertthat::assert_that(length(row_ind == 1) ||
+                                  grepl("pfh",
+                                        pir_checked_survey_form$survey_form[i]))
+
+        if (length(row_ind > 1) &&
+            grepl("pfh", pir_checked_survey_form$survey_form[i])) {
+
+          # This can be the case if two layers in the same profile have
+          # the same horizon_master (e.g. C in 2_15)
+
+          # Check if parameter_value_orig equals any of the
+          # selected rows in df
+
+          row_ind <- which(df[row_ind,
+                              which(names(df) ==
+                                      pir_checked_survey_form$parameter[i])] ==
+                             pir_checked_survey_form$parameter_value_orig[i])
+
+          assertthat::assert_that(
+            identical(row_ind, integer(0)) ||
+                        length(row_ind) == 1)
+
+        }
+      }
+    }
+
 
     # If the records haven't been deleted meanwhile
 
     if (identical(row_ind, integer(0))) {
 
       pir_checked_survey_form$fscc_action[i] <-
-        "record no longer exists"
+        "Record no longer exists"
 
     } else {
 
-      # if the error does not concern rule_id FSCC_12: pH measurement method
+      # If the error does not concern rule_id FSCC_12 (pH measurement method)
 
       if (pir_checked_survey_form$rule_id[i] != "FSCC_12") {
 
@@ -502,12 +564,12 @@ gapfill_from_pir <- function(code_survey,
     if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
         !is_the_same(pull(df[row_ind, col_ind]),
                      pir_checked_survey_form$parameter_value_orig[i])) {
-      pir_checked_survey_form$fscc_action[i] <- "already updated in layer 0"
+      pir_checked_survey_form$fscc_action[i] <- "Already updated in layer 0"
     }
 
     # If the change_date is before 2 March 2023 OR
     if (as.Date(df$change_date[row_ind]) < as.Date("2023-03-02") ||
-        # if the values haven't been updated
+        # If the values haven't been updated
         is_the_same(pull(df[row_ind, col_ind]),
                     pir_checked_survey_form$parameter_value_orig[i])) {
 
@@ -517,11 +579,14 @@ gapfill_from_pir <- function(code_survey,
       if (pir_checked_survey_form$updated_value[i] == "record_to_be_removed") {
 
         df <- df[-row_ind, ]
-        pir_checked_survey_form$fscc_action[i] <- "removed"
+        pir_checked_survey_form$fscc_action[i] <-
+          "Record removed as specified in PIR"
 
       } else
 
-      # If updated_value is not the same like the original value
+      # If updated_value is not the same like the original value,
+      # The value needs to be updated in the survey form ----
+
       if (!is_the_same(pull(df[row_ind, col_ind]),
                        pir_checked_survey_form$updated_value[i])) {
 
@@ -529,18 +594,33 @@ gapfill_from_pir <- function(code_survey,
 
           df[row_ind, col_ind] <-
             as.numeric(pir_checked_survey_form$updated_value[i])
+
         } else {
+
         df[row_ind, col_ind] <-
           type.convert(pir_checked_survey_form$updated_value[i], as.is = TRUE)
         }
 
-        pir_checked_survey_form$fscc_action[i] <- "updated"
+        pir_checked_survey_form$fscc_action[i] <-
+          "Value updated as specified in PIR"
+
+
+        # Update "source" column
+
+        name_source_col <-
+          paste0(pir_checked_survey_form$parameter[i], "_source")
+
+        if (name_source_col %in% names(df)) {
+
+          df[row_ind, which(names(df) == name_source_col)] <- "PIR"
+
+        }
       }
 
       }
       } else {
 
-        # If the inconcistency concerns FSCC_12: pH measurement method
+        # If the inconcistency concerns FSCC_12 (pH measurement method)
 
         pir_checked_survey_form$parameter_value_current[i] <-
           pull(df[row_ind, which(names(df) == "other_obs")])
@@ -548,19 +628,22 @@ gapfill_from_pir <- function(code_survey,
 
         if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
             str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
-          pir_checked_survey_form$fscc_action[i] <- "already updated in layer 0"
+
+          pir_checked_survey_form$fscc_action[i] <-
+            "Already updated in layer 0"
         }
 
         # If the change_date is before 2 March 2023 OR
         if (as.Date(df$change_date[row_ind]) < as.Date("2023-03-02") ||
-            # if the values haven't been updated
+            # If the values haven't been updated
             !str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
 
           df[row_ind, which(names(df) == "other_obs")] <-
             paste0(pull(df[row_ind, which(names(df) == "other_obs")]), "; ",
                    pir_checked_survey_form$updated_value[i])
 
-          pir_checked_survey_form$fscc_action[i] <- "updated"
+          pir_checked_survey_form$fscc_action[i] <-
+            "Value updated as specified in PIR"
 
         }
 
