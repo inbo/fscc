@@ -192,6 +192,12 @@ get_range_inconsistencies <- function(survey_form,
   parameters <- names(df)[names(df) %in% ranges_qaqc$parameter]
   length_parameters_range <- length(parameters)
 
+  parameters_without_loq <-
+    names(df)[names(df) %in%
+                ranges_qaqc$parameter[which(
+                  is.na(ranges_qaqc$LOQ_org) | is.na(ranges_qaqc$LOQ_mineral))]]
+
+
   } else {
     length_parameters_range <- 0
   }
@@ -285,6 +291,32 @@ get_range_inconsistencies <- function(survey_form,
   } else {
     length_parameters_code <- 0
   }
+
+
+  # Create copies of columns that will be changed, containing the original
+  # values
+
+  columns <- unique(c(parameters_wrong_units, parameters, parameters_code))
+  columns <- names(df)[which(names(df) %in%
+                               c("bulk_density",
+                                 "organic_carbon_total",
+                                 "n_total",
+                                 "horizon_bulk_dens_measure",
+                                 "horizon_bulk_dens_est",
+                                 "horizon_c_organic_total",
+                                 "horizon_n_total",
+                                 "organic_layer_weight"))]
+
+  # Check for "_orig" columns and create if it doesn't exist
+  for (col in columns) {
+    orig_col <- paste0(col, "_orig")
+    if (!orig_col %in% names(df)) {
+      df[[orig_col]] <- df[[col]]
+    }
+  }
+
+
+
 
 
   # Set up a progress bar to track processing
@@ -710,9 +742,9 @@ get_range_inconsistencies <- function(survey_form,
       # Store information about the layers and repetitions to be shown in the
       # inconsistency list for "som" survey forms
 
-      if ("code_layer_original" %in% names(df)) {
+      if ("code_layer_orig" %in% names(df)) {
           ind_layer_horizon <-
-            as.character(df$code_layer_original[vec_inconsistency])
+            as.character(df$code_layer_orig[vec_inconsistency])
         } else {
           ind_layer_horizon <- as.character(df$code_layer[vec_inconsistency])
         }
@@ -1351,21 +1383,117 @@ get_range_inconsistencies <- function(survey_form,
         # this is only tested for "unique_partner_surveys" with at least two
         # observations)
 
-        if (((parameters_wrong_units[i] != "organic_layer_weight" &&
+        test_majority_survey_wrong <-
+          ((parameters_wrong_units[i] != "organic_layer_weight" &&
               (length(which((vec_layer_type != "mineral" &
-                   vec_data > wrong_range_org[1] &
-                   vec_data < wrong_range_org[2]) |
-                  (vec_layer_type == "mineral" &
-                     vec_data > wrong_range_mineral[1] &
-                     vec_data < wrong_range_mineral[2]))) >=
-             0.9 * length(vec_data))) ||
+                               vec_data > wrong_range_org[1] &
+                               vec_data < wrong_range_org[2]) |
+                              (vec_layer_type == "mineral" &
+                                 vec_data > wrong_range_mineral[1] &
+                                 vec_data < wrong_range_mineral[2]))) >=
+                 0.9 * length(vec_data))) ||
              # For organic_layer_weight: only look at organic matrices
              (parameters_wrong_units[i] == "organic_layer_weight" &&
-              (length(which((vec_layer_type != "mineral" &
-                             vec_data > wrong_range_org[1] &
-                             vec_data < wrong_range_org[2]))) >=
-               0.9 * length(vec_data)))) &&
-            length(vec_data) >= 2) {
+                (length(which((vec_layer_type != "mineral" &
+                                 vec_data > wrong_range_org[1] &
+                                 vec_data < wrong_range_org[2]))) >=
+                   0.9 * length(vec_data)))) &&
+          length(vec_data) >= 2
+
+        # Individual plot surveys that seem wrong
+        # by comparing "som" with "pfh"
+
+        s1_pfh_wrong_units_toc <-
+          c("4_2007_8010", "13_2002_1137", "13_2002_1608",
+            df %>%
+              filter(code_country == 56) %>%
+              distinct(unique_survey) %>%
+              pull(unique_survey))
+
+
+        if (test_majority_survey_wrong ||
+            (survey_form == "s1_pfh" &&
+             parameters_wrong_units[i] == "horizon_c_organic_total" &&
+             any(s1_pfh_wrong_units_toc %in%
+                 df$unique_survey[vec_nonempty]))) {
+
+
+
+
+          # If it is not the case that the majority of the TOC data
+          # in s1_pfh falls in the wrong unit range
+
+          if (test_majority_survey_wrong == FALSE &&
+              survey_form == "s1_pfh" &&
+              parameters_wrong_units[i] == "horizon_c_organic_total") {
+
+            # Check if the data for the listed plot surveys falls within
+            # the wrong unit range
+
+            vec_nonempty <- df[vec, ] %>%
+              mutate(to_check =
+                       ((unique_survey %in% s1_pfh_wrong_units_toc) &
+                          (!is.na(.[[col_ind]]) &
+                             (.[[col_ind]] != -1)))) %>%
+              pull(to_check) %>%
+              which()
+
+            assertthat::assert_that(!identical(vec_nonempty, integer(0)))
+
+            vec_nonempty <- vec[vec_nonempty]
+
+          }
+
+          # Filter for plot surveys in which none of the data * 10
+          # are higher than 1000 (since impossible)
+
+          if (parameters_wrong_units[i] %in% c("organic_carbon_total",
+                                               "n_total",
+                                               "horizon_c_organic_total",
+                                               "horizon_n_total",
+                                               "horizon_caco3_total",
+                                               "horizon_gypsum")) {
+
+            unique_surveys_to_exclude <- c(
+              df[vec_nonempty, ] %>%
+              mutate(hypothetically_corrected = 10 * (.[[col_ind]])) %>%
+              relocate(hypothetically_corrected,
+                       .before = "horizon_c_organic_total") %>%
+              group_by(unique_survey) %>%
+              reframe(any_outside_possible_range =
+                        any(hypothetically_corrected > 1000)) %>%
+              filter(any_outside_possible_range == TRUE) %>%
+              pull(unique_survey),
+              # Manually determined exceptions
+              df[vec_nonempty, ] %>%
+                filter(plot_id %in% c("14_1", "14_15", "14_104",
+                                      "51_1")) %>%
+                group_by(unique_survey) %>%
+                reframe(all_fine =
+                          all(.[[col_ind]] < 60)) %>%
+                filter(all_fine == TRUE) %>%
+                pull(unique_survey))
+
+            if (!identical(unique_surveys_to_exclude, character(0))) {
+
+              vec_nonempty <- df[vec, ] %>%
+                mutate(to_keep =
+                         (!(unique_survey %in% unique_surveys_to_exclude) &
+                          !is.na(.[[col_ind]]) &
+                            (.[[col_ind]] != -1))) %>%
+                pull(to_keep) %>%
+                which()
+
+              vec_nonempty <- vec[vec_nonempty]
+            }
+          }
+
+          vec_data <- df[vec_nonempty, col_ind]
+
+          if ("tbl_df" %in% class(vec_data)) {
+            vec_data <- pull(vec_data)
+          }
+
 
           # Store the information whether a given observation was reported in
           # the wrong unit in "df" (TRUE)
@@ -1413,9 +1541,9 @@ get_range_inconsistencies <- function(survey_form,
 
           if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-          if ("code_layer_original" %in% names(df)) {
+          if ("code_layer_orig" %in% names(df)) {
             ind_layer_horizon <-
-              as.character(df$code_layer_original[vec_nonempty])
+              as.character(df$code_layer_orig[vec_nonempty])
             } else {
               ind_layer_horizon <- as.character(df$code_layer[vec_nonempty])
             }
@@ -1505,6 +1633,23 @@ get_range_inconsistencies <- function(survey_form,
                                                  "horizon_bulk_dens_measure",
                                                  "horizon_bulk_dens_est")) {
               df[vec_nonempty, col_ind] <- 1000 * df[vec_nonempty, col_ind]
+
+              name_source_col <- paste0(parameters_wrong_units[i], "_source")
+
+              if (name_source_col %in% names(df)) {
+
+                df <- df %>%
+                  mutate({{ name_source_col }} :=
+                           ifelse(row_number() %in% vec_nonempty,
+                                  paste0({{ name_source_col }},
+                                         " (corrected units)"),
+                                  {{ name_source_col }}))
+
+              # df[vec_nonempty, which(names(df) == "bulk_density_source")] <-
+              #   paste0(df[vec_nonempty,
+              #             which(names(df) == "bulk_density_source")],
+              #          " (corrected units)")
+              }
               }
 
             # reported in % instead of g kg-1
@@ -1515,11 +1660,48 @@ get_range_inconsistencies <- function(survey_form,
                                                  "horizon_caco3_total",
                                                  "horizon_gypsum")) {
               df[vec_nonempty, col_ind] <- 10 * df[vec_nonempty, col_ind]
+
+              name_source_col <- paste0(parameters_wrong_units[i], "_source")
+
+              if (name_source_col %in% names(df)) {
+
+                df <- df %>%
+                  mutate({{ name_source_col }} :=
+                           ifelse(row_number() %in% vec_nonempty,
+                                  paste0({{ name_source_col }},
+                                         " (corrected units)"),
+                                  {{ name_source_col }}))
+
+                # df[vec_nonempty, which(names(df) == name_source_col)] <-
+                #   paste0(df[vec_nonempty,
+                #             which(names(df) == name_source_col)],
+                #          " (corrected units)")
+              }
             }
 
             # probably reported in g m-2 instead of kg m-2
             if (parameters_wrong_units[i] %in% c("organic_layer_weight")) {
+
               df[vec_nonempty, col_ind] <- 0.001 * df[vec_nonempty, col_ind]
+
+              if ("organic_layer_weight_source" %in% names(df)) {
+
+              # df[vec_nonempty, which(names(df) ==
+              #                          "organic_layer_weight_source")] <-
+              #   paste0(df[vec_nonempty,
+              #             which(names(df) == "organic_layer_weight_source")],
+              #          " (corrected units)")
+
+                name_source_col <- "organic_layer_weight_source"
+
+                df <- df %>%
+                  mutate({{ name_source_col }} :=
+                           ifelse(row_number() %in% vec_nonempty,
+                                  paste0({{ name_source_col }},
+                                         " (corrected units)"),
+                                  {{ name_source_col }}))
+
+              }
             }
 
             }
@@ -1535,13 +1717,29 @@ get_range_inconsistencies <- function(survey_form,
 
       vec_inconsistency <-
         which(!is.na(pull(df[, col_ind])) &
-                pull(df[, col_ind]) < wrong_range_mineral[2])
+                pull(df[, col_ind]) < 2.65)
 
       if (solve == TRUE) {
 
         # reported in g cm-3 instead of kg m-3
         df[vec_inconsistency, col_ind] <- 1000 * df[vec_inconsistency, col_ind]
 
+        name_source_col <- paste0(parameters_wrong_units[i], "_source")
+
+        if (name_source_col %in% names(df)) {
+
+          df <- df %>%
+            mutate({{ name_source_col }} :=
+                     ifelse(row_number() %in% vec_inconsistency,
+                            paste0({{ name_source_col }}, " (corrected units)"),
+                            {{ name_source_col }}))
+
+
+        # df[vec_inconsistency, which(names(df) == "bulk_density_source")] <-
+        #   paste0(df[vec_inconsistency,
+        #             which(names(df) == "bulk_density_source")],
+        #          " (corrected units)")
+        }
       }
     }
 
@@ -1619,7 +1817,8 @@ get_range_inconsistencies <- function(survey_form,
         # organic matrices for the parameters "bulk density",
         # "organic_carbon_total" and "n_total".
 
-        if  (df$code_layer[j] == "M05" &&
+        if  ((!is.na(df$code_layer[j]) &&
+              df$code_layer[j] == "M05") &&
              (column_name %in% c("bulk_density",
                                  "organic_carbon_total",
                                  "n_total"))) {
@@ -1782,6 +1981,13 @@ get_range_inconsistencies <- function(survey_form,
       if (!is.na(range_min_possible) && !is.na(range_max_possible) &&
           !is.na(df$active_column[j])) {
 
+        if ((unlist(strsplit(survey_form, "_"))[2] == "som") &&
+            (column_name == "organic_layer_weight")) {
+
+          range_max_possible <- 1e99
+
+        }
+
         # Update range_max_possible
         # In case the parameter is organic_layer_weight and
         # the thickness of the given layer is known:
@@ -1816,9 +2022,22 @@ get_range_inconsistencies <- function(survey_form,
 
         # If the parameter value was outside the possible range
 
-        if (df$active_column[j] != -1 &&
-            (df$active_column[j] <= range_min_possible ||
-             df$active_column[j] >= range_max_possible)) {
+        # This ignores -1 (below LOQ) except for organic_layer_weight
+
+        # And considers the upper possible limit as impossible
+        # as well as the lower possible limit if it is a variable without
+        # LOQ
+
+
+        if ((column_name == "organic_layer_weight" &&
+             (df$active_column[j] < range_min_possible ||
+              df$active_column[j] >= range_max_possible)) ||
+            (column_name != "organic_layer_weight" &&
+             df$active_column[j] != -1 &&
+            (df$active_column[j] < range_min_possible ||
+             df$active_column[j] >= range_max_possible)) ||
+            (column_name %in% parameters_without_loq &&
+             df$active_column[j] == range_min_possible)) {
 
           # Store information about the inconsistency in
           # "list_range_inconsistencies"
@@ -1829,8 +2048,8 @@ get_range_inconsistencies <- function(survey_form,
             } else
 
           if (unlist(strsplit(survey_form, "_"))[2] == "som") {
-            if ("code_layer_original" %in% names(df)) {
-              ind_layer_horizon <- as.character(df$code_layer_original[j])
+            if ("code_layer_orig" %in% names(df)) {
+              ind_layer_horizon <- as.character(df$code_layer_orig[j])
             } else {
                 ind_layer_horizon <- as.character(df$code_layer[j])
                 }
@@ -1887,8 +2106,14 @@ get_range_inconsistencies <- function(survey_form,
 
             df$active_column[j] <- NA
 
-          }
+            name_source_col <- paste0(parameters[i], "_source")
 
+            if (name_source_col %in% names(df)) {
+
+            df[j, which(names(df) == name_source_col)] <- NA
+
+            }
+          }
 
         }
         }
@@ -1960,8 +2185,8 @@ get_range_inconsistencies <- function(survey_form,
          } else
 
          if (unlist(strsplit(survey_form, "_"))[2] == "som") {
-           if ("code_layer_original" %in% names(df)) {
-           ind_layer_horizon <- as.character(df$code_layer_original[j])
+           if ("code_layer_orig" %in% names(df)) {
+           ind_layer_horizon <- as.character(df$code_layer_orig[j])
            } else {
              ind_layer_horizon <- as.character(df$code_layer[j])
              }
@@ -2109,9 +2334,9 @@ get_range_inconsistencies <- function(survey_form,
     # Create a vector with the row indices of the records with a parameter value
     # which is not in the list of possible codes for this parameter
 
-    vec_inconsistency <- which(!is.na(df[, col_ind]) &
-                                 (df[, col_ind] != "") &
-                                 (!df[, col_ind] %in% possible_codes))
+    vec_inconsistency <- which(!is.na(pull(df[, col_ind])) &
+                                 (pull(df[, col_ind]) != "") &
+                                 (!pull(df[, col_ind]) %in% possible_codes))
 
     # If there are any records with a "non-existing" code
 
@@ -2120,10 +2345,10 @@ get_range_inconsistencies <- function(survey_form,
     # Store information about the inconsistency in "list_range_inconsistencies"
 
     if (unlist(strsplit(survey_form, "_"))[2] == "som") {
-      if ("code_layer_original" %in% names(df)) {
+      if ("code_layer_orig" %in% names(df)) {
 
         ind_layer_horizon <-
-          as.character(df$code_layer_original[vec_inconsistency])
+          as.character(df$code_layer_orig[vec_inconsistency])
       } else {
           ind_layer_horizon <- as.character(df$code_layer[vec_inconsistency])
       }
@@ -2194,6 +2419,13 @@ get_range_inconsistencies <- function(survey_form,
 
         df[vec_inconsistency, col_ind] <- NA
 
+        name_source_col <- paste0(parameter_code, "_source")
+
+        if (name_source_col %in% names(df)) {
+
+          df[j, which(names(df) == name_source_col)] <- NA
+
+        }
       }
 
 
@@ -2247,8 +2479,8 @@ get_range_inconsistencies <- function(survey_form,
 
     if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-      if ("code_layer_original" %in% names(df)) {
-        ind_layer_horizon <- as.character(df$code_layer_original)
+      if ("code_layer_orig" %in% names(df)) {
+        ind_layer_horizon <- as.character(df$code_layer_orig)
       } else {
           ind_layer_horizon <- as.character(df$code_layer)
           }
@@ -2438,6 +2670,604 @@ get_range_inconsistencies <- function(survey_form,
   close(progress_bar)
     }
     }
+
+
+
+
+
+
+  # Specific manual corrections of total organic carbon ----
+
+  ## so_som ----
+
+  if (survey_form == "so_som") {
+
+    # Romania: organic_carbon_total of forest floors seem to be reported in %,
+    # while those of the mineral layers are fine.
+    # This is in line with the data in AFSCDB_LII.
+
+    # Update: this is already corrected via the PIRs. It won't be solved
+    # because of the "if" statement.
+
+    # Forest floor layers
+
+    unique_layers_to_convert <- df %>%
+      filter(code_country == 52) %>%
+      filter(layer_type == "forest_floor") %>%
+      mutate(unit_issue_toc =
+               # Upper limit of organic_carbon_total plausible range in %
+               ifelse(.data$organic_carbon_total < 59,
+                      TRUE,
+                      FALSE))
+
+    if (!identical(which(unique_layers_to_convert$unit_issue_toc == TRUE),
+                   integer(0)) &&
+        length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
+        0.9 * nrow(unique_layers_to_convert) &&
+        nrow(unique_layers_to_convert) >= 2) {
+
+      unique_layers_to_convert <-
+        unique(unique_layers_to_convert$unique_layer_repetition)
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        10 * .data$organic_carbon_total,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source)
+               )
+    }
+
+    # Plot 52_10
+    # n_total of mineral layers should be divided by 10
+    # (in comparison with AFSCDB_LII)
+
+    # Update: this is already corrected via the PIRs. It won't be solved
+    # because of the "if" statement.
+
+    unique_layers_to_convert <- df %>%
+      filter(plot_id == "52_10") %>%
+      filter(layer_type != "forest_floor") %>%
+      mutate(unit_issue_tn =
+               # Upper limit of n_total plausible range
+               ifelse(.data$n_total > 10,
+                      TRUE,
+                      FALSE))
+
+    if (!identical(which(unique_layers_to_convert$unit_issue_tn == TRUE),
+                   integer(0)) &&
+        length(which(unique_layers_to_convert$unit_issue_tn == TRUE)) >=
+        0.7 * nrow(unique_layers_to_convert) &&
+        nrow(unique_layers_to_convert) >= 2) {
+
+      unique_layers_to_convert <-
+        unique(unique_layers_to_convert$unique_layer_repetition)
+
+      df <- df %>%
+        mutate(n_total =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        0.1 * .data$n_total,
+                        .data$n_total),
+               n_total_source =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        "manual correction (FSCC)",
+                        .data$n_total_source))
+    }
+
+    # Plot 52_12
+    # organic_carbon_total of mineral layers should be a factor 10 higher
+    # (in comparison with AFSCDB_LII)
+
+    unique_layers_to_convert <- df %>%
+      filter(plot_id == "52_12") %>%
+      filter(layer_type != "forest_floor") %>%
+      mutate(unit_issue_toc =
+               # Upper limit of organic_carbon_total plausible range in %
+               ifelse(.data$organic_carbon_total < 15 &
+                        .data$organic_carbon_total <
+                        0.2 * .data$organic_carbon_total_afscdb,
+                      TRUE,
+                      NA))
+
+    if (!identical(which(unique_layers_to_convert$unit_issue_toc == TRUE),
+                   integer(0)) &&
+        nrow(unique_layers_to_convert) >= 2) {
+
+      unique_layers_to_convert <-
+        unique_layers_to_convert %>%
+        filter(unit_issue_toc == TRUE) %>%
+        distinct(unique_layer_repetition) %>%
+        pull(unique_layer_repetition)
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        .data$organic_carbon_total_afscdb,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        "FSCDB.LII (2012)",
+                        .data$organic_carbon_total_source))
+    }
+
+    # German partner_code 3604
+    # Manually verified: TOC values in forest floor layers are unlikely low
+    # in layer 0, while they look realistic in AFSCDB.
+
+    # What to do with forest floor records for 2009
+
+    unique_layers_to_convert <- df %>%
+      filter(partner_code == 3604) %>%
+      filter(layer_type == "forest_floor") %>%
+      mutate(unit_issue_toc =
+               # Upper limit of organic_carbon_total plausible range in %
+               ifelse(!is.na(.data$organic_carbon_total) &
+                        !is.na(.data$organic_carbon_total_afscdb) &
+                        .data$organic_carbon_total !=
+                        .data$organic_carbon_total_afscdb,
+                      TRUE,
+                      NA)) %>%
+      filter(unit_issue_toc == TRUE) %>%
+      pull(code_line)
+
+    if (!identical(unique_layers_to_convert, character(0))) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$code_line %in% unique_layers_to_convert,
+                        .data$organic_carbon_total_afscdb,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$code_line %in% unique_layers_to_convert,
+                        "FSCDB.LII (2012)",
+                        .data$organic_carbon_total_source))
+    }
+
+
+
+
+    # Poland
+    # In plot 514 (survey_year 1995), M48 is probably a mistake.
+    # Take value from survey year 1999 (i.e. 4)
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "53_514") %>%
+      filter(survey_year == 1995) %>%
+      filter(code_layer == "M48")
+
+    toc_1999 <- df %>%
+      filter(plot_id == "53_514") %>%
+      filter(survey_year == 1999) %>%
+      filter(code_layer == "M48") %>%
+      pull(organic_carbon_total)
+
+    if (round(toc_1999) == 4 &&
+        round(pull(unique_layers_to_change, organic_carbon_total)) == 258) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(code_layer ==
+                          pull(unique_layers_to_change, code_line),
+                        toc_1999,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(code_layer ==
+                          pull(unique_layers_to_change, code_line),
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+    }
+
+
+    # Poland
+    # In plot 702 (survey_year 1999), M48 is probably a mistake
+    # Take value from survey_year 1995 (i.e. 12)
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "53_702") %>%
+      filter(survey_year == 1999) %>%
+      filter(code_layer == "M48")
+
+    toc_1995 <- df %>%
+      filter(plot_id == "53_702") %>%
+      filter(survey_year == 1995) %>%
+      filter(code_layer == "M48") %>%
+      pull(organic_carbon_total)
+
+    if (round(toc_1995) == 12 &&
+        round(pull(unique_layers_to_change, organic_carbon_total)) == 200) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(code_layer ==
+                          pull(unique_layers_to_change, code_line),
+                        toc_1995,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(code_layer ==
+                          pull(unique_layers_to_change, code_line),
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+    }
+
+
+    # Spain
+    # In plot 11_26 (survey_year 1996) in repetition 4, M05 is probably a
+    # mistake since the same like OL, and considerably different than the
+    # other three repetitions.
+    # Take average of three other repetitions in 1996, i.e. 23.79
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "11_26") %>%
+      filter(survey_year == 1996) %>%
+      filter(code_layer == "M05")
+
+    toc_avg <- unique_layers_to_change %>%
+      filter(repetition != 4) %>%
+      pull(organic_carbon_total) %>%
+      mean %>%
+      round(2)
+
+    if (toc_avg == 23.79 &&
+        round(pull(filter(unique_layers_to_change, repetition == 4),
+             organic_carbon_total)) == 206) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$code_line ==
+                          pull(filter(unique_layers_to_change, repetition == 4),
+                               code_line),
+                        toc_avg,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$code_line ==
+                          pull(filter(unique_layers_to_change, repetition == 4),
+                               code_line),
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+    }
+
+
+    # UK: 6_2010_512
+    # Below-ground values of repetitions 2 and 3 are -1
+    # while those of repetition 1 are considerably higher
+    # In AFSCDB, these values are NA, which seems more reasonable
+
+    layers_to_check <- df %>%
+      filter(unique_survey == "6_2010_512") %>%
+      filter(repetition %in% c(2, 3)) %>%
+      filter(layer_type == "mineral")
+
+    if (all(pull(layers_to_check, organic_carbon_total) == -1) &&
+        all(is.na(pull(layers_to_check, organic_carbon_total_afscdb)))) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$code_line %in%
+                          pull(layers_to_check, code_line),
+                        NA,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$code_line %in%
+                          pull(layers_to_check, code_line),
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+
+    }
+
+
+    # Portugal: plot 4 and plot 2
+    # Uncertain if units are wrong here
+
+    # Hungary (2010)
+    # Uncertain if units are wrong here
+
+    # partner_code 3604 in 1995
+
+    # Spain: plot 26 in 1994?
+
+  }
+
+
+  ## so_pfh ----
+
+  if (survey_form == "so_pfh") {
+
+    # Hungary (2010)
+
+
+    # Bulgaria
+    # Based on other profiles in this plot,
+    # it seems plausible that these TOC values have to be moved up
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "63_2") %>%
+      filter(survey_year == 2009) %>%
+      select(horizon_master, horizon_limit_up, horizon_limit_low,
+             horizon_c_organic_total)
+
+    toc_ol <- unique_layers_to_change %>%
+      filter(horizon_master == "A") %>%
+      pull(horizon_c_organic_total)
+
+    toc_a <- unique_layers_to_change %>%
+      filter(horizon_limit_up == 27 &
+               horizon_limit_low == 58) %>%
+      pull(horizon_c_organic_total)
+
+    if (round(toc_ol) == 289 &&
+        round(toc_a) == 47) {
+
+      df <- df %>%
+        mutate(horizon_c_organic_total =
+                 ifelse(.data$unique_survey_layer == "63_2009_2_OL",
+                        toc_ol,
+                        .data$horizon_c_organic_total),
+               horizon_c_organic_total_source =
+                 ifelse(.data$unique_survey_layer == "63_2009_2_OL",
+                        "manual correction (FSCC)",
+                        .data$horizon_c_organic_total_source)) %>%
+        mutate(horizon_c_organic_total =
+                 ifelse(.data$unique_survey_layer == "63_2009_2_A",
+                        toc_a,
+                        .data$horizon_c_organic_total),
+               horizon_c_organic_total_source =
+                 ifelse(.data$unique_survey_layer == "63_2009_2_A",
+                        "manual correction (FSCC)",
+                        .data$horizon_c_organic_total_source))
+    }
+
+
+
+    # Estonia
+    # Based on FSCDB and the TOC value,
+    # it seems plausible that this TOC should be 21.2
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "59_3") %>%
+      filter(survey_year == 2009) %>%
+      filter(horizon_master == "B")
+
+    if (round(unique_layers_to_change$horizon_c_organic_total) == 212) {
+
+      df <- df %>%
+        mutate(horizon_c_organic_total =
+                 ifelse(.data$code_line ==
+                          pull(unique_layers_to_change, code_line),
+                        21.2,
+                        .data$horizon_c_organic_total),
+               horizon_c_organic_total_source =
+                 ifelse(.data$code_line ==
+                          pull(unique_layers_to_change, code_line),
+                        "manual correction (FSCC)",
+                        .data$horizon_c_organic_total_source))
+    }
+
+  }
+
+
+  ## s1_som ----
+
+  if (survey_form == "s1_som") {
+
+    # Canary Islands
+    # Based on location in this profile,
+    # it seems not plausible that this value is so low (57), and considering
+    # the thickness of the layer (0.2 cm), it makes sense to just replace it
+    # by the value of the OH layer (253)
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "95_2111") %>%
+      filter(survey_year == 2009) %>%
+      select(code_layer, layer_limit_superior, layer_limit_inferior,
+             organic_carbon_total)
+
+    toc_of <- unique_layers_to_change %>%
+      filter(code_layer == "OF") %>%
+      pull(organic_carbon_total)
+
+    toc_oh <- unique_layers_to_change %>%
+      filter(code_layer == "OH") %>%
+      pull(organic_carbon_total)
+
+    if (round(toc_of) == 57 &&
+        round(toc_oh) == 252) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_survey_layer == "95_2009_2111_OF",
+                        toc_oh,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_survey_layer == "95_2009_2111_OF",
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+    }
+
+
+
+    # Estonia
+    # Replace values of "OF" and "HS" (29 and 18) by value for "H"
+    # from before PIRs (240), because these low values must be a mistake from
+    # during resubmission
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "59_29") %>%
+      filter(survey_year == 1990) %>%
+      select(code_layer, layer_limit_superior, layer_limit_inferior,
+             organic_carbon_total)
+
+    if (round(pull(filter(unique_layers_to_change, code_layer == "OF"),
+             organic_carbon_total)) == 29 &&
+        round(pull(filter(unique_layers_to_change, code_layer == "HS"),
+                   organic_carbon_total)) == 19) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_survey == "59_1990_29" &
+                          .data$code_layer %in% c("OF", "HS"),
+                        240,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_survey == "59_1990_29" &
+                          .data$code_layer %in% c("OF", "HS"),
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+    }
+
+    # Spain
+    # Based on location in this profile,
+    # it seems not plausible that this value is so low (70), and considering
+    # the thickness of the layer (0.8 cm), it makes sense to just replace it
+    # by the value of the OH layer (425)
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "11_758") %>%
+      filter(survey_year == 2009) %>%
+      select(code_layer, layer_limit_superior, layer_limit_inferior,
+             organic_carbon_total)
+
+    toc_of <- unique_layers_to_change %>%
+      filter(code_layer == "OF") %>%
+      pull(organic_carbon_total)
+
+    toc_oh <- unique_layers_to_change %>%
+      filter(code_layer == "OH") %>%
+      pull(organic_carbon_total)
+
+    if (round(toc_of) == 70 &&
+        round(toc_oh) == 425) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_survey_layer == "11_2009_758_OF",
+                        toc_oh,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_survey_layer == "11_2009_758_OF",
+                        "manual correction (FSCC)",
+                        .data$organic_carbon_total_source))
+    }
+
+
+    # UK: TOC of OFH layers must be a mistake
+    # This used to be NA. In the PIR, the UK indicated that this value was not
+    # available, but after the PIR resubmission, this value was resubmitted as
+    # 0.6 for 48 plots, which seems like an artefact. Replace by NA.
+
+    unique_layers_to_change <- df %>%
+      filter(code_country == 6) %>%
+      filter(layer_type == "forest_floor") %>%
+      filter(!is.na(organic_carbon_total) & organic_carbon_total < 1) %>%
+      select(plot_id, code_layer, repetition, organic_carbon_total) %>%
+      distinct(plot_id) %>%
+      pull(plot_id)
+
+    if (!identical(unique_layers_to_change, character(0))) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(plot_id %in% unique_layers_to_change &
+                          code_layer == "OFH" &
+                          organic_carbon_total == 0.6,
+                        NA,
+                        organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(plot_id %in% unique_layers_to_change &
+                          code_layer == "OFH" &
+                          organic_carbon_total == 0.6,
+                        "manual correction (FSCC)",
+                        organic_carbon_total_source))
+    }
+
+
+
+    # Sweden: same data in s1_som and s1_pfh (from NFI)
+    # However, some data sometimes seem to be submitted
+    # under the wrong code_layer
+
+    # E.g. 13_2008_1037 → TOC of OF should maybe go to M01?
+
+
+  }
+
+
+  ## s1_pfh ----
+
+  if (survey_form == "s1_pfh") {
+
+    # France 1_521
+    # Replace TOC of OF by value from "s1_som": 318
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "1_521") %>%
+      filter(survey_year == 1994) %>%
+      select(horizon_master, horizon_limit_up, horizon_limit_low,
+             horizon_c_organic_total)
+
+    toc_of <- unique_layers_to_change %>%
+      filter(horizon_master == "OF") %>%
+      pull(horizon_c_organic_total)
+
+    if (round(toc_of) == 43) {
+
+      df <- df %>%
+        mutate(horizon_c_organic_total =
+                 ifelse(.data$unique_survey_layer == "1_1994_521_OF",
+                        318,
+                        .data$horizon_c_organic_total),
+               horizon_c_organic_total_source =
+                 ifelse(.data$unique_survey_layer == "1_1994_521_OF",
+                        "manual correction (FSCC)",
+                        .data$horizon_c_organic_total_source))
+    }
+
+    # France 1_1275
+    # Replace TOC of OF by value from "s1_som": 155
+
+    unique_layers_to_change <- df %>%
+      filter(plot_id == "1_1275") %>%
+      filter(survey_year == 1994) %>%
+      select(horizon_master, horizon_limit_up, horizon_limit_low,
+             horizon_c_organic_total)
+
+    toc_oh <- unique_layers_to_change %>%
+      filter(horizon_master == "OH") %>%
+      pull(horizon_c_organic_total)
+
+    if (round(toc_oh) %in% c(24, 2)) {
+
+      df <- df %>%
+        mutate(horizon_c_organic_total =
+                 ifelse(.data$unique_survey_layer == "1_1994_1275_OH",
+                        155,
+                        .data$horizon_c_organic_total),
+               horizon_c_organic_total_source =
+                 ifelse(.data$unique_survey_layer == "1_1994_1275_OH",
+                        "manual correction (FSCC)",
+                        .data$horizon_c_organic_total_source))
+    }
+
+
+    # Latvia: TOC contents seem overall unreliable in s1_pfh
+
+    # Sweden: same data in s1_som and s1_pfh (from NFI)
+    # However, some data sometimes seem to be submitted
+    # under the wrong code_layer
+
+  }
+
+
+
+
 
   # Final processing and saving of dataframe ----
 
