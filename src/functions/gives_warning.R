@@ -27,23 +27,52 @@
 #' @keywords warning check test
 #' @export
 
+# gives_warning <- function(test) {
+#
+#   assign("last.warning", NULL, envir = baseenv())  # Clear the previous warning
+#
+#   withCallingHandlers(
+#     expr = {
+#       test
+#     },
+#     warning = function(w) {
+#       # Assign the warning to last.warning
+#       assign("last.warning", w, envir = baseenv())
+#       # Muffle the warning to prevent it from being printed
+#       invokeRestart("muffleWarning")
+#     }
+#   )
+#
+#   # Check if a warning was captured
+#   !is.null(get("last.warning", envir = baseenv()))
+#
+# }
+
+
 gives_warning <- function(test) {
+  # Clear the last warning
+  last_warning <- NULL
 
-  assign("last.warning", NULL, envir = baseenv())  # Clear the previous warning
+  # Evaluate the expression and capture warnings/errors
+  result <- tryCatch({
+    withCallingHandlers(
+      expr = {
+        test
+      },
+      warning = function(w) {
+        last_warning <<- w
+        invokeRestart("muffleWarning")
+      }
+    )
+  }, warning = function(w) {
+    last_warning <<- w
+    invokeRestart("muffleWarning")
+  }, error = function(e) {
+    NULL
+  })
 
-  withCallingHandlers(
-    expr = {
-      test
-    },
-    warning = function(w) {
-      # Assign the warning to last.warning
-      assign("last.warning", w, envir = baseenv())
-      # Muffle the warning to prevent it from being printed
-      invokeRestart("muffleWarning")
-    }
-  )
-  
   # Check if a warning was captured
-  !is.null(get("last.warning", envir = baseenv()))
+  result_warning <- !is.null(last_warning)
 
+  return(result_warning)
 }
