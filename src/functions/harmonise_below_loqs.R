@@ -7,7 +7,15 @@ harmonise_below_loqs <- function(survey_form,
                                                 "part_size_silt",
                                                 "part_size_sand",
                                                 "organic_carbon_total",
-                                                "n_total"),
+                                                "n_total",
+                                                "exch_ca",
+                                                "exch_mg",
+                                                "exch_k",
+                                                "exch_na",
+                                                "exch_al",
+                                                "exch_fe",
+                                                "exch_mn",
+                                                "free_h"),
                                  solve = TRUE,
                                  save_to_env = FALSE) {
 
@@ -15,6 +23,42 @@ harmonise_below_loqs <- function(survey_form,
   source("./src/functions/assign_env.R")
 
   cat(paste0(" \nHarmonise data below LOQ in '", survey_form, "'\n"))
+
+
+  # Replace default parameters if pfh
+
+  if (unlist(str_split(survey_form, "_"))[2] == "pfh") {
+
+    if (identical(parameters,
+                  c("part_size_clay",
+                    "part_size_silt",
+                    "part_size_sand",
+                    "organic_carbon_total",
+                    "n_total",
+                    "exch_ca",
+                    "exch_mg",
+                    "exch_k",
+                    "exch_na",
+                    "exch_al",
+                    "exch_fe",
+                    "exch_mn",
+                    "free_h"))) {
+
+      parameters <-
+        c("horizon_clay",
+          "horizon_silt",
+          "horizon_sand",
+          "horizon_c_organic_total",
+          "horizon_n_total",
+          "horizon_exch_ca",
+          "horizon_exch_mg",
+          "horizon_exch_k",
+          "horizon_exch_na")
+
+    }
+
+  }
+
 
 
   # 1. Prepare dataframes ----
