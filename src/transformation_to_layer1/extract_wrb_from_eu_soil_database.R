@@ -82,12 +82,16 @@ source("./src/functions/dec_coordinate.R")
 source("./src/functions/as_sf.R")
 
 s1_missing_wrb <-
-  read.csv("./data/additional_data/S1_PRF_missing_FAO_WRB.csv",
+  read.csv("./data/additional_data/S1_PRF_231204_missing_WRB_qual.csv",
            sep = ";") %>%
-  mutate(latitude_dec =
-           sapply(latitude, dec_coordinate, error_report = FALSE),
-         longitude_dec =
-           sapply(longitude, dec_coordinate, error_report = FALSE)) %>%
+  rename(plot_id = PLOTID) %>%
+  filter(!is.na(plot_id) &
+           plot_id != "") %>%
+  mutate(plot_id = ifelse(plot_id == "6_940010",
+                          "6_10",
+                          plot_id)) %>%
+  left_join(coordinates_s1,
+            by = "plot_id") %>%
   select(plot_id, latitude_dec, longitude_dec)
 
 s1_missing_wrb_sf <-
@@ -160,12 +164,16 @@ s1_wrb <- s1_missing_wrb %>%
   mutate_at(vars(wrb_lev1, wrb_adj1, wrb_full, fao90_full), as.character) %>%
   # Convert records that contain number "6" to "6"
   mutate(across(c(wrb_lev1, wrb_adj1, wrb_full, fao90_full),
-                ~ if_else(grepl("6", .), "6", .)))
+                ~ if_else(grepl("6", .), "6", .))) %>%
+  # Convert records that contain number "6" to "6"
+  mutate(across(c(wrb_lev1, wrb_adj1, wrb_full, fao90_full),
+                ~ if_else(grepl("3", .), "3", .)))
 
 
 
 
 # 3. Fill data gaps ----
+## 3.1. Actual Swedish data gaps ----
 
 s1_wrb_gaps <- s1_wrb %>%
   filter(is.na(wrb_lev1) |
@@ -176,7 +184,7 @@ s1_wrb_gaps <- s1_wrb %>%
   # Gaps for:
   # - three Canarian plots → no data in European Soil Database
   # - five Swedish plots → no data because right outside the edge with the
-  #   sea (in comparison with raster). Reasonable to take the WRB nearby.
+  #   sea. Reasonable to take the WRB nearby.
 
 
 
@@ -188,7 +196,7 @@ dev.new()
 terra::plot(soil_wrb_lev1, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
 
 # Add points on top of the raster
-terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16)
 
 # Add labels based on the plot_id column
 terra::text(terra::vect(s1_wrb_gaps),
@@ -204,7 +212,7 @@ dev.new()
 terra::plot(soil_wrb_adj1, xlim = c(4.5E6, 4.8E6), ylim = c(3.85E6, 4.05E6))
 
 # Add points on top of the raster
-terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16)
 
 # Add labels based on the plot_id column
 terra::text(terra::vect(s1_wrb_gaps),
@@ -260,31 +268,295 @@ s1_wrb <- s1_wrb %>%
     plot_id == "13_17887" ~ "CM",
     plot_id %in% c("13_17841", "13_17526") ~ "LP",
     TRUE ~ wrb_lev1)) %>%
-  left_join(legend_wrb_lev1 %>%
-              rename(wrb_soil_group = RSG),
-            by = join_by("wrb_lev1" == "WRB.LEV1")) %>%
   # WRB-ADJ1
-  mutate(wrb_adj1 = ifelse(is.na(wrb_adj1),
+  mutate(wrb_adj1 = ifelse(wrb_adj1 %in% c("13_12987", "13_22447", "13_17887",
+                                           "13_17841", "13_17526"),
                            "dy",
                            .data$wrb_adj1)) %>%
-  left_join(legend_wrb_adj1 %>%
-              rename(wrb_qualifier_1 = qualifier_1),
-            by = join_by("wrb_adj1" == "WRB.ADJ1")) %>%
   # WRB-FULL
   mutate(wrb_full = case_when(
     plot_id %in% c("13_12987", "13_22447") ~ "PZha",
     plot_id == "13_17887" ~ "CMdy",
     plot_id %in% c("13_17841", "13_17526") ~ "LPdy",
     TRUE ~ wrb_full)) %>%
-  left_join(legend_wrb_full %>%
-              rename(wrb_full_class = wrb_full),
-            by = join_by("wrb_full" == "WRB.FULL")) %>%
   # FAO90-FULL
   mutate(fao90_full = case_when(
     plot_id %in% c("13_12987", "13_22447") ~ "PZh",
     plot_id == "13_17887" ~ "CMd",
     plot_id %in% c("13_17841", "13_17526") ~ "LPd",
-    TRUE ~ fao90_full)) %>%
+    TRUE ~ fao90_full))
+
+
+
+
+
+
+## 3.2. Plots on a water body ----
+
+s1_wrb_gaps <- s1_wrb %>%
+  filter(wrb_lev1 == "3" |
+           wrb_adj1 == "3" |
+           wrb_full == "3") %>%
+  as_sf
+
+# Gaps for:
+# - one Spanish plot: 11_979
+#   Reasonable to take the WRB nearby.
+
+
+# WRB-LEV1: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_wrb_lev1, xlim = c(2.9E6, 3E6), ylim = c(2E6, 2.1E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+# WRB-ADJ1: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_wrb_adj1, xlim = c(2.9E6, 3E6), ylim = c(2E6, 2.1E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+# WRB-FULL: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_wrb_full, xlim = c(2.9E6, 3E6), ylim = c(2E6, 2.1E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+
+
+# FAO90-FULL: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_fao90_full,  xlim = c(2.9E6, 3E6), ylim = c(2E6, 2.1E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+
+
+
+
+
+# The class can be filled easily based on the map
+
+s1_wrb <- s1_wrb %>%
+  # WRB-LEV1
+  mutate(wrb_lev1 = case_when(
+    plot_id == "11_979" ~ "RG",
+    TRUE ~ wrb_lev1)) %>%
+  # WRB-ADJ1
+  mutate(wrb_adj1 = case_when(
+    plot_id == "11_979" ~ "dy",
+    TRUE ~ wrb_adj1)) %>%
+  # WRB-FULL
+  mutate(wrb_full = case_when(
+    plot_id == "11_979" ~ "RG",
+    TRUE ~ wrb_full)) %>%
+  # FAO90-FULL
+  mutate(fao90_full = case_when(
+    plot_id == "11_979" ~ "RGd",
+    TRUE ~ fao90_full))
+
+
+
+
+
+
+## 3.3. Plots on a rock outcrop ----
+
+s1_wrb_gaps <- s1_wrb %>%
+  filter(wrb_lev1 == "6" |
+           wrb_adj1 == "6" |
+           wrb_full == "6") %>%
+  as_sf
+
+# Gaps for:
+# - one Swedish plot: 13_10534
+#   Reasonable to take the WRB nearby.
+
+
+# WRB-LEV1: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_wrb_lev1, xlim = c(4.4E6, 4.6E6), ylim = c(4.4E6, 4.6E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+# WRB-ADJ1: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_wrb_adj1, xlim = c(4.4E6, 4.6E6), ylim = c(4.4E6, 4.6E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+# WRB-FULL: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_wrb_full, xlim = c(4.4E6, 4.6E6), ylim = c(4.4E6, 4.6E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+
+
+# FAO90-FULL: Make a map to explore the plot
+
+dev.new()
+
+# Plot the raster with focus on the plot
+terra::plot(soil_fao90_full, xlim = c(4.4E6, 4.6E6), ylim = c(4.4E6, 4.6E6))
+
+# Add points on top of the raster
+terra::points(terra::vect(s1_wrb_gaps), col = "red", pch = 16, add = TRUE)
+
+# Add labels based on the plot_id column
+terra::text(terra::vect(s1_wrb_gaps),
+            labels = s1_wrb_gaps$plot_id, pos = 1, col = "red", cex = 0.8)
+
+
+
+
+
+
+
+
+# The class can be filled easily based on the map
+
+s1_wrb <- s1_wrb %>%
+  # WRB-LEV1
+  mutate(wrb_lev1 = case_when(
+    plot_id == "13_10534" ~ "PZ",
+    TRUE ~ wrb_lev1)) %>%
+  # WRB-ADJ1
+  mutate(wrb_adj1 = case_when(
+    plot_id == "13_10534" ~ "ha",
+    TRUE ~ wrb_adj1)) %>%
+  # WRB-FULL
+  mutate(wrb_full = case_when(
+    plot_id == "13_10534" ~ "PZha",
+    TRUE ~ wrb_full)) %>%
+  # FAO90-FULL
+  mutate(fao90_full = case_when(
+    plot_id == "13_10534" ~ "PZh",
+    TRUE ~ fao90_full))
+
+
+## 3.4. Canarian plots ----
+
+# Remaining gaps
+
+s1_wrb_gaps <- s1_wrb %>%
+  filter(is.na(wrb_lev1)) %>%
+  as_sf
+
+# The Canary islands are not covered by the European soil map. However,
+# their soil group can be derived based on the ISRIC website:
+# https://soilgrids.org/
+
+# This was done by visually comparing the maps and coordinates
+
+leaflet() %>%
+  addTiles() %>%  # OSM basemap
+  addCircleMarkers(lng = s1_wrb_gaps$longitude_dec,
+                   lat = s1_wrb_gaps$latitude_dec,
+                   label = s1_wrb_gaps$plot_id,
+                   labelOptions = labelOptions(noHide = TRUE))
+
+
+
+
+# Fill the classes based on the map
+
+s1_wrb <- s1_wrb %>%
+  # WRB-LEV1
+  mutate(wrb_lev1 = case_when(
+    plot_id == "95_2113" ~ "LV",
+    plot_id == "95_2114" ~ "LV",
+    plot_id == "95_2115" ~ "CM",
+    TRUE ~ wrb_lev1))
+
+
+
+## 3.5. Convert codes to the actual groups ----
+
+s1_wrb <- s1_wrb %>%
+  # WRB-LEV1
+  left_join(legend_wrb_lev1 %>%
+              rename(wrb_soil_group = RSG),
+            by = join_by("wrb_lev1" == "WRB.LEV1")) %>%
+  # WRB-ADJ1
+  left_join(legend_wrb_adj1 %>%
+              rename(wrb_qualifier_1 = qualifier_1),
+            by = join_by("wrb_adj1" == "WRB.ADJ1")) %>%
+  # WRB-FULL
+  left_join(legend_wrb_full %>%
+              rename(wrb_full_class = wrb_full),
+            by = join_by("wrb_full" == "WRB.FULL")) %>%
+  # FAO90-FULL
   left_join(legend_fao90_full %>%
               rename(fao90_full_class = fao90_full),
             by = join_by("fao90_full" == "FAO90.FULL")) %>%
@@ -296,7 +568,8 @@ s1_wrb <- s1_wrb %>%
 # 4. Export data ----
 
 write.table(s1_wrb,
-            file = "./data/additional_data/S1_PRF_missing_FAO_WRB_suppl.csv",
+            file =
+              "./data/additional_data/S1_PRF_231204_missing_WRB_qual_suppl.csv",
             row.names = FALSE,
             na = "",
             sep = ";",
