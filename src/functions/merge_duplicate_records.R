@@ -40,9 +40,12 @@ merge_duplicate_records <- function(survey_form,
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
-  
+
+  cat(" \nMerge duplicate records 'so_som'\n")
+
+
   # Retrieve the survey_form data ----
-  
+
   if (is.null(data_frame)) {
     df <- get_env(survey_form)
   } else {
@@ -61,6 +64,8 @@ nrow_initial <- nrow(df)
 # be grouped in two MAN-OPT pairs. This line updates unique_layer_repetition
 # based on this information:
 
+if (survey_form == "so_som") {
+
 ind_latvia <- which(df$unique_layer_repetition == "64_2004_5_NA_1")
 
 if (length(which(duplicated(df$unique_layer_repetition[ind_latvia]))) == 3) {
@@ -76,9 +81,11 @@ if (length(which(duplicated(df$unique_layer_repetition[ind_latvia]))) == 3) {
   df$unique_layer_repetition[ind_latvia[ind_latvia_001]] <- "64_2004_5_001_1"
   df$unique_layer_repetition[ind_latvia[ind_latvia_002]] <- "64_2004_5_002_1"
   }
+}
 
 
 # Evaluate for each of the duplicated unique_layer_repetition ----
+
 
 # List of unique_layer_repetition for which the combination of
 # unique_layer_repetition and the layer limits are duplicated
@@ -91,6 +98,9 @@ vec_dupl <- unique(df$unique_layer_repetition[which(duplicated(
   paste0(df$unique_layer_repetition, "_",
          df$layer_limit_inferior, "_",
          df$layer_limit_superior)))])
+
+
+
 
 # Set up a progress bar to track processing
 
@@ -107,7 +117,7 @@ progress_bar <- txtProgressBar(min = 0,
   # if conflicting values: take value for origin "MAN"
 
 list_man <- c("country", "partner_short", "partner", "survey_year",
-              "code_country", "code_plot", "code_layer", 
+              "code_country", "code_plot", "code_layer",
               "code_layer_original", "repetition",
               "layer_limit_superior", "layer_limit_inferior",
               "date_labor_analyses", "origin", "code_soil_horizon_sample_c",
@@ -127,7 +137,13 @@ list_man <- c("country", "partner_short", "partner", "survey_year",
               "tot_al", "tot_ca", "tot_fe", "tot_k", "tot_mg",
               "tot_mn", "tot_na", "rea_al", "rea_fe", "exch_bce",
               "exch_ace", "exch_cec", "elec_cond", "ni", "base_saturation",
-              "p_ox", "bulk_density", "partner_code_orig", "code_plot_orig")
+              "p_ox", "bulk_density", "partner_code_orig", "code_plot_orig",
+              "bulk_density_source", "organic_layer_weight_source",
+              "organic_carbon_total_source", "n_total_source",
+              "code_layer_orig", "part_size_clay_orig", "part_size_silt_orig",
+              "part_size_sand_orig", "bulk_density_orig",
+              "coarse_fragment_vol_orig", "organic_layer_weight_orig",
+              "organic_carbon_total_orig", "n_total_orig")
 
   # Rule:
   # if both values are the same: take the unique value,
@@ -180,7 +196,7 @@ for (i in seq_along(vec_dupl)) {
 
   # Add a column for the MAN records which will indicate later on whether a row
   # has been merged in the history
-  
+
   df$origin_merged[ind_man] <- TRUE
 
   # Indicate if row has to be removed
@@ -246,7 +262,7 @@ for (i in seq_along(vec_dupl)) {
   if (!isTRUE(getOption("knitr.in.progress"))) {
   setTxtProgressBar(progress_bar, i)
   }
-}
+} # End of "for" loop
 
 if (!isTRUE(getOption("knitr.in.progress"))) {
 close(progress_bar)
@@ -275,7 +291,7 @@ if (identical(which(!is.na(df$to_remove)), integer(0))) {
            nrow_final, " rows (range survey years: ",
            min(years), " - ", max(years), ")")
 
-  
+
   # If the duplicate rows have to be removed
   if (merge == TRUE) {
 
@@ -289,7 +305,7 @@ if (identical(which(!is.na(df$to_remove)), integer(0))) {
     } else {
       return(df)
     }
-    
+
     # Print the following:
     cat(paste0("Number of rows was reduced by ",
                rel_reduction,
