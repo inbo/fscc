@@ -83,6 +83,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
   cat(paste0(" \nSolve inconsistencies in derived variables in '",
              survey_form, "'\n"))
 
+
+
   # Specify date on which 'layer 0' data were downloaded ----
   # from ICP Forests website
 
@@ -102,6 +104,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
   inconsistency_catalogue <-
     read.csv("./data/additional_data/inconsistency_catalogue.csv", sep = ";")
 
+
+
   # Retrieve the survey_form data
 
   if (is.null(data_frame)) {
@@ -111,160 +115,131 @@ get_derived_variable_inconsistencies <- function(survey_form,
   }
 
 
+  # Retrieve a median value of bulk densities in an organic matrix across
+  # all data sources, in order to gap-fill organic_layer_weights for which
+  # layer limits are known.
+
+  source("./src/functions/get_bulk_density_stats.R")
+  bd_org_median <- get_bulk_density_stats()
+
+  cat(paste0(" \nMedian bulk density of organic layers used for ",
+             "the estimation of organic_layer_weight: ",
+             bd_org_median, " kg m-3\n"))
+
+
+
   # "som" survey forms ----
 
   if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-  # Add new variables ----
+    # Add new variables ----
 
-  df$layer_thickness <- NA
-  df$bulk_density_layer_weight <- NA
-  df$sum_texture <- NA
-  df$c_to_n_ratio <- NA
-  df$sum_base_cations <- NA # Ca, Mg, K, Na
-  df$sum_acid_cations <- NA # Al, Fe, Mn, free H+
-
-  for (i in seq_len(nrow(df)))  {
-
-    # layer_thickness
-
-    if (!is.na(df$layer_limit_superior[i]) &&
-       !is.na(df$layer_limit_inferior[i]) &&
-       (df$layer_limit_superior[i] != df$layer_limit_inferior[i]))  {
-
-      limits <- c(df$layer_limit_superior[i], df$layer_limit_inferior[i])
-      df$layer_thickness[i] <- max(limits) - min(limits)
-      }
-
-    # bulk_density_layer_weight
-
-    if (!is.na(df$organic_layer_weight[i]) &&
-        !is.na(df$layer_thickness[i]))  {
-
-      df$bulk_density_layer_weight[i] <-
-        df$organic_layer_weight[i] / (df$layer_thickness[i] * 1e-2) #kg m^(-3)
+    df <- df %>%
+      rowwise() %>%
+      mutate(
+        # Layer thickness
+        layer_thickness =
+               ifelse(!is.na(.data$layer_limit_superior) &
+                        !is.na(.data$layer_limit_inferior) &
+                        (.data$layer_limit_superior !=
+                           .data$layer_limit_inferior),
+                      abs(.data$layer_limit_superior -
+                            .data$layer_limit_inferior),
+                      NA_real_),
+        # C to N ratio
+        # This should be in a plausible range (1 to 100)
+        c_to_n_ratio =
+          ifelse(!is.na(.data$organic_carbon_total) &
+                   !is.na(.data$n_total) &
+                   !is.na(.data$organic_carbon_total_loq) &
+                   !is.na(.data$n_total_loq) &
+                   (.data$organic_carbon_total >=
+                      .data$organic_carbon_total_loq) &
+                   (.data$n_total >=
+                      .data$n_total_loq),
+                 round(.data$organic_carbon_total / .data$n_total, 2),
+                 NA_real_),
+        # Sum base cations
+        # This should be smaller or equal to CEC (exch_cec)
+        sum_base_cations =
+          ifelse(!is.na(.data$exch_ca) &
+                   !is.na(.data$exch_mg) &
+                   !is.na(.data$exch_k) &
+                   !is.na(.data$exch_na) &
+                   !is.na(.data$exch_ca_loq) &
+                   !is.na(.data$exch_mg_loq) &
+                   !is.na(.data$exch_k_loq) &
+                   !is.na(.data$exch_na_loq) &
+                   # If only one value is above LOQ, but this value
+                   # is significantly higher,
+                   # it could still be justifiable to calculate a sum???
+                   rowSums(cbind(.data$exch_ca, .data$exch_mg,
+                                 .data$exch_k, .data$exch_na) >
+                             cbind(.data$exch_ca_loq, .data$exch_mg_loq,
+                                   .data$exch_k_loq,
+                                   .data$exch_na_loq)) >= 2,
+                 round(.data$exch_ca + .data$exch_mg +
+                         .data$exch_k + .data$exch_na, 2),
+                 NA_real_),
+        # Sum acid cations
+        # This should approximate the exchangeable acidity (exch_acidiy)
+        sum_acid_cations =
+          ifelse(!is.na(.data$exch_al) &
+                   !is.na(.data$exch_fe) &
+                   !is.na(.data$exch_mn) &
+                   !is.na(.data$free_h) &
+                   !is.na(.data$exch_al_loq) &
+                   !is.na(.data$exch_fe_loq) &
+                   !is.na(.data$exch_mn_loq) &
+                   !is.na(.data$free_h_loq) &
+                   # If only one value is above LOQ, but this value
+                   # is significantly higher,
+                   # it could still be justifiable to calculate a sum???
+                   rowSums(cbind(.data$exch_al, .data$exch_fe,
+                                 .data$exch_mn, .data$free_h) >
+                             cbind(.data$exch_al_loq, .data$exch_fe_loq,
+                                   .data$exch_mn_loq,
+                                   .data$free_h_loq)) >= 2,
+                 round(.data$exch_al + .data$exch_fe +
+                         .data$exch_mn + .data$free_h, 2),
+                 NA_real_),
+        # Bulk density based on layer weight
         # to compare with plausibility range of bulk density
-    }
+        bulk_density_layer_weight =
+          ifelse(!is.na(.data$organic_layer_weight) &
+                   (.data$organic_layer_weight != -1) &
+                   !is.na(.data$layer_thickness) &
+                   (.data$layer_type %in% c("forest_floor", "peat")),
+                 # kg m-3
+                 round(.data$organic_layer_weight /
+                         (.data$layer_thickness * 1e-2), 2),
+                 NA_real_),
+        # Organic layer weight based on bulk density
+        organic_layer_weight_bd =
+          ifelse(!is.na(.data$bulk_density) &
+                   !is.na(.data$layer_thickness) &
+                   (.data$layer_type %in% c("forest_floor", "peat")),
+                 # kg m-2
+                 round(.data$bulk_density * (.data$layer_thickness * 1e-2), 3),
+                 NA_real_),
+        # Organic layer weight thickness based on
+        # a median value for bulk density
+        organic_layer_weight_bd_median =
+          ifelse(!is.na(.data$layer_thickness) &
+                   (.data$layer_type %in% c("forest_floor", "peat")),
+                 # kg m-2
+                 round(bd_org_median * (.data$layer_thickness * 1e-2), 3),
+                 NA_real_),
+        # Sum texture
+        # This should be between 97 and 103 %
+        sum_texture =
+          ifelse(!is.na(.data$part_size_clay) &
+                   !is.na(.data$part_size_silt) &
+                   !is.na(.data$part_size_clay),
+                 .data$part_size_clay + .data$part_size_silt +
+                   .data$part_size_sand,
+                 NA_real_))
 
-    # sum_texture
-
-    if (!is.na(df$part_size_clay[i]) &&
-        !is.na(df$part_size_silt[i]) &&
-        !is.na(df$part_size_sand[i])) {
-
-      # LOQ = 1 %
-      # if (df$part_size_clay[i] == -1) {
-      #     clay <- 0.5
-      # } else {
-      #     clay <- df$part_size_clay[i]
-      # }
-      # if (df$part_size_silt[i] == -1) {
-      #     silt <- 0.5
-      # } else {
-      #     silt <- df$part_size_silt[i]
-      # }
-      # if (df$part_size_sand[i] == -1) {
-      #     sand <- 0.5
-      # } else {
-      #     sand <- df$part_size_sand[i]
-      # }
-
-      df$sum_texture[i] <- df$part_size_clay[i] +
-        df$part_size_silt[i] +
-        df$part_size_sand[i]
-      # This should be between 97 and 103 %
-  }
-
-    # c_to_n_ratio
-
-    if (!is.na(df$organic_carbon_total[i]) &&
-        !is.na(df$n_total[i]) &&
-        !is.na(df$organic_carbon_total_loq[i]) &&
-        !is.na(df$n_total_loq[i]) &&
-        (df$organic_carbon_total[i] >= df$organic_carbon_total_loq[i]) &&
-        (df$n_total[i] >= df$n_total_loq[i])) {
-
-      df$c_to_n_ratio[i] <- (df$organic_carbon_total[i]) / (df$n_total[i])
-      # This should be in a plausible range (1 to 100)
-  }
-
-    # sum_base_cations
-
-    # TO DO: update LOQ implementation
-
-    if (!is.na(df$exch_ca[i]) &&
-        !is.na(df$exch_mg[i]) &&
-        !is.na(df$exch_k[i]) &&
-        !is.na(df$exch_na[i]) &&
-        (sum(c(df$exch_ca[i], df$exch_mg[i],
-               df$exch_k[i], df$exch_na[i]) != (-1)) > 1)) {
-
-      # LOQ = 0.03 cmol+ kg-1
-      if (df$exch_ca[i] == -1) {
-          exch_ca <- 0.015
-      } else {
-          exch_ca <- df$exch_ca[i]
-      }
-      if (df$exch_mg[i] == -1) {
-          exch_mg <- 0.015
-      } else {
-          exch_mg <- df$exch_mg[i]
-      }
-      if (df$exch_k[i] == -1) {
-          exch_k <- 0.015
-      } else {
-          exch_k <- df$exch_k[i]
-      }
-      if (df$exch_na[i] == -1) {
-          exch_na <- 0.015
-      } else {
-          exch_na <- df$exch_na[i]
-      }
-
-      df$sum_base_cations[i] <- exch_ca + exch_mg + exch_k + exch_na
-      # This should be smaller or equal to CEC (exch_cec)
-    }
-
-    # sum_acid_cations
-
-    # TO DO: update LOQ implementation
-
-    if (!is.na(df$exch_al[i]) &&
-        !is.na(df$exch_fe[i]) &&
-        !is.na(df$exch_mn[i]) &&
-        !is.na(df$free_h[i]) &&
-        (sum(c(df$exch_al[i], df$exch_fe[i],
-               df$exch_mn[i], df$free_h[i]) != (-1)) > 1)) {
-
-      # LOQ = 0.02 cmol+ kg-1
-      if (df$exch_al[i] == -1) {
-        exch_al <- 0.01
-      } else {
-        exch_al <- df$exch_al[i]
-      }
-      if (df$exch_fe[i] == -1) {
-        exch_fe <- 0.01
-      } else {
-        exch_fe <- df$exch_fe[i]
-      }
-      if (df$exch_mn[i] == -1) {
-        exch_mn <- 0.01
-      } else {
-        exch_mn <- df$exch_mn[i]
-      }
-
-      # LOQ = 0.1 cmol+ kg-1
-      if (df$free_h[i] == -1) {
-        free_h <- 0.05
-      } else {
-        free_h <- df$free_h[i]
-      }
-
-      df$sum_acid_cations[i] <- exch_al + exch_fe + exch_mn + free_h
-      # This should approximate the exchangeable acidity (exch_acidiy)
-
-    }
-  }
   }
 
 
@@ -272,96 +247,128 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
   if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
 
+    # Import average coarse fragments vol% per volumetric class
+
+    d_soil_coarse_fragments <-
+      read.csv2("./data/additional_data/d_soil_coarse_fragments.csv") %>%
+      select(code, coarse_fragment_vol_avg)
+
+
     # Add new variables ----
 
-    df$sum_texture <- NA
-    df$c_to_n_ratio <- NA
-    df$sum_base_cations <- NA # Ca, Mg, K, Na
+    df <- df %>%
+      rowwise() %>%
+      mutate(
+        # Layer thickness
+        layer_thickness =
+          ifelse(!is.na(.data$horizon_limit_up) &
+                   !is.na(.data$horizon_limit_low) &
+                   (.data$horizon_limit_up !=
+                      .data$horizon_limit_low),
+                 abs(.data$horizon_limit_up -
+                       .data$horizon_limit_low),
+                 NA_real_),
+        # C to N ratio
+        # This should be in a plausible range (1 to 100)
+        c_to_n_ratio =
+          ifelse(!is.na(.data$horizon_c_organic_total) &
+                   !is.na(.data$horizon_n_total) &
+                   !is.na(.data$horizon_c_organic_total_loq) &
+                   !is.na(.data$horizon_n_total_loq) &
+                   (.data$horizon_c_organic_total >=
+                      .data$horizon_c_organic_total_loq) &
+                   (.data$horizon_n_total >=
+                      .data$horizon_n_total_loq),
+                 round(.data$horizon_c_organic_total / .data$horizon_n_total,
+                       2),
+                 NA_real_),
+        # Sum base cations
+        # This should be smaller or equal to CEC (exch_cec)
+        sum_base_cations =
+          ifelse(!is.na(.data$horizon_exch_ca) &
+                   !is.na(.data$horizon_exch_mg) &
+                   !is.na(.data$horizon_exch_k) &
+                   !is.na(.data$horizon_exch_na) &
+                   !is.na(.data$horizon_exch_ca_loq) &
+                   !is.na(.data$horizon_exch_mg_loq) &
+                   !is.na(.data$horizon_exch_k_loq) &
+                   !is.na(.data$horizon_exch_na_loq) &
+                   # If only one value is above LOQ, but this value
+                   # is significantly higher,
+                   # it could still be justifiable to calculate a sum???
+                   rowSums(cbind(.data$horizon_exch_ca,
+                                 .data$horizon_exch_mg,
+                                 .data$horizon_exch_k,
+                                 .data$horizon_exch_na) >
+                             cbind(.data$horizon_exch_ca_loq,
+                                   .data$horizon_exch_mg_loq,
+                                   .data$horizon_exch_k_loq,
+                                   .data$horizon_exch_na_loq)) >= 2,
+                 round(.data$horizon_exch_ca + .data$horizon_exch_mg +
+                         .data$horizon_exch_k + .data$horizon_exch_na, 2),
+                 NA_real_),
+        # Bulk density merged
+        bulk_density_harm =
+          coalesce(.data$horizon_bulk_dens_measure,
+                   .data$horizon_bulk_dens_est),
+        # Organic layer weight based on bulk density
+        organic_layer_weight_bd =
+          ifelse(!is.na(.data$bulk_density_harm) &
+                   !is.na(.data$layer_thickness) &
+                   (.data$layer_type %in% c("forest_floor", "peat")),
+                 # kg m-2
+                 round(.data$bulk_density_harm *
+                         (.data$layer_thickness * 1e-2), 3),
+                 NA_real_),
+        # Organic layer weight thickness based on thickness and
+        # a median value for bulk density
+        organic_layer_weight_bd_median =
+          ifelse(!is.na(.data$layer_thickness) &
+                   (.data$layer_type %in% c("forest_floor", "peat")),
+                 # kg m-2
+                 round(bd_org_median * (.data$layer_thickness * 1e-2), 3),
+                 NA_real_),
+        # Sum texture
+        sum_texture =
+          ifelse(!is.na(.data$horizon_clay) &
+                   !is.na(.data$horizon_silt) &
+                   !is.na(.data$horizon_sand),
+                 .data$horizon_clay + .data$horizon_silt +
+                   .data$horizon_sand,
+                 NA_real_),
+        # Coarse fragments: vol% converted from weight%
+        # ---
+        # Convert weight percentages to volumetric percentages:
+        # Imagine: 1 m³ of fine earth contains
+        # e.g. 1300 kg fine earth (bulk density).
+        # Then, imagine the weight percentage of coarse fragments
+        # from that soil is 11 %.
+        # That means that there is 1300 kg * 11/89 = 160.7 kg of coarse
+        # fragments for 1 m³ of fine earth in this soil.
+        # Imagine the coarse fragments have a particle density of 2650 kg
+        # per m³.
+        # Then, we can calculate that this 160.7 kg of coarse fragments
+        # occupies 160.7/2650 = 0.061 m³.
+        # As such, the vol % of coarse fragments will be 0.061 / (1 + 0.061)
+        coarse_fragment_aid =
+          ifelse(!is.na(bulk_density_harm) & !is.na(horizon_coarse_weight),
+                 (.data$bulk_density_harm *
+                    (.data$horizon_coarse_weight /
+                       (100 - .data$horizon_coarse_weight))) / 2650,
+                 NA),
+        coarse_fragment_vol_converted =
+          ifelse(!is.na(.data$coarse_fragment_aid),
+                 round(as.numeric((.data$coarse_fragment_aid /
+                               (1 + .data$coarse_fragment_aid)) * 100), 3),
+                 NA)) %>%
+      # Coarse fragments: average volume of class
+      # Convert volumetric coarse fragment codes to actual average vol %
+      left_join(d_soil_coarse_fragments,
+                by = join_by(code_horizon_coarse_vol == code)) %>%
+      select(-bulk_density_harm,
+             -coarse_fragment_aid)
 
-    for (i in 1:nrow(df)) {
-
-      # sum_texture
-
-      if (!is.na(df$horizon_clay[i]) &
-          !is.na(df$horizon_silt[i]) &
-          !is.na(df$horizon_sand[i])) {
-
-        # LOQ = 1 %
-        # if (df$horizon_clay[i] == -1) {
-        #   clay <- 0.5
-        # } else {
-        #     clay <- df$horizon_clay[i]
-        # }
-        # if (df$horizon_silt[i] == -1) {
-        #   silt <- 0.5
-        # } else {
-        #     silt <- df$horizon_silt[i]
-        # }
-        # if (df$horizon_sand[i] == -1) {
-        #   sand <- 0.5
-        # } else {
-        #     sand <- df$horizon_sand[i]
-        # }
-
-        df$sum_texture[i] <- df$horizon_clay[i] +
-          df$horizon_silt[i] +
-          df$horizon_sand[i]
-        }
-
-      # c_to_n_ratio
-
-      if (!is.na(df$horizon_c_organic_total[i]) &&
-          !is.na(df$horizon_n_total[i]) &&
-          !is.na(df$horizon_c_organic_total_loq[i]) &&
-          !is.na(df$horizon_n_total_loq[i]) &&
-          (df$horizon_c_organic_total[i] >=
-             df$horizon_c_organic_total_loq[i]) &&
-          (df$horizon_n_total[i] >=
-            df$horizon_n_total_loq[i])) {
-
-        df$c_to_n_ratio[i] <-
-          (df$horizon_c_organic_total[i]) / (df$horizon_n_total[i])}
-
-      # sum_base_cations
-
-      # TO DO: update LOQ implementation
-
-      if (!is.na(df$horizon_exch_ca[i]) &&
-          !is.na(df$horizon_exch_mg[i]) &&
-          !is.na(df$horizon_exch_k[i]) &&
-          !is.na(df$horizon_exch_na[i]) &&
-          (sum(c(df$horizon_exch_ca[i], df$horizon_exch_mg[i],
-                 df$horizon_exch_k[i], df$horizon_exch_na[i]) != (-1)) > 1)) {
-
-        # LOQ = 0.03 cmol+ kg-1
-
-        if (df$horizon_exch_ca[i] == -1) {
-          exch_ca <- 0.015
-          } else {
-          exch_ca <- df$horizon_exch_ca[i]
-          }
-        if (df$horizon_exch_mg[i] == -1) {
-          exch_mg <- 0.015
-          } else {
-          exch_mg <- df$horizon_exch_mg[i]
-          }
-        if (df$horizon_exch_k[i] == -1) {
-          exch_k <- 0.015
-          } else {
-          exch_k <- df$horizon_exch_k[i]
-          }
-        if (df$horizon_exch_na[i] == -1) {
-          exch_na <- 0.015
-          } else {
-          exch_na <- df$horizon_exch_na[i]
-          }
-
-        df$sum_base_cations[i] <- exch_ca + exch_mg + exch_k + exch_na
-
-        }
     }
-    }
-
 
 
 
@@ -415,8 +422,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
       if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-        if ("code_layer_original" %in% names(df)) {
-          ind_layer_horizon <- as.character(df$code_layer_original)
+        if ("code_layer_orig" %in% names(df)) {
+          ind_layer_horizon <- as.character(df$code_layer_orig)
         } else {
           ind_layer_horizon <- as.character(df$code_layer)}
           ind_repetition_profile_pit_id <- df$repetition
@@ -530,8 +537,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
       if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-        if ("code_layer_original" %in% names(df)) {
-          ind_layer_horizon <- as.character(df$code_layer_original)
+        if ("code_layer_orig" %in% names(df)) {
+          ind_layer_horizon <- as.character(df$code_layer_orig)
         } else {
             ind_layer_horizon <- as.character(df$code_layer)
         }
@@ -656,8 +663,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
       if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
-        if ("code_layer_original" %in% names(df)) {
-            ind_layer_horizon <- as.character(df$code_layer_original)
+        if ("code_layer_orig" %in% names(df)) {
+            ind_layer_horizon <- as.character(df$code_layer_orig)
           } else {
             ind_layer_horizon <- as.character(df$code_layer)
           }
@@ -778,8 +785,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
       if (unlist(strsplit(survey_form, "_"))[2] == "som") {
       # Ca, Mg, K, Na
 
-        if ("code_layer_original" %in% names(df)) {
-            ind_layer_horizon <- as.character(df$code_layer_original)
+        if ("code_layer_orig" %in% names(df)) {
+            ind_layer_horizon <- as.character(df$code_layer_orig)
           } else {
             ind_layer_horizon <- as.character(df$code_layer)
           }
@@ -992,8 +999,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
       if (unlist(strsplit(survey_form, "_"))[2] == "som") {
       # Al, Fe, Mn, free H+
 
-        if ("code_layer_original" %in% names(df)) {
-            ind_layer_horizon <- as.character(df$code_layer_original)
+        if ("code_layer_orig" %in% names(df)) {
+            ind_layer_horizon <- as.character(df$code_layer_orig)
         } else {
             ind_layer_horizon <- as.character(df$code_layer)}
             ind_repetition_profile_pit_id <- df$repetition
@@ -1130,7 +1137,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
       }
     }
-    }
+  }
+
+
+  # Remove redundant variables
+
+  df <- df %>%
+    select(-sum_texture)
 
   # Save the survey form and inconsistency list ----
   # for the given survey
