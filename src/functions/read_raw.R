@@ -366,89 +366,9 @@ for (i in seq_along(survey_forms_extended)) {
 
 
 
-# Create data_availability table ----
-
-  data_availability_long <- NULL
-
-  for (i in seq_len(length(survey_forms) + 1)) {
-
-    if (i <= length(survey_forms)) {
-    # Read the data table ----
-    df <- read.csv(paste0(subdir, code_survey, "_",
-                          list_data_tables[[which(names(list_data_tables) ==
-                                                    code_survey)]][i], ".csv"),
-                   sep = ";")
-    }
-
-    if (i == length(survey_forms) + 1 &&
-        !code_survey %in% c("si", "y1")) {
-
-      if (survey_level == "LI") {
-
-        df <-
-          read.csv(paste0(dir, "y1/y1_pl1.csv"),
-                   sep = ";")
-
-      }
-
-      if (survey_level == "LII") {
-
-        df <-
-          read.csv(paste0(dir, "si/si_plt.csv"),
-                   sep = ";")
-
-      }
-
-    }
-
-    if ((i <= length(survey_forms)) ||
-        (i == length(survey_forms) + 1 &&
-        !code_survey %in% c("si", "y1"))) {
 
 
-    if (!"survey_year" %in% colnames(df) &&
-        "last_year" %in% colnames(df)) {
-      names(df)[which(names(df) == "last_year")] <- "survey_year"
-    }
-
-    if (!"survey_year" %in% colnames(df) &&
-        !"last_year" %in% colnames(df)) {
-      df$survey_year <- NA
-    }
-
-    data_availability_long <- bind_rows(data_availability_long,
-                                        df %>%
-                                          select(partner_code,
-                                                 code_country,
-                                                 code_plot,
-                                                 survey_year))
-    }
-  }
-
-  data_availability <- data_availability_long %>%
-    mutate(code_plot = ifelse(code_country == 4 &
-                                as.numeric(code_plot) > 4000000,
-                              as.numeric(code_plot - 4000000),
-                              .data$code_plot)) %>%
-    mutate(plot_id = paste0(code_country, "_",
-                            code_plot)) %>%
-    distinct(plot_id, .keep_all = TRUE) %>%
-    select(-survey_year) %>%
-    mutate(code_country = as.integer(code_country)) %>%
-    left_join(d_country[, c("code", "lib_country")],
-              by = join_by(code_country == code)) %>%
-    rename(country = lib_country) %>%
-    mutate(partner_code = as.integer(partner_code)) %>%
-    left_join(d_partner[, c("code", "desc_short", "description")],
-              by = join_by(partner_code == code)) %>%
-    rename(partner_short = desc_short) %>%
-    rename(partner = description) %>%
-    mutate(country = as.character(country)) %>%
-    mutate(partner_short = as.character(partner_short)) %>%
-    mutate(partner = as.character(partner))
-
-
-
+# Evaluate for each of the survey forms ----
 
 
 for (i in seq_along(survey_forms)) {
@@ -474,33 +394,32 @@ for (i in seq_along(survey_forms)) {
                               as.numeric(code_plot - 4000000),
                               .data$code_plot))
 
-  # Convert columns that should be factors to factors ----
-  vec_as_factor <- which(names(df) %in%
-                         c("code_layer", "code_texture_class", "origin",
-                           "horizon_subordinate",
-                           "colour_moist", "colour_dry",
-                           "code_horizon_texture_class",
-                           "code_wrb_soil_group",
-                           "code_wrb_qualifier_1",
-                           "code_wrb_spezifier_1", "code_wrb_qualifier_2",
-                           "code_wrb_spezifier_2", "code_wrb_qualifier_3",
-                           "code_wrb_spezifier_3", "code_wrb_qualifier_4",
-                           "code_wrb_spezifier_4", "code_wrb_qualifier_5",
-                           "code_wrb_spezifier_5", "code_wrb_qualifier_6",
-                           "code_wrb_spezifier_6", "classification_full_name",
-                           "diagnostic_1", "diagnostic_2", "diagnostic_3",
-                           "diagnostic_4", "diagnostic_5", "diagnostic_6",
-                           "diagnostic_7", "diagnostic_8", "diagnostic_9",
-                           "diagnostic_10", "code_wrb_publication",
-                           "code_parameter", "code_pretreatment",
-                           "code_sample_prep", "code_determination",
-                           "laboratory_id", "sw_id",
-                           "code_depth_layer", "pfh_id", "code_event_type",
-                           "product_material"))
-
-  for (j in vec_as_factor) {
-    df[, j] <- as.factor(df[, j])
-  }
+  # # Convert columns that should be factors to factors ----
+  # vec_as_factor <- which(names(df) %in%
+  #                        c("code_layer", "code_texture_class", "origin",
+  #                          "horizon_subordinate",
+  #                          "colour_moist", "colour_dry",
+  #                          "code_horizon_texture_class",
+  #                          "code_wrb_soil_group",
+  #                          "code_wrb_qualifier_1",
+  #                          "code_wrb_spezifier_1", "code_wrb_qualifier_2",
+  #                          "code_wrb_spezifier_2", "code_wrb_qualifier_3",
+  #                          "code_wrb_spezifier_3", "code_wrb_qualifier_4",
+  #                          "code_wrb_spezifier_4", "code_wrb_qualifier_5",
+  #                          "code_wrb_spezifier_5", "code_wrb_qualifier_6",
+  #                          "code_wrb_spezifier_6", "classification_full_name",
+  #                          "diagnostic_1", "diagnostic_2", "diagnostic_3",
+  #                          "diagnostic_4", "diagnostic_5", "diagnostic_6",
+  #                          "diagnostic_7", "diagnostic_8", "diagnostic_9",
+  #                          "diagnostic_10", "code_wrb_publication",
+  #                          "code_parameter", "code_pretreatment",
+  #                          "code_sample_prep", "code_determination",
+  #                          "laboratory_id", "code_event_type",
+  #                          "product_material"))
+  #
+  # for (j in vec_as_factor) {
+  #   df[, j] <- as.factor(df[, j])
+  # }
 
 
 
@@ -612,12 +531,26 @@ for (i in seq_along(survey_forms)) {
                                        "M92", "M94", "Mxx", "M27", "M39",
                                        "M42"))
 
-    df$layer_type <- df$code_layer
-    levels(df$layer_type) <- layer_type_levels
+    df <- df %>%
+      mutate(layer_type = case_when(
+        code_layer %in% layer_type_levels$peat ~ "peat",
+        code_layer %in% layer_type_levels$forest_floor ~ "forest_floor",
+        code_layer %in% layer_type_levels$mineral ~ "mineral",
+        TRUE ~ NA_character_
+      ))
 
-    df$layer_type <- as.character(df$layer_type)
-    df$code_layer <- as.character(df$code_layer)
+    if (code_survey == "so") {
 
+    # Special case: Latvian forest floor layers of plot_id 64_5
+
+    df <- df %>%
+      mutate(layer_type = ifelse(code_country == 64 &
+                                   code_plot == 5 &
+                                   (is.na(code_layer) |
+                                      code_layer == ""),
+                                 "forest_floor",
+                                 layer_type))
+    }
     }
 
   # For s1_pfh and so_pfh: add column "layer type" ----
@@ -643,6 +576,24 @@ for (i in seq_along(survey_forms)) {
         }
 
      df$layer_type <- as.character(df$layer_type)
+
+     if (code_survey == "so") {
+
+       # Special case: Serbian row without horizon_master
+
+       df <- df %>%
+         mutate(layer_type = ifelse(code_country == 67 &
+                                      code_plot == 2 &
+                                      survey_year == 2010 &
+                                      (is.na(horizon_master) |
+                                         horizon_master == ""),
+                                    "forest_floor",
+                                    layer_type))
+
+
+     }
+
+
      }
 
 
@@ -666,7 +617,6 @@ for (i in seq_along(survey_forms)) {
     }
     }
 
-  df$layer_type <- as.factor(df$layer_type)
   }
 
 
@@ -752,6 +702,22 @@ for (i in seq_along(survey_forms)) {
     df$repetition[which(is.na(df$repetition) | df$repetition == -9999)] <- 1
     }
 
+
+  # if layer limit is -9999: replace by NA ----
+
+  cols_layer_limits <-
+    names(df)[which(names(df) %in%
+                      c("layer_limit_superior", "layer_limit_inferior",
+                        "horizon_limit_up", "horizon_limit_low"))]
+
+  if (!identical(cols_layer_limits,
+                 character(0))) { # if layer limits are reported in df
+
+    df <- df %>%
+      mutate(across(all_of(cols_layer_limits),
+                    ~ ifelse(. == -9999, NA, .)))
+
+  }
 
 
 
@@ -872,6 +838,40 @@ for (i in seq_along(survey_forms)) {
   }
 
 
+  # Issue with Czech plot codes
+
+  if (code_survey %in% c("s1", "y1")) {
+
+    # Based on an e-mail conversation with the Czech soil expert:
+    # 58_2255 is a mistake and should be 58_255
+    # 58_2188 is a mistake and should be 58_188
+
+    if (!"code_plot_orig" %in% names(df)) {
+      df$code_plot_orig <- df$code_plot
+    }
+
+    if (any(df$code_country == 58 & df$code_plot == 2255)) {
+
+      df <- df %>%
+        mutate(code_plot =
+                 ifelse(code_country == 58 &
+                          code_plot == 2255,
+                        255,
+                        code_plot))
+    }
+
+    if (any(df$code_country == 58 & df$code_plot == 2188)) {
+
+      df <- df %>%
+        mutate(code_plot =
+                 ifelse(code_country == 58 &
+                          code_plot == 2188,
+                        188,
+                        code_plot))
+    }
+
+  }
+
   # Issue with German non-unique plot codes LI
 
   if (code_survey %in% c("s1", "y1")) {
@@ -988,9 +988,6 @@ for (i in seq_along(survey_forms)) {
       if (renamed_repetition == TRUE) {
         names(df)[which(names(df) == "repetition")] <- "profile_pit_id"
       }
-
-      # df <- df %>%
-      #   select(-key_per_survey_form)
 
     }
   }
@@ -1113,6 +1110,62 @@ for (i in seq_along(survey_forms)) {
 
 
 
+
+  ## Add columns with "_orig" and "_source" ----
+
+  # source
+
+  columns_to_add_source <-
+    names(df)[which(names(df) %in% c("bulk_density",
+                                     "organic_carbon_total",
+                                     "n_total",
+                                     "horizon_bulk_dens_measure",
+                                   # "horizon_bulk_dens_est",
+                                     "horizon_c_organic_total",
+                                     "horizon_n_total",
+                                     "organic_layer_weight"))]
+
+  for (col in columns_to_add_source) {
+
+    source_col <- paste0(col, "_source")
+
+    if (!source_col %in% names(df)) {
+      df[[source_col]] <- ifelse(!is.na(df[[col]]),
+                                 unlist(strsplit(survey_forms[i], "_"))[2],
+                                 NA)
+    }
+  }
+
+  # orig
+
+  columns_to_add_orig <-
+    names(df)[which(names(df) %in% c("code_plot",
+                                     "code_layer",
+                                     "horizon_master",
+                                     "bulk_density",
+                                     "organic_carbon_total",
+                                     "n_total",
+                                     "horizon_bulk_dens_measure",
+                                     # "horizon_bulk_dens_est",
+                                     "horizon_c_organic_total",
+                                     "horizon_n_total",
+                                     "organic_layer_weight",
+                                     "coarse_fragment_vol",
+                                     "part_size_clay",
+                                     "part_size_silt",
+                                     "part_size_sand"))]
+
+  for (col in columns_to_add_orig) {
+    orig_col <- paste0(col, "_orig")
+    if (!orig_col %in% names(df)) {
+      df[[orig_col]] <- df[[col]]
+    }
+  }
+
+
+
+
+
   # Save the survey forms to the global environment if permitted ----
 
   if (save_to_env == TRUE) {
@@ -1133,114 +1186,288 @@ for (i in seq_along(survey_forms)) {
 
 
 
-  # Create a dataframe with the most common coordinates for each plot ----
+# Create data_availability table ----
 
-  # List all the surveys where coordinates have to be looked for
 
-surveys <- paste0(code_survey, "_",
-                  list_data_tables[[which(names(list_data_tables) ==
-                                            code_survey)]])
+source("~/ICP Forests - data/fscc/src/functions/get_env.R")
 
-if (survey_level == "LI" &&
-    code_survey != "y1") {
-  surveys <- c(surveys,
-               paste0("y1", "_",
-               list_data_tables[[which(names(list_data_tables) == "y1")]]))
+data_availability_long <- NULL
+
+for (i in seq_along(survey_forms)) {
+
+  df <- get_env(survey_forms[i])
+
+  if (!"survey_year" %in% colnames(df) &&
+      "last_year" %in% colnames(df)) {
+    names(df)[which(names(df) == "last_year")] <- "survey_year"
   }
 
-if (survey_level == "LII" &&
-    code_survey != "si") {
-  surveys <- c(surveys,
-               paste0("si", "_",
-                      list_data_tables[[which(names(list_data_tables) ==
-                                                "si")]]))
+  if (!"survey_year" %in% colnames(df) &&
+      !"last_year" %in% colnames(df)) {
+    df$survey_year <- NA
   }
 
-  # Retrieve survey forms with coordinates (from global environment)
+  data_availability_long <- bind_rows(data_availability_long,
+                                      df %>%
+                                        select(partner_code,
+                                               code_country,
+                                               code_plot,
+                                               plot_id,
+                                               survey_year))
+}
 
-source("./src/functions/get_env.R")
+if (code_survey == "so") {
 
-survey_forms_with_coordinates <- NULL
+  # Add extra plot_ids from AFSCDB
 
-for (i in seq_along(surveys)) {
-  if (surveys[i] %in% ls(envir = .GlobalEnv)) {
-    if (exists("latitude_dec", where = get_env(surveys[i])) &&
-        exists("longitude_dec", where = get_env(surveys[i]))) {
+  dir_afscdb <-
+    paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
+                "AFSCDB_LII_2_2_080515_som.csv")
 
-      if (is.null(survey_forms_with_coordinates)) {
-        survey_forms_with_coordinates <- surveys[i]
-        } else {
-          survey_forms_with_coordinates <- c(survey_forms_with_coordinates,
-                                            surveys[i])
-        }
+  assertthat::assert_that(file.exists(dir_afscdb),
+                          msg = paste0("'", dir, "' ",
+                                       "does not exist."))
+
+  # Get the partner_codes of these plots
+  # None of the plot_ids in AFSCDB which are not reported in "so"
+  # belong to the countries with multiple partner codes (2, 4, 13)
+
+  diff_partner_codes <- data_availability_long %>%
+    distinct(partner_code, .keep_all = TRUE) %>%
+    filter(.data$partner_code != .data$code_country) %>%
+    distinct(code_country) %>%
+    pull(code_country)
+
+  partner_codes <- data_availability_long %>%
+    filter(!partner_code %in% diff_partner_codes) %>%
+    filter(code_country %in% diff_partner_codes) %>%
+    distinct(plot_id, .keep_all = TRUE) %>%
+    select(plot_id, partner_code)
+
+  df <- read.csv(dir_afscdb,
+                 sep = ";", na.strings = "") %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    left_join(partner_codes,
+              by = "plot_id") %>%
+    mutate(partner_code = ifelse(!is.na(.data$partner_code),
+                                 .data$partner_code,
+                                 .data$code_country))
+
+  data_availability_long <- bind_rows(data_availability_long,
+                                      df %>%
+                                        select(partner_code,
+                                               code_country,
+                                               code_plot,
+                                               plot_id,
+                                               survey_year))
+}
+
+
+data_availability <- data_availability_long %>%
+  group_by(plot_id, code_country, partner_code, code_plot) %>%
+  summarise(survey_years = paste(unique(sort(survey_year)), collapse = "_"),
+            .groups = "drop") %>%
+  mutate(code_country = as.integer(code_country)) %>%
+  left_join(d_country[, c("code", "lib_country")],
+            by = join_by(code_country == code)) %>%
+  rename(country = lib_country) %>%
+  mutate(partner_code = as.integer(partner_code)) %>%
+  left_join(d_partner[, c("code", "desc_short", "description")],
+            by = join_by(partner_code == code)) %>%
+  rename(partner_short = desc_short) %>%
+  rename(partner = description) %>%
+  mutate(country = as.character(country)) %>%
+  mutate(partner_short = as.character(partner_short)) %>%
+  mutate(partner = as.character(partner)) %>%
+  arrange(code_country, code_plot)
+
+dupl_partner_codes <- data_availability %>%
+  mutate(dupl = ifelse(duplicated(plot_id) |
+                         duplicated(plot_id, fromLast = TRUE),
+                       TRUE,
+                       NA)) %>%
+  filter(!is.na(dupl)) %>%
+  pull(plot_id)
+
+if (!identical(dupl_partner_codes, character(0))) {
+
+  data_availability <- data_availability %>%
+    mutate(to_remove = ifelse(plot_id %in% dupl_partner_codes &
+                                partner_code %in% c(98, 11),
+                              TRUE,
+                              NA)) %>%
+    filter(is.na(to_remove)) %>%
+    select(-to_remove)
+
+}
+
+
+
+
+# Create a dataframe with harmonised coordinates for each plot ----
+
+
+if (code_survey %in% c("s1", "so")) {
+
+  source("./src/functions/add_dec_coord_columns.R")
+
+  # Get harmonised coordinates
+
+  coord_harmonised <-
+    read.csv(paste0("./data/additional_data/coordinates_plots/",
+                    "coord_harmonised_", code_survey, ".csv"),
+             sep = ";") %>%
+    add_dec_coord_columns
+
+  # Get coordinates in the database
+
+  if (code_survey == "s1") {
+    survey_forms_with_coordinates <- c("y1_pl1", "s1_pls", "s1_prf")
+  }
+
+  if (code_survey == "so") {
+    survey_forms_with_coordinates <- c("si_plt", "so_pls", "so_prf")
+  }
+
+  coordinates_full <- NULL
+
+  for (i in seq_along(survey_forms_with_coordinates)) {
+
+    coordinates_full <-
+      bind_rows(coordinates_full,
+                get_env(survey_forms_with_coordinates[i]) %>%
+                  mutate(survey_form = survey_forms_with_coordinates[i]) %>%
+                  mutate(longitude_dec = as.numeric(longitude_dec)) %>%
+                  mutate(latitude_dec = as.numeric(latitude_dec)) %>%
+                  select(survey_form, plot_id,
+                         longitude_dec, latitude_dec,
+                         change_date))
+  }
+
+  coordinates_full <- coordinates_full %>%
+    filter(!is.na(longitude_dec)) %>%
+    filter(!is.na(latitude_dec)) %>%
+    filter(!is.na(change_date))
+
+  # Check if any coordinates have been updated after the harmonisation
+
+  coordinate_list <- select(data_availability, plot_id) %>%
+    left_join(coord_harmonised %>%
+                select(plot_id, longitude_dec, latitude_dec),
+              by = "plot_id")
+
+  updated_coords <- NULL
+  updated_coords_overview <- NULL
+
+  for (i in seq_len(nrow(coordinate_list))) {
+
+    coord_harm_i <- coord_harmonised %>%
+      filter(plot_id == coordinate_list$plot_id[i])
+
+    coord_database_i <- coordinates_full %>%
+      filter(plot_id == coordinate_list$plot_id[i])
+
+    # If any coordinate pair has been updated recently
+
+    if (any(coord_database_i$change_date > coord_harm_i$observation_date)) {
+
+      coord_database_i <- coord_database_i %>%
+        filter(coord_database_i$change_date > coord_harm_i$observation_date)
+
+      # If any of these coordinates are clearly different
+
+      if ((any(round(coord_database_i$longitude_dec, 2) !=
+              round(coord_harm_i$longitude_dec, 2))) ||
+          (any(round(coord_database_i$latitude_dec, 2) !=
+               round(coord_harm_i$latitude_dec, 2)))) {
+
+        updated_coords <- c(updated_coords, coordinate_list$plot_id[i])
+
+
+        coord_i_summ <-
+          bind_rows(
+            coord_database_i %>%
+              group_by(longitude_dec, latitude_dec) %>%
+              reframe(sources_database_update =
+                        paste(unique(survey_form), collapse = "-"),
+                      change_date_recent =
+                        ifelse(all(is.na(change_date)),
+                               NA,
+                               change_date[which.max(
+                                 as.numeric(as.Date(change_date)))])),
+            coord_harm_i %>%
+              mutate(sources_database_update = NA,
+                     change_date_recent = NA) %>%
+              select(longitude_dec, latitude_dec, sources_database_update,
+                     change_date_recent)) %>%
+          mutate(plot_id = coordinate_list$plot_id[i],
+                 country = coord_harm_i$country[1]) %>%
+          relocate(plot_id, .before = longitude_dec) %>%
+          relocate(country, .before = plot_id)
+
+
+        diagonal_dist_m <-
+          st_distance(
+            # Bounding box: corner left below
+            as_sf(data.frame(longitude_dec =
+                               min(coord_i_summ$longitude_dec),
+                             latitude_dec =
+                               min(coord_i_summ$latitude_dec))),
+            # Bounding box: corner right up
+            as_sf(data.frame(longitude_dec =
+                               max(coord_i_summ$longitude_dec),
+                             latitude_dec =
+                               max(coord_i_summ$latitude_dec)))) %>%
+          as.numeric
+
+
+        coord_i_summ <- coord_i_summ %>%
+          mutate(dist_diagonal_m = diagonal_dist_m)
+
+
+        updated_coords_overview <-
+          bind_rows(updated_coords_overview,
+                    coord_i_summ)
       }
     }
   }
 
 
-  # Create vector with unique plots in all surveys
+  if (!is.null(updated_coords)) {
 
-coordinates_full <- NULL
+    print(updated_coords_overview %>%
+            mutate(
+              longitude_dec = num(longitude_dec, digits = 5),
+              latitude_dec = num(latitude_dec, digits = 5)))
 
-for (i in seq_along(survey_forms_with_coordinates)) {
+    cat(paste0(" \nCoordinates have been updated in the database for ",
+               "the shown plot_ids.\n"))
 
-  coordinates_full <-
-    bind_rows(coordinates_full,
-              get_env(survey_forms_with_coordinates[i]) %>%
-                mutate(survey_form = survey_forms_with_coordinates[i]) %>%
-                mutate(longitude_dec = as.character(longitude_dec)) %>%
-                mutate(latitude_dec = as.character(latitude_dec)) %>%
-                select(survey_form, plot_id, longitude_dec, latitude_dec))
+    # Alert if there are coordinate updates in s1 or so
 
+    assertthat::assert_that(isFALSE(
+      any(grepl("so|s1", updated_coords_overview$sources_database_update))))
+
+  }
+
+  # assertthat::assert_that(is.null(updated_coords),
+  #                         msg = paste0("Coordinates have been updated ",
+  #                                      "in the database for ",
+  #                                      "the following plot_ids:\n",
+  #                                      updated_coords))
+
+
+  if (save_to_env == TRUE) {
+    assign_env(paste0("coordinates_", code_survey), as_tibble(coordinate_list))
+  }
 }
 
 
-coordinates_full <- coordinates_full %>%
-  filter(!is.na(longitude_dec)) %>%
-  filter(!is.na(latitude_dec))
-
-coordinates <- distinct(coordinates_full, plot_id) %>%
-  mutate(longitude_dec = NA,
-         latitude_dec = NA)
-
-
-for (j in seq_len(nrow(coordinates))) {
-
-  # Determine the row indices of the given plot_id in coordinates_full
-
-  coord_plot_j <- coordinates_full %>%
-    filter(plot_id == coordinates$plot_id[j])
-
-  # Assumption that coordinates in system installment forms are more correct
-
-  if (nrow(coord_plot_j) > 0 &&
-      (any(str_starts(coord_plot_j$survey_form, "si")) ||
-       any(str_starts(coord_plot_j$survey_form, "y1")))) {
-
-    coord_plot_j <- coord_plot_j %>%
-      filter(str_starts(survey_form, "si") |
-               str_starts(survey_form, "y1"))
-  }
-
-  coord_plot_j_abundance <- coord_plot_j %>%
-    group_by(longitude_dec, latitude_dec) %>%
-    summarize(count = n(),
-              .groups = "drop") %>%
-    arrange(-count)
-
-  coordinates$longitude_dec[j] <-
-    as.numeric(coord_plot_j_abundance$longitude_dec[1])
-
-  coordinates$latitude_dec[j] <-
-    as.numeric(coord_plot_j_abundance$latitude_dec[1])
-  }
-
-coordinates <- coordinates %>%
-  filter(!is.na(latitude_dec)) %>%
-  filter(!is.na(longitude_dec))
 
 
 # Save remaining dataframes to the global environment if permitted
+
+
 
 if (save_to_env == TRUE) {
 
@@ -1250,8 +1477,6 @@ if (save_to_env == TRUE) {
     assign_env(paste0("data_availability_", code_survey),
                as_tibble(data_availability))
   }
-
-# assign_env(paste0("coordinates_", code_survey), as_tibble(coordinates))
 
 assign_env("d_country", as_tibble(d_country))
 
