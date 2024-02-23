@@ -9,7 +9,7 @@
 #'
 #' @param layers Character string - this contains the unique horizon_master
 #' values for records with available layer limit information in a given
-#' profile. 
+#' profile.
 #' In case horizon_master values of the given profile are not unique,
 #' attach a unique number.
 #' For example, if 'vec' are the row indices of data frame 'df' for a
@@ -206,7 +206,7 @@ if (nrow(redundant_layers) > 0) {
     depth_ranges_total_05 <-
       unique(round(sort(depth_ranges_total_05), digits = 1))
 
-    
+
     # redundant layer type 1
     for (i in seq_len(nrow(depth_layers))) {
 
@@ -756,14 +756,14 @@ if ((length(ind_max) == 1)) {
             redundant_layers_short$horizon_limit_up[ind_max[2]]) &&
            (redundant_layers_short$horizon_limit_low[ind_max[1]] ==
             redundant_layers_short$horizon_limit_low[ind_max[2]])) {
-  redundant_layers <- 
+  redundant_layers <-
     rbind(redundant_layers,
           data.frame(layer = redundant_layers_short$layer[ind_max[2]],
                      redundancy_type = 0,
                      combined_layer = redundant_layers_short$combined_layer[
                        ind_max[2]]))
 
-  
+
 } else if ((length(ind_max) == 3) &&
            (any(redundant_layers_short$redundancy_type[ind_max] == 1)) &&
            (any(redundant_layers_short$redundancy_type[ind_max] == 2))) {
@@ -798,10 +798,16 @@ if ((length(ind_max) == 1)) {
   }
 }
 
-if ((nrow(redundant_layers) >= 1 &&
-    identical(which(redundant_layers$redundancy_type == 0), integer(0)))) {
-  warning(paste0("no redundancy type 0 found for ",superior_layer_limits))
+if (nrow(redundant_layers) >= 1) {
+
+  assertthat::assert_that(
+    !identical(which(redundant_layers$redundancy_type == 0), integer(0)),
+    msg = paste0("no redundancy type 0 found for ", superior_layer_limits))
+
   }
+
+
+
 
 
 return(redundant_layers)
