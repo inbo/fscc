@@ -43,7 +43,7 @@
 #'   for which either the layer limits are different, or the layer limits are NA
 #'   while column "origin" is the same or non-existent):
 #'   > Copy the original column "code_layer" to a new column
-#'     "code_layer_original"
+#'     "code_layer_orig"
 #'   > Change the "code_layer" column for these ambiguous layers to
 #'     (first letters, e.g. "M", "H", "OL") + abs(layer_limit_superior) +
 #'     abs(layer_limit_inferior), e.g. "M5060", "M8590", "OL74" etc
@@ -185,12 +185,12 @@ get_primary_inconsistencies <- function(code_survey,
     # Only the "code_layer" column without "_original" can be altered
 
     if (solve == TRUE) {
-      df$code_layer_original <- as.character(df$code_layer)
+      df$code_layer_orig <- as.character(df$code_layer)
     df$code_layer <- as.character(df$code_layer)
     }
 
-    if ("code_layer_original" %in% names(df)) {
-      col_code_layer <- df$code_layer_original
+    if ("code_layer_orig" %in% names(df)) {
+      col_code_layer <- df$code_layer_orig
       } else {
         col_code_layer <- df$code_layer
         }
@@ -244,7 +244,7 @@ get_primary_inconsistencies <- function(code_survey,
 
           initial_letters <- gsub("[0-9x]+$", "",
                                   unique(as.character(
-                                    df$code_layer_original[j_dupl])))
+                                    df$code_layer_orig[j_dupl])))
 
           # If the layer limits are known:
           # (only if not forest floor)
@@ -398,12 +398,12 @@ get_primary_inconsistencies <- function(code_survey,
     }
     }
 
-    # Remove the column "code_layer_original"
+    # Remove the column "code_layer_orig"
     # if the survey form does not contain any ambiguous layers
     # (e.g. for "so_som")
 
-    if (all(df$code_layer == df$code_layer_original)) {
-      df <- df[, -which(names(df) == "code_layer_original")]
+    if (all(df$code_layer == df$code_layer_orig)) {
+      df <- df[, -which(names(df) == "code_layer_orig")]
       }
 
     }
@@ -415,7 +415,7 @@ get_primary_inconsistencies <- function(code_survey,
 
 
 
-    # Check for the presence of primary key information
+    # Check for the presence of primary key information ----
 
     # Store the column indices of columns with primary key information
 
@@ -426,9 +426,9 @@ get_primary_inconsistencies <- function(code_survey,
     column_code_layer_horizon_master <- rep(NA, nrow(df))
     column_repetition_profile_pit_id <- rep(NA, nrow(df))
 
-    if ("code_layer_original" %in% names(df)) {
+    if ("code_layer_orig" %in% names(df)) {
       column_code_layer_horizon_master <-
-        pull(df[, which(names(df) == "code_layer_original")])
+        pull(df[, which(names(df) == "code_layer_orig")])
       } else
     if ("code_layer" %in% names(df)) {
       column_code_layer_horizon_master <-
@@ -507,7 +507,7 @@ get_primary_inconsistencies <- function(code_survey,
         }
 
 
-        # FSCC_35: "survey_year" outside possible range
+        # FSCC_35: "survey_year" outside possible range ----
 
         # Determine the minimum and maximum possible "survey_year"
 
@@ -567,8 +567,7 @@ get_primary_inconsistencies <- function(code_survey,
         }
 
 
-      # FSCC_36
-      # code_plot
+      ## FSCC_36: this record does not have a 'code_plot' ----
 
       if (names(df)[j] == "code_plot") {
 
@@ -620,7 +619,7 @@ get_primary_inconsistencies <- function(code_survey,
       }
 
 
-      # FSCC_33: missing "horizon_master" or "code_layer"
+      # FSCC_33: missing "horizon_master" or "code_layer" ----
       # horizon_master
 
       if (names(df)[j] == "horizon_master") {
@@ -670,17 +669,491 @@ get_primary_inconsistencies <- function(code_survey,
                      change_date = df$change_date[vec_inconsistency],
                      download_date = rep(download_date_pir,
                                          length(vec_inconsistency))))
+
+        if (solve == TRUE) {
+
+          if (survey_form == "so_pfh") {
+
+          # Complete missing Serbian horizon_master
+
+          df <- df %>%
+            mutate(horizon_master = ifelse(code_country == 67 &
+                                         code_plot == 2 &
+                                         survey_year == 2010 &
+                                         (is.na(horizon_master) |
+                                            horizon_master == ""),
+                                       "O",
+                                       horizon_master),
+                   unique_survey_layer = ifelse(code_country == 67 &
+                                                  code_plot == 2 &
+                                                  survey_year == 2010 &
+                                                  layer_type == "forest_floor",
+                                                paste0(code_country, "_",
+                                                       survey_year, "_",
+                                                       code_plot, "_",
+                                                       horizon_master),
+                                                unique_survey_layer),
+                   unique_layer_repetition = ifelse(code_country == 67 &
+                                                      code_plot == 2 &
+                                                      survey_year == 2010 &
+                                                      layer_type ==
+                                                         "forest_floor",
+                                                    paste0(code_country, "_",
+                                                           survey_year, "_",
+                                                           code_plot, "_",
+                                                           horizon_master, "_",
+                                                           profile_pit_id),
+                                                    unique_layer_repetition),
+                   unique_layer = ifelse(code_country == 67 &
+                                          code_plot == 2 &
+                                          survey_year == 2010 &
+                                          layer_type == "forest_floor",
+                                        paste0(code_country, "_",
+                                               code_plot, "_",
+                                               horizon_master),
+                                        unique_layer))
+          }
+
+
+
+          if (survey_form == "s1_pfh") {
+
+            # Missing horizon_master in Hungary
+            # (Manually determined)
+
+            # Plot 51_1
+
+            layers_to_check <- df %>%
+              filter(plot_id == "51_1") %>%
+              filter(survey_year == 2006) %>%
+              filter(profile_pit_id == 1)
+
+            assertthat::assert_that(
+              all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")))
+
+            if (all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == ""))) {
+
+              df <- df %>%
+                mutate(horizon_master =
+                         ifelse(unique_survey_profile ==
+                                  unique(layers_to_check$unique_survey_profile),
+                                case_when(
+                                  horizon_limit_up == 0 ~ "A",
+                                  horizon_limit_up == 10 ~ "AB",
+                                  horizon_limit_up %in% c(30, 60) ~ "B",
+                                  horizon_limit_up == 90 ~ "BC",
+                                  horizon_limit_up == 125 ~ "C",
+                                  TRUE ~ horizon_master),
+                                horizon_master),
+                       unique_survey_layer =
+                         ifelse(unique_survey_profile ==
+                                  unique(layers_to_check$unique_survey_profile),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_survey_layer),
+                       unique_layer_repetition =
+                         ifelse(unique_survey_profile ==
+                                  unique(layers_to_check$unique_survey_profile),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master, "_",
+                                       profile_pit_id),
+                                unique_layer_repetition),
+                       unique_layer =
+                         ifelse(unique_survey_profile ==
+                                  unique(layers_to_check$unique_survey_profile),
+                                paste0(code_country, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_layer)) %>%
+                mutate(layer_type =
+                         ifelse(unique_survey_profile ==
+                                  unique(layers_to_check$unique_survey_profile),
+                                "mineral",
+                                .data$layer_type))
+            }
+
+
+
+
+
+
+            # Plot 51_61 and 51_364
+
+            layers_to_check <- df %>%
+              filter(plot_id %in% c("51_61", "51_364")) %>%
+              filter(survey_year == 2006) %>%
+              filter(profile_pit_id == 1)
+
+            layers_fine <- layers_to_check %>%
+              filter(horizon_limit_up >= 0)
+
+            layers_to_check <- layers_to_check %>%
+              filter(horizon_limit_up < 0)
+
+            assertthat::assert_that(
+              all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                      (layers_fine$horizon_master != "")))
+
+            if (all(is.na(layers_to_check$horizon_master) |
+                     (layers_to_check$horizon_master == "")) &&
+                 all(!is.na(layers_fine$horizon_master) &
+                     (layers_fine$horizon_master != ""))) {
+
+              df <- df %>%
+                mutate(horizon_master =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                case_when(
+                                  horizon_limit_up < 0 ~ "O",
+                                  TRUE ~ horizon_master),
+                                .data$horizon_master),
+                       unique_survey_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_survey_layer),
+                       unique_layer_repetition =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master, "_",
+                                       profile_pit_id),
+                                unique_layer_repetition),
+                       unique_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_layer)) %>%
+                mutate(layer_type =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line) &
+                                horizon_limit_up < 0,
+                                "forest_floor",
+                                .data$layer_type))
+            }
+
+
+            # Plot 51_83
+
+            layers_to_check <- df %>%
+              filter(plot_id %in% c("51_83")) %>%
+              filter(survey_year == 2006) %>%
+              filter(profile_pit_id == 1)
+
+            layers_fine <- layers_to_check %>%
+              filter(horizon_limit_up <= 120)
+
+            layers_to_check <- layers_to_check %>%
+              filter(horizon_limit_up > 120)
+
+            assertthat::assert_that(
+              all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                      (layers_fine$horizon_master != "")))
+
+            if (all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                    (layers_fine$horizon_master != ""))) {
+
+              df <- df %>%
+                mutate(horizon_master =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                case_when(
+                                  horizon_limit_up > 120 ~ "C",
+                                  TRUE ~ horizon_master),
+                                .data$horizon_master),
+                       unique_survey_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_survey_layer),
+                       unique_layer_repetition =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master, "_",
+                                       profile_pit_id),
+                                unique_layer_repetition),
+                       unique_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_layer)) %>%
+                mutate(layer_type =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line) &
+                                  horizon_limit_up > 120,
+                                "mineral",
+                                .data$layer_type))
+            }
+
+
+
+            # Plot 51_140
+
+            layers_to_check <- df %>%
+              filter(plot_id %in% c("51_140")) %>%
+              filter(survey_year == 2006) %>%
+              filter(profile_pit_id == 1)
+
+            layers_fine <- layers_to_check %>%
+              filter(horizon_limit_up <= 15)
+
+            layers_to_check <- layers_to_check %>%
+              filter(horizon_limit_up > 15)
+
+            assertthat::assert_that(
+              all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                      (layers_fine$horizon_master != "")))
+
+            if (all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                    (layers_fine$horizon_master != ""))) {
+
+              df <- df %>%
+                mutate(horizon_master =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                case_when(
+                                  horizon_limit_up == 40 ~ "B",
+                                  horizon_limit_up == 62 ~ "B",
+                                  horizon_limit_up == 84 ~ "BC",
+                                  horizon_limit_up == 108 ~ "C",
+                                  horizon_limit_up == 135 ~ "C",
+                                  TRUE ~ horizon_master),
+                                .data$horizon_master),
+                       unique_survey_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_survey_layer),
+                       unique_layer_repetition =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master, "_",
+                                       profile_pit_id),
+                                unique_layer_repetition),
+                       unique_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_layer)) %>%
+                mutate(layer_type =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line) &
+                                  horizon_limit_up > 15,
+                                "mineral",
+                                .data$layer_type))
+            }
+
+
+
+            # Plot 51_252
+
+            layers_to_check <- df %>%
+              filter(plot_id %in% c("51_252")) %>%
+              filter(survey_year == 2006) %>%
+              filter(profile_pit_id == 1)
+
+            layers_fine <- layers_to_check %>%
+              filter(horizon_limit_up >= 185)
+
+            layers_to_check <- layers_to_check %>%
+              filter(horizon_limit_up < 185)
+
+            assertthat::assert_that(
+              all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                      (layers_fine$horizon_master != "")))
+
+            if (all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                    (layers_fine$horizon_master != ""))) {
+
+              df <- df %>%
+                mutate(horizon_master =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                case_when(
+                                  horizon_limit_up == 0 ~ "A",
+                                  horizon_limit_up == 20 ~ "B",
+                                  horizon_limit_up == 95 ~ "B",
+                                  horizon_limit_up == 140 ~ "B",
+                                  TRUE ~ horizon_master),
+                                .data$horizon_master),
+                       unique_survey_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_survey_layer),
+                       unique_layer_repetition =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master, "_",
+                                       profile_pit_id),
+                                unique_layer_repetition),
+                       unique_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_layer)) %>%
+                mutate(layer_type =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line) &
+                                  horizon_limit_up < 185 &
+                                  horizon_limit_up >= 0,
+                                "mineral",
+                                .data$layer_type))
+            }
+
+
+
+
+
+            # Plot 51_287
+
+            layers_to_check <- df %>%
+              filter(plot_id %in% c("51_287")) %>%
+              filter(survey_year == 2006) %>%
+              filter(profile_pit_id == 1)
+
+            layers_fine <- layers_to_check %>%
+              filter(horizon_limit_up >= 18)
+
+            layers_to_check <- layers_to_check %>%
+              filter(horizon_limit_up < 18)
+
+            assertthat::assert_that(
+              all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                      (layers_fine$horizon_master != "")))
+
+            if (all(is.na(layers_to_check$horizon_master) |
+                    (layers_to_check$horizon_master == "")) &&
+                all(!is.na(layers_fine$horizon_master) &
+                    (layers_fine$horizon_master != ""))) {
+
+              df <- df %>%
+                mutate(horizon_master =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                case_when(
+                                  horizon_limit_up < 18 ~ "A",
+                                  TRUE ~ horizon_master),
+                                .data$horizon_master),
+                       unique_survey_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_survey_layer),
+                       unique_layer_repetition =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       survey_year, "_",
+                                       code_plot, "_",
+                                       horizon_master, "_",
+                                       profile_pit_id),
+                                unique_layer_repetition),
+                       unique_layer =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line),
+                                paste0(code_country, "_",
+                                       code_plot, "_",
+                                       horizon_master),
+                                unique_layer)) %>%
+                mutate(layer_type =
+                         ifelse(code_line %in%
+                                  pull(layers_to_check, code_line) &
+                                  horizon_limit_up < 18 &
+                                  horizon_limit_up >= 0,
+                                "mineral",
+                                .data$layer_type))
+            }
+
+
+
+          } # End of s1_pfh
+
+          # Assert that all horizon_masters/code_layers and layer_types
+          # are known
+
+          assertthat::assert_that(
+            all(!is.na(df$horizon_master) & (df$horizon_master != "")),
+            msg = paste0("In survey_form '", survey_form,
+                         "', not all horizon_masters are known.")
+          )
+
+          assertthat::assert_that(
+            all(!is.na(df$layer_type)),
+            msg = paste0("In survey_form '", survey_form,
+                         "', not all layer_types are known.")
+          )
+
+        }
+
       }
+
       }
 
 
       if (names(df)[j] == "code_layer") {
 
-        # Evaluate the presence of "code_layer_original" if "code_layer" has
+        # Evaluate the presence of "code_layer_orig" if "code_layer" has
         # been renamed (in case of ambiguous code_layer)
 
-      if ("code_layer_original" %in% names(df)) {
-        col <- which(names(df) == "code_layer_original")
+      if ("code_layer_orig" %in% names(df)) {
+        col <- which(names(df) == "code_layer_orig")
         } else {
         col <- j
         }
@@ -730,8 +1203,91 @@ get_primary_inconsistencies <- function(code_survey,
                      change_date = df$change_date[vec_inconsistency],
                      download_date = rep(download_date_pir,
                                          length(vec_inconsistency))))
+
+
+        if (solve == TRUE) {
+
+          # Special case: Latvian records without code_layer
+          # There are two Latvian records without code_layer, layer_limits,
+          # and with only one organic_carbon_total value
+          # Assumption: since the other records of the same
+          # unique_survey_repetition are M01, M12, M24, M48, and
+          # organic_layer_weight is reported, we will assume that these are
+          # forest floor layers.
+          # Because of the organic_layer_weight information, these records
+          # are still valuable for C stock calculations.
+          # Deriving which of the records is on top
+          # and which is below can only happen based on
+          # analysis of the organic_layer_weight in so_som profiles
+          # with at least two forest floor layers. This teaches us that
+          # it is the most likely that the inferior layer usually has a
+          # higher organic_layer_weight than the superior layer.
+          # As such, we will name the code_layer of these records so that
+          # they will be sorted accordingly.
+          # This also matches with the values in the columns "code_line" and
+          # "line_nr".
+
+          vec_ff <- which(df$plot_id == "64_5" &
+                            df$survey_year == 2004 &
+                            df$layer_type == "forest_floor" &
+                            is.na(df$code_layer))
+
+          if (!identical(vec_ff, integer(0))) {
+
+                ind_superior <-
+                  vec_ff[which(df$organic_layer_weight[vec_ff] ==
+                                 min(df$organic_layer_weight[vec_ff]))]
+
+                ind_inferior <-
+                  vec_ff[which(df$organic_layer_weight[vec_ff] ==
+                                 max(df$organic_layer_weight[vec_ff]))]
+
+                df$code_layer[ind_superior] <- "OL"
+                df$code_layer[ind_inferior] <- "OFH"
+
+                df$unique_survey_layer[vec_ff] <-
+                  paste0(df$code_country[vec_ff], "_",
+                         df$survey_year[vec_ff], "_",
+                         df$code_plot[vec_ff], "_",
+                         df$code_layer[vec_ff])
+
+                df$unique_layer_repetition[vec_ff] <-
+                  paste0(df$code_country[vec_ff], "_",
+                         df$survey_year[vec_ff], "_",
+                         df$code_plot[vec_ff], "_",
+                         df$code_layer[vec_ff], "_",
+                         df$repetition[vec_ff])
+
+                df$unique_layer[vec_ff] <-
+                  paste0(df$code_country[vec_ff], "_",
+                         df$code_plot[vec_ff], "_",
+                         df$code_layer[vec_ff])
+
+          }
+
+
+          # Assert that all horizon_masters/code_layers and layer_types
+          # are known
+
+          assertthat::assert_that(
+            all(!is.na(df$code_layer) & (df$code_layer != "")),
+            msg = paste0("In survey_form '", survey_form,
+                         "', not all code_layers are known.")
+          )
+
+          assertthat::assert_that(
+            all(!is.na(df$layer_type)),
+            msg = paste0("In survey_form '", survey_form,
+                         "', not all layer_types are known.")
+          )
+
         }
         }
+        }
+
+
+
+      # FSCC_37: missing "profile_pit_id" ----
 
 
       if (names(df)[j] == "profile_pit_id") {
@@ -785,15 +1341,68 @@ get_primary_inconsistencies <- function(code_survey,
       }
     }
 
-    if ((unlist(strsplit(survey_form, "_"))[2] == "som") &&
-        (any("FSCC_47" %in% unique(list_primary_inconsistencies$rule_id)))) {
+
+    # Specific issues ----
+
+    if (survey_form == "so_pfh") {
+
+      # Issue with Romanian profile_pit_ids:
+      # Some of the plots have a different profile_pit_id for every layer
+      # existing in the plot.
+      # This probably arises from a "pull" problem in Excel.
+      # It is quite obvious that these layer all belong to the same profile.
+
+      surveys_to_check <- df %>%
+        filter(code_country == 52) %>%
+        filter(survey_year <= 2010) %>%
+        distinct(unique_survey_profile, .keep_all = TRUE) %>%
+        group_by(unique_survey) %>%
+        summarise(profile_count = n()) %>%
+        filter(profile_count > 2) %>%
+        pull(unique_survey)
+
+      if (!identical(surveys_to_check, character(0))) {
+
+        assertthat::assert_that(
+          all(surveys_to_check %in%
+                c("52_2009_11", "52_2009_13", "52_2009_5", "52_2009_9")))
+
+        df <- df %>%
+          mutate(profile_pit_id = ifelse(unique_survey %in%
+                                           surveys_to_check,
+                                         1,
+                                         .data$profile_pit_id),
+                 unique_survey_profile = ifelse(unique_survey %in%
+                                                  surveys_to_check,
+                                                paste0(.data$unique_survey, "_",
+                                                       .data$profile_pit_id),
+                                                .data$unique_survey_profile),
+                 unique_layer_repetition =
+                   ifelse(unique_survey %in% surveys_to_check,
+                          paste0(.data$unique_survey, "_",
+                                 .data$horizon_master, "_",
+                                 .data$profile_pit_id),
+                          .data$unique_layer_repetition))
+      }
+
+    }
+
+
+
+
+
+
+
 
       if (save_to_env == TRUE) {
         assign_env(survey_form, df)
       }
-      }
 
-  }
+
+  } # End of loop along survey forms
+
+
+
 
   if (save_to_env == TRUE) {
 
