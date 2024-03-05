@@ -61,8 +61,7 @@ harmonise_layer_to_depths <- function(limit_sup,
   mode <- match.arg(mode)
 
   assertthat::assert_that(!is.null(df_sub_selected) ||
-                            (!is.null(bulk_density) &&
-                               !is.null(variab) &&
+                            (!is.null(variab) &&
                                !is.null(upper_depths) &&
                                !is.null(lower_depths)))
 
@@ -86,7 +85,14 @@ harmonise_layer_to_depths <- function(limit_sup,
 
   if (is.null(df_sub_selected)) {
 
-    if (is.null(coarse_fragment_vol_frac)) {
+    if (is.null(bulk_density)) {
+      df_sub_selected <-
+        data.frame(bulk_density = rep(1, length(variab)),
+                   horizon_limit_up = upper_depths,
+                   horizon_limit_low = lower_depths,
+                   variab = variab)
+    } else
+      if (is.null(coarse_fragment_vol_frac)) {
     df_sub_selected <-
       data.frame(bulk_density = bulk_density,
                  horizon_limit_up = upper_depths,
@@ -109,6 +115,17 @@ harmonise_layer_to_depths <- function(limit_sup,
     names(df_sub_selected)[which(names(df_sub_selected) == "variab")] <-
       parameter_name
   }
+
+  # If "coarse_fragment_vol_frag" is unknown but "coarse_fragment_vol"
+  # is known:
+
+  if ("coarse_fragment_vol" %in% names(df_sub_selected) &&
+      !"coarse_fragment_vol_frac" %in% names(df_sub_selected)) {
+
+    df_sub_selected <- df_sub_selected %>%
+      mutate(coarse_fragment_vol_frac = 0.01 * coarse_fragment_vol)
+  }
+
 
   # If no "bulk_density_total_soil" is present
   # and if "coarse_fragment_vol_frac" is known:
