@@ -847,7 +847,7 @@ if (survey_form == "s1_pfh") {
                                           character(0)) ||
                                   # Sometimes single values may have been
                                   # updated upon resubmission
-                                  length(columns_with_different_content) < 4)
+                                  length(columns_with_different_content) < 6)
 
         ind_to_remove <-
           which(df$plot_id %in%
