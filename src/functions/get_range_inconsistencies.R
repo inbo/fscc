@@ -293,6 +293,8 @@ get_range_inconsistencies <- function(survey_form,
   }
 
 
+  if (unlist(strsplit(survey_form, "_"))[2] %in% c("som", "pfh")) {
+
   # Create copies of columns that will be changed, containing the original
   # values
 
@@ -314,7 +316,7 @@ get_range_inconsistencies <- function(survey_form,
       df[[orig_col]] <- df[[col]]
     }
   }
-
+}
 
 
 
@@ -1346,6 +1348,9 @@ get_range_inconsistencies <- function(survey_form,
 
     for (j in seq_along(unique(df$unique_partner_survey))) {
 
+
+
+
       # Determine the row indices, data and layer types of the records which do
       # contain data for the given parameter in the given
       # "unique_partner_survey"
@@ -1457,8 +1462,6 @@ get_range_inconsistencies <- function(survey_form,
             unique_surveys_to_exclude <- c(
               df[vec_nonempty, ] %>%
               mutate(hypothetically_corrected = 10 * (.[[col_ind]])) %>%
-              relocate(hypothetically_corrected,
-                       .before = "horizon_c_organic_total") %>%
               group_by(unique_survey) %>%
               reframe(any_outside_possible_range =
                         any(hypothetically_corrected > 1000)) %>%
@@ -1641,9 +1644,9 @@ get_range_inconsistencies <- function(survey_form,
                 df <- df %>%
                   mutate({{ name_source_col }} :=
                            ifelse(row_number() %in% vec_nonempty,
-                                  paste0({{ name_source_col }},
+                                  paste0(.data[[name_source_col]],
                                          " (corrected units)"),
-                                  {{ name_source_col }}))
+                                  .data[[name_source_col]]))
 
               # df[vec_nonempty, which(names(df) == "bulk_density_source")] <-
               #   paste0(df[vec_nonempty,
@@ -1668,9 +1671,9 @@ get_range_inconsistencies <- function(survey_form,
                 df <- df %>%
                   mutate({{ name_source_col }} :=
                            ifelse(row_number() %in% vec_nonempty,
-                                  paste0({{ name_source_col }},
+                                  paste0(.data[[name_source_col]],
                                          " (corrected units)"),
-                                  {{ name_source_col }}))
+                                  .data[[name_source_col]]))
 
                 # df[vec_nonempty, which(names(df) == name_source_col)] <-
                 #   paste0(df[vec_nonempty,
@@ -1697,9 +1700,9 @@ get_range_inconsistencies <- function(survey_form,
                 df <- df %>%
                   mutate({{ name_source_col }} :=
                            ifelse(row_number() %in% vec_nonempty,
-                                  paste0({{ name_source_col }},
+                                  paste0(.data[[name_source_col]],
                                          " (corrected units)"),
-                                  {{ name_source_col }}))
+                                  .data[[name_source_col]]))
 
               }
             }
@@ -1731,8 +1734,9 @@ get_range_inconsistencies <- function(survey_form,
           df <- df %>%
             mutate({{ name_source_col }} :=
                      ifelse(row_number() %in% vec_inconsistency,
-                            paste0({{ name_source_col }}, " (corrected units)"),
-                            {{ name_source_col }}))
+                            paste0(.data[[name_source_col]],
+                                   " (corrected units)"),
+                            .data[[name_source_col]]))
 
 
         # df[vec_inconsistency, which(names(df) == "bulk_density_source")] <-
@@ -1750,6 +1754,9 @@ get_range_inconsistencies <- function(survey_form,
     }
   } # End of for-loop parameters_wrong_units
   }
+
+
+
 
 
 
@@ -2239,6 +2246,11 @@ get_range_inconsistencies <- function(survey_form,
     }
 
 
+
+
+
+
+
   # FSCC_12: Is pH extraction method reported in pfh (other_obs) ----
 
       # If the given column is "horizon_ph", and if a value has been reported
@@ -2675,7 +2687,6 @@ get_range_inconsistencies <- function(survey_form,
 
 
 
-
   # Specific manual corrections of total organic carbon ----
 
   ## so_som ----
@@ -2823,7 +2834,8 @@ get_range_inconsistencies <- function(survey_form,
 
       df <- df %>%
         mutate(organic_carbon_total =
-                 ifelse(.data$code_line %in% unique_layers_to_convert,
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line %in% unique_layers_to_convert,
                         .data$organic_carbon_total_afscdb,
                         .data$organic_carbon_total),
                organic_carbon_total_source =
@@ -2838,6 +2850,8 @@ get_range_inconsistencies <- function(survey_form,
     # Poland
     # In plot 514 (survey_year 1995), M48 is probably a mistake.
     # Take value from survey year 1999 (i.e. 4)
+
+    if ("53_1995_514_M48_1" %in% df$unique_layer_repetition) {
 
     unique_layers_to_change <- df %>%
       filter(plot_id == "53_514") %>%
@@ -2855,21 +2869,25 @@ get_range_inconsistencies <- function(survey_form,
 
       df <- df %>%
         mutate(organic_carbon_total =
-                 ifelse(code_layer ==
+                 ifelse((!is.na(.data$code_line)) &
+                          code_line ==
                           pull(unique_layers_to_change, code_line),
                         toc_1999,
                         .data$organic_carbon_total),
                organic_carbon_total_source =
-                 ifelse(code_layer ==
+                 ifelse((!is.na(.data$code_line)) &
+                          code_line ==
                           pull(unique_layers_to_change, code_line),
                         "manual correction (FSCC)",
                         .data$organic_carbon_total_source))
     }
-
+}
 
     # Poland
     # In plot 702 (survey_year 1999), M48 is probably a mistake
     # Take value from survey_year 1995 (i.e. 12)
+
+    if ("53_1995_702_M48_1" %in% df$unique_layer_repetition) {
 
     unique_layers_to_change <- df %>%
       filter(plot_id == "53_702") %>%
@@ -2887,16 +2905,20 @@ get_range_inconsistencies <- function(survey_form,
 
       df <- df %>%
         mutate(organic_carbon_total =
-                 ifelse(code_layer ==
+                 ifelse((!is.na(.data$code_line)) &
+                          code_line ==
                           pull(unique_layers_to_change, code_line),
                         toc_1995,
                         .data$organic_carbon_total),
                organic_carbon_total_source =
-                 ifelse(code_layer ==
+                 ifelse((!is.na(.data$code_line)) &
+                          code_line ==
                           pull(unique_layers_to_change, code_line),
                         "manual correction (FSCC)",
                         .data$organic_carbon_total_source))
     }
+}
+
 
 
     # Spain
@@ -2904,6 +2926,8 @@ get_range_inconsistencies <- function(survey_form,
     # mistake since the same like OL, and considerably different than the
     # other three repetitions.
     # Take average of three other repetitions in 1996, i.e. 23.79
+
+    if ("11_1996_26" %in% df$unique_survey) {
 
     unique_layers_to_change <- df %>%
       filter(plot_id == "11_26") %>%
@@ -2922,17 +2946,20 @@ get_range_inconsistencies <- function(survey_form,
 
       df <- df %>%
         mutate(organic_carbon_total =
-                 ifelse(.data$code_line ==
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line ==
                           pull(filter(unique_layers_to_change, repetition == 4),
                                code_line),
                         toc_avg,
                         .data$organic_carbon_total),
                organic_carbon_total_source =
-                 ifelse(.data$code_line ==
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line ==
                           pull(filter(unique_layers_to_change, repetition == 4),
                                code_line),
                         "manual correction (FSCC)",
                         .data$organic_carbon_total_source))
+    }
     }
 
 
@@ -2940,6 +2967,8 @@ get_range_inconsistencies <- function(survey_form,
     # Below-ground values of repetitions 2 and 3 are -1
     # while those of repetition 1 are considerably higher
     # In AFSCDB, these values are NA, which seems more reasonable
+
+    if ("6_2010_512" %in% df$unique_survey) {
 
     layers_to_check <- df %>%
       filter(unique_survey == "6_2010_512") %>%
@@ -2951,16 +2980,19 @@ get_range_inconsistencies <- function(survey_form,
 
       df <- df %>%
         mutate(organic_carbon_total =
-                 ifelse(.data$code_line %in%
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line %in%
                           pull(layers_to_check, code_line),
                         NA,
                         .data$organic_carbon_total),
                organic_carbon_total_source =
-                 ifelse(.data$code_line %in%
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line %in%
                           pull(layers_to_check, code_line),
                         "manual correction (FSCC)",
                         .data$organic_carbon_total_source))
 
+    }
     }
 
 
@@ -2975,6 +3007,10 @@ get_range_inconsistencies <- function(survey_form,
     # Spain: plot 26 in 1994?
 
   }
+
+
+
+
 
 
   ## so_pfh ----
@@ -3040,12 +3076,14 @@ get_range_inconsistencies <- function(survey_form,
 
       df <- df %>%
         mutate(horizon_c_organic_total =
-                 ifelse(.data$code_line ==
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line ==
                           pull(unique_layers_to_change, code_line),
                         21.2,
                         .data$horizon_c_organic_total),
                horizon_c_organic_total_source =
-                 ifelse(.data$code_line ==
+                 ifelse((!is.na(.data$code_line)) &
+                          .data$code_line ==
                           pull(unique_layers_to_change, code_line),
                         "manual correction (FSCC)",
                         .data$horizon_c_organic_total_source))
@@ -3273,46 +3311,32 @@ get_range_inconsistencies <- function(survey_form,
 
   # Remove the columns that are no longer needed in the data frame
 
-  if (any(names(df) %in% c("unique_partner_survey",
-                           "bulk_density_wrong_unit",
-                           "bulk_density_est_wrong_unit",
-                           "organic_carbon_wrong_unit",
-                           "total_nitrogen_wrong_unit",
-                           "gypsum_wrong_unit",
-                           "caco3_wrong_unit",
-                           "coarse_fragment_vol_any_survey",
-                           "bulk_density_any_survey",
-                           "part_size_clay_any_survey",
-                           "part_size_silt_any_survey",
-                           "part_size_sand_any_survey",
-                           "exch_ca_any_survey",
-                           "rea_al_any_survey",
-                           "rea_fe_any_survey",
-                           "non_stony",
-                           "calcareous_pH5",
-                           "calcareous_pH6"))) {
+  cols_to_remove <- c("unique_partner_survey",
+                      "bulk_density_wrong_unit",
+                      "bulk_density_est_wrong_unit",
+                      "organic_carbon_wrong_unit",
+                      "total_nitrogen_wrong_unit",
+                      "gypsum_wrong_unit",
+                      "caco3_wrong_unit",
+                      "organic_layer_weight_wrong_unit",
+                      "coarse_fragment_vol_any_survey",
+                      "bulk_density_any_survey",
+                      "part_size_clay_any_survey",
+                      "part_size_silt_any_survey",
+                      "part_size_sand_any_survey",
+                      "exch_ca_any_survey",
+                      "rea_al_any_survey",
+                      "rea_fe_any_survey",
+                      "non_stony",
+                      "calcareous_pH5",
+                      "calcareous_pH6",
+                      "ni",
+                      "code_soil_horizon_sample_c",
+                      "elec_cond")
 
-  df <- df[, -which(names(df) %in% c("unique_partner_survey",
-                                    "bulk_density_wrong_unit",
-                                    "bulk_density_est_wrong_unit",
-                                    "organic_carbon_wrong_unit",
-                                    "total_nitrogen_wrong_unit",
-                                    "gypsum_wrong_unit",
-                                    "caco3_wrong_unit",
-                                    "coarse_fragment_vol_any_survey",
-                                    "bulk_density_any_survey",
-                                    "part_size_clay_any_survey",
-                                    "part_size_silt_any_survey",
-                                    "part_size_sand_any_survey",
-                                    "exch_ca_any_survey",
-                                    "rea_al_any_survey",
-                                    "rea_fe_any_survey",
-                                    "non_stony",
-                                    "calcareous_pH5",
-                                    "calcareous_pH6",
-                                    "ni",
-                                    "code_soil_horizon_sample_c",
-                                    "elec_cond"))]
+  if (any(names(df) %in% cols_to_remove)) {
+    df <- df %>%
+      select(-any_of(cols_to_remove))
   }
 
   # Save the survey form and list_range_inconsistencies for the given survey
