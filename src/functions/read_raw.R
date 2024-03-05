@@ -1119,11 +1119,20 @@ for (i in seq_along(survey_forms)) {
     names(df)[which(names(df) %in% c("bulk_density",
                                      "organic_carbon_total",
                                      "n_total",
+                                     "organic_layer_weight",
                                      "horizon_bulk_dens_measure",
                                    # "horizon_bulk_dens_est",
                                      "horizon_c_organic_total",
                                      "horizon_n_total",
-                                     "organic_layer_weight"))]
+                                     "organic_layer_weight",
+                                     "coarse_fragment_vol",
+                                     "part_size_clay",
+                                     "part_size_silt",
+                                     "part_size_sand",
+                                     "horizon_coarse_weight",
+                                     "horizon_clay",
+                                     "horizon_silt",
+                                     "horizon_sand"))]
 
   for (col in columns_to_add_source) {
 
@@ -1145,6 +1154,7 @@ for (i in seq_along(survey_forms)) {
                                      "bulk_density",
                                      "organic_carbon_total",
                                      "n_total",
+                                     "organic_layer_weight",
                                      "horizon_bulk_dens_measure",
                                      # "horizon_bulk_dens_est",
                                      "horizon_c_organic_total",
@@ -1153,7 +1163,11 @@ for (i in seq_along(survey_forms)) {
                                      "coarse_fragment_vol",
                                      "part_size_clay",
                                      "part_size_silt",
-                                     "part_size_sand"))]
+                                     "part_size_sand",
+                                     "horizon_coarse_weight",
+                                     "horizon_clay",
+                                     "horizon_silt",
+                                     "horizon_sand"))]
 
   for (col in columns_to_add_orig) {
     orig_col <- paste0(col, "_orig")
@@ -1310,6 +1324,8 @@ if (!identical(dupl_partner_codes, character(0))) {
 if (code_survey %in% c("s1", "so")) {
 
   source("./src/functions/add_dec_coord_columns.R")
+  source("./src/functions/as_sf.R")
+
 
   # Get harmonised coordinates
 
