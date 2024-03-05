@@ -115,7 +115,11 @@ soilspline <- function(id,
 
   mpspline_output <- mpspline_one(site = prof_input,
                                   var_name = "variab",
-                                  lam = 0.1)
+                                  lam = 0.1,
+                                  # constrains the maximum predicted value
+                                  # to a realistic number. Defaults
+                                  # to 1000:
+                                  vhigh = 2600)
 
   # Extrapolate the mass-preserving spline output to depth max_soil_depth ----
   # (i.e. effective soil depth; max 100 cm)
