@@ -2964,7 +2964,7 @@ if (any(df$layer_type[vec] == "mineral")) {
     # They should belong to those unique surveys (as manually evaluated):
 
     so_som_dont_convert <- c("1_2011_92", "5_1995_17", "5_1997_2",
-                             "60_2004_2", "50_1997_2")
+                             "60_2004_2", "50_1997_2", "52_2019_10")
     s1_som_dont_convert <- c("58_1995_285", "7_2007_208", "6_2008_62",
                              "6_2008_124", "6_2008_135", "6_2008_156",
                              "6_2008_158")
@@ -4288,6 +4288,8 @@ df <- df %>%
                          ifelse(is.na(.data$layer_limit_inferior) &
                                   (.data$layer_number ==
                                      .data$layer_number_deepest) &
+                                  (.data$layer_number != 1) &
+                                  (.data$layer_type != "forest_floor") &
                                   !is.na(.data$eff_soil_depth) &
                                   (.data$eff_soil_depth > .data$depth_max),
                                 .data$eff_soil_depth,
@@ -7366,6 +7368,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                              ifelse(is.na(.data$horizon_limit_low) &
                                       (.data$layer_number ==
                                          .data$layer_number_deepest) &
+                                      (.data$layer_number != 1) &
+                                      (.data$layer_type != "forest_floor") &
                                       !is.na(.data$eff_soil_depth) &
                                       (.data$eff_soil_depth > .data$depth_max),
                                     .data$eff_soil_depth,
