@@ -7,14 +7,49 @@ gapfill_internally <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  source("./src/functions/harmonise_per_plot_layer.R")
+  source("./src/functions/depth_join.R")
+
   cat(paste0(" \nGap-fill '", survey_form, "' internally\n"))
 
 
-  # . ----
-  # som ----
+  code_survey <- unlist(str_split(survey_form, "_"))[1]
+  survey_form_type <- unlist(str_split(survey_form, "_"))[2]
 
 
-  if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+
+  # Parameter ranges ----
+
+  ranges_qaqc <-
+    read.csv("./data/additional_data/ranges_qaqc.csv", sep = ";")
+
+  source("./src/functions/get_bulk_density_stats.R")
+  quant_bd <- get_bulk_density_stats(mode = "quantile",
+                                     matrix_type = "mineral",
+                                     quantile = 99)
+  quant_bd_org <- get_bulk_density_stats(mode = "quantile",
+                                         matrix_type = "organic",
+                                         quantile = 99)
+  quant_bd <- c(294, 1920)
+  quant_bd_org <- c(6, 1250)
+
+  parameter_ranges <- bind_rows(
+    data.frame(parameter = "bulk_density",
+               range_min = quant_bd[1],
+               range_max = quant_bd[2]),
+    data.frame(parameter = "coarse_fragment_vol",
+               range_min = 0,
+               range_max = 100),
+    data.frame(parameter = "clay",
+               range_min = 0,
+               range_max = 100),
+    data.frame(parameter = "silt",
+               range_min = 0,
+               range_max = 100),
+    data.frame(parameter = "sand",
+               range_min = 0,
+               range_max = 100))
+
 
   # Import survey forms ----
 
@@ -24,105 +59,1010 @@ gapfill_internally <- function(survey_form,
     df <- data_frame
   }
 
-  pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
 
+  if (survey_form_type == "pfh") {
 
+    # Harmonise the variable names with those of "som"
 
-  # 1. Source 1: "sw_swc" ----
-
-  if (unlist(strsplit(survey_form, "_"))[1] == "so") {
-    # Level II
-
-    # Import additional sw_swc file with corresponding fixed-depth layers
-    # by Nathalie (manually created)
-
-    # TO DO: automate the assignment of corresponding fixed-depth layers
-
-    file_path <- "./data/additional_data/sw_swc/SW_SWC_code_layer_SOM.csv"
-
-    assertthat::assert_that(file.exists(file_path),
-                            msg = paste0("'", file_path, "' ",
-                                         "does not exist."))
-
-    sw_swc_adds <- read.csv2(file_path)
-
-    # Preprocess file
-
-    sw_swc_adds_sameyear <- sw_swc_adds %>%
-      rename(code_layer_som = code_layer_SOM) %>%
-      rename(plot_id = PLOTID) %>%
-      # Remove records without corresponding fixed-depth layer
-      filter(code_layer_som %in%
-               c("O", "OH", "OFH",
-                 "M05", "M51", "M01", "M12", "M24", "M48")) %>%
-      # Create unique_survey_layer
-      mutate(unique_survey_layer =
-               paste0(code_country, "_",
-                      survey_year, "_",
-                      code_plot, "_",
-                      code_layer_som)) %>%
-      # Create unique_layer
-      mutate(unique_layer =
-               paste0(code_country, "_",
-                      code_plot, "_",
-                      code_layer_som)) %>%
-      # Aggregate over replicates
-      group_by(unique_survey_layer, unique_layer) %>%
-      summarise(bulk_density =
-                  mean(bulk_density, na.rm = TRUE),
-                .groups = "drop")
-
-
-    # Aggregate different survey years per unique layer (plot_id x code_layer)
-    # To gap-fill data not from the same survey_year
-
-    sw_swc_adds_otheryear <- sw_swc_adds_sameyear %>%
-      group_by(unique_layer) %>%
-      summarise(bulk_density =
-                  mean(bulk_density, na.rm = TRUE),
-                .groups = "drop")
+    df <- df %>%
+      rename(layer_limit_superior = horizon_limit_up) %>%
+      rename(layer_limit_inferior = horizon_limit_low) %>%
+      rename(code_layer = horizon_master) %>%
+      rename(unique_survey_repetition = unique_survey_profile)
 
   }
 
 
 
 
-  # 2. Source 2: "pfh" ----
 
-  # Redundant layers do already need to be removed from so_pfh before
-  # being able to harmonise the layers into pre-defined depth intervals
+  # 1. Get data of physical parameters at one profile per plot ----
 
-  assertthat::assert_that("layer_number" %in% names(pfh))
+  ## 1.1. Source 1: "sw_swc" ----
+
+  if (code_survey == "so") {
+
+    # Level II
+
+    swc <- get_env("sw_swc")
+
+    # Above-ground as well as below-ground need to be gap-filled
+    # based on depth
+
+    name <- "sw_swc_plot_layer"
+
+    if (!exists(name) ||
+        (exists(name) &&
+         any(!"data.frame" %in% class(get_env(name))))) {
+
+      cat(paste0(" \nHarmonise data of '", "sw_swc", "' per plot layer\n"))
+
+      swc_plot <-
+        harmonise_per_plot_layer(survey_form_input = "sw_swc",
+                                 data_frame_input = swc)
+
+      assign_env(name,
+                 swc_plot)
+
+      write.table(sw_plot,
+                  file = paste0("./output/gap_filling_details/",
+                                name,
+                                ".csv"),
+                  row.names = FALSE,
+                  na = "",
+                  sep = ";",
+                  dec = ".")
+
+    } else {
+
+      swc_plot <- get_env(name)
+
+    }
+  }
 
 
-  # Convert pedogenic depth layers ("pfh")
-  # into a dataframe with pre-defined fixed-depth layers ("som")
+
+
+  ## 1.2. Source 2: "pfh" ----
 
   # This takes some time, so check whether this form already exists
   # in the global environment
 
-  name_pfh_fixed <- paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh_fixed")
+  name <- paste0(code_survey, "_pfh_plot_layer")
 
-  if (!exists(name_pfh_fixed) ||
-       (exists(name_pfh_fixed) &&
-        any(!"data.frame" %in% class(get_env(name_pfh_fixed))))) {
+  if (!exists(name) ||
+       (exists(name) &&
+        any(!"data.frame" %in% class(get_env(name))))) {
 
-    source("./src/functions/harmonise_into_fixed_depth_layers.R")
+    # Redundant layers do need to be removed so this column is needed
 
-    name_pfh <- paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh")
+    assertthat::assert_that(
+      "layer_number" %in% names(
+        get_env(paste0(code_survey, "_pfh"))))
 
-    pfh_fixed <-
-      harmonise_into_fixed_depth_layers(data_frame = pfh,
-                                        survey_form_df = name_pfh)
+    cat(paste0(" \nHarmonise data of '", code_survey, "_pfh",
+               "' per plot layer\n"))
 
-    assign_env(name_pfh_fixed,
-               pfh_fixed)
+    pfh_plot <-
+      harmonise_per_plot_layer(
+        survey_form_input =
+          paste0(code_survey, "_pfh"),
+        data_frame_input =
+          get_env(paste0(code_survey, "_pfh")))
+
+    assign_env(name,
+               pfh_plot)
+
+    write.table(pfh_plot,
+                file = paste0("./output/gap_filling_details/",
+                              name,
+                              ".csv"),
+                row.names = FALSE,
+                na = "",
+                sep = ";",
+                dec = ".")
 
   } else {
 
-    pfh_fixed <- get_env(name_pfh_fixed)
+    pfh_plot <- get_env(name)
 
   }
+
+
+
+
+  ## 1.3. Source 3: "som" ----
+
+  # This takes some time, so check whether this form already exists
+  # in the global environment
+
+  name <- paste0(code_survey, "_som_plot_layer")
+
+  if (!exists(name) ||
+      (exists(name) &&
+       any(!"data.frame" %in% class(get_env(name))))) {
+
+    # Redundant layers do need to be removed so this column is needed
+
+    assertthat::assert_that(
+      "layer_number" %in% names(
+        get_env(paste0(code_survey, "_som"))))
+
+    cat(paste0(" \nHarmonise data of '", code_survey, "_som",
+               "' per plot layer\n"))
+
+    som_plot <-
+      harmonise_per_plot_layer(
+        survey_form_input =
+          paste0(code_survey, "_som"),
+        data_frame_input =
+          get_env(paste0(code_survey, "_som")))
+
+    assign_env(name,
+               som_plot)
+
+    write.table(som_plot,
+                file = paste0("./output/gap_filling_details/",
+                              name,
+                              ".csv"),
+                row.names = FALSE,
+                na = "",
+                sep = ";",
+                dec = ".")
+
+  } else {
+
+    som_plot <- get_env(name)
+
+  }
+
+
+
+
+
+
+
+# 2. Add data to df ----
+
+  # Add data of "som"
+
+  df <- depth_join(df1 = df,
+                   df2 = som_plot,
+                   prefix_parameters_in_df1 = "som_")
+
+  # Add data of "pfh"
+
+  df <- depth_join(df1 = df,
+                   df2 = pfh_plot,
+                   prefix_parameters_in_df1 = "pfh_")
+
+  # Add data of "swc"
+
+  if (code_survey == "so") {
+
+  df <- depth_join(df1 = df,
+                   df2 = swc_plot,
+                   prefix_parameters_in_df1 = "swc_")
+  }
+
+  write.table(df,
+              file = paste0("./output/gap_filling_details/",
+                            survey_form, "_suppl",
+                            ".csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
+
+
+
+
+
+
+
+# 3. Combine columns ----
+
+  ## 3.1. "som" ----
+
+  if (survey_form_type == "som") {
+
+    ### 3.1.1. Bulk density ----
+
+    range_mineral_min <- parameter_ranges$range_min[
+      which(parameter_ranges$parameter == "bulk_density")]
+    range_mineral_max <- parameter_ranges$range_max[
+      which(parameter_ranges$parameter == "bulk_density")]
+
+    bulk_density_columns <- df %>%
+      select(contains("bulk_dens"),
+             -contains("source"), -contains("survey_year")) %>%
+      names
+
+    df <- df %>%
+      # Remove values outside of the bulk density range
+      mutate(bulk_density = ifelse(
+        (!is.na(bulk_density)) &
+        ((.data$layer_type != "mineral" &
+           .data$bulk_density > quant_bd_org[1] &
+           .data$bulk_density < quant_bd_org[2]) |
+          (.data$layer_type == "mineral" &
+             .data$bulk_density >= range_mineral_min &
+             .data$bulk_density <= range_mineral_max)),
+        bulk_density,
+        NA),
+        bulk_density_source = ifelse(
+          (!is.na(bulk_density_source)) &
+            ((.data$layer_type != "mineral" &
+                .data$bulk_density > quant_bd_org[1] &
+                .data$bulk_density < quant_bd_org[2]) |
+               (.data$layer_type == "mineral" &
+                  .data$bulk_density >= range_mineral_min &
+                  .data$bulk_density <= range_mineral_max)),
+          bulk_density_source,
+          NA),
+        bulk_density_layer_weight = ifelse(
+          (!is.na(bulk_density_layer_weight)) &
+            ((.data$layer_type != "mineral" &
+                .data$bulk_density_layer_weight > quant_bd_org[1] &
+                .data$bulk_density_layer_weight < quant_bd_org[2]) |
+               (.data$layer_type == "mineral" &
+                  .data$bulk_density_layer_weight >= range_mineral_min &
+                  .data$bulk_density_layer_weight <= range_mineral_max)),
+          bulk_density_layer_weight,
+          NA)) %>%
+      # Use bulk_density_layer_weight to gap-fill layers from the same year
+      mutate(
+        bulk_density_source = ifelse(
+          (is.na(bulk_density) &
+             !is.na(bulk_density_layer_weight) &
+             (layer_type %in% c("forest_floor", "peat"))),
+          paste0("som (organic_layer_weight", .data$survey_year, ")"),
+          bulk_density_source),
+        bulk_density = ifelse(
+          (is.na(bulk_density) &
+             !is.na(bulk_density_layer_weight) &
+             (layer_type %in% c("forest_floor", "peat"))),
+          bulk_density_layer_weight,
+          bulk_density)) %>%
+      # Gap-fill
+      mutate(
+        bulk_density_source = ifelse(
+          !is.na(bulk_density) &
+            ((layer_type %in% c("forest_floor", "peat")) |
+               (layer_type == "mineral" &
+                  !is.na(som_bulk_density_survey_year) &
+                  (survey_year == som_bulk_density_survey_year))),
+          # Original data are kept
+          bulk_density_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(som_bulk_density) ~
+              paste0("som_", .data$som_bulk_density_survey_year),
+            exists("swc_bulk_density") && !is.na(swc_bulk_density) ~
+              paste0("swc_", .data$swc_bulk_density_survey_year),
+            !is.na(pfh_horizon_bulk_dens_measure) ~
+              paste0("pfh_measure_",
+                     .data$pfh_horizon_bulk_dens_measure_survey_year),
+            !is.na(pfh_horizon_bulk_dens_est) ~
+              paste0("pfh_est_", .data$pfh_horizon_bulk_dens_est_survey_year))),
+        bulk_density = ifelse(
+          !is.na(bulk_density) &
+            ((layer_type %in% c("forest_floor", "peat")) |
+            (layer_type == "mineral" &
+               !is.na(som_bulk_density_survey_year) &
+               (survey_year == som_bulk_density_survey_year))),
+          # Keep the original bulk density data
+          bulk_density,
+          # Else, gap-fill
+          coalesce(
+            som_bulk_density,
+            ifelse(exists("swc_bulk_density"), swc_bulk_density, NULL),
+            pfh_horizon_bulk_dens_measure,
+            pfh_horizon_bulk_dens_est))) %>%
+      # Confidence intervals
+      mutate(bulk_density_sd = case_when(
+        !is.na(bulk_density) ~
+               sd(c_across(all_of(bulk_density_columns)),
+                                  na.rm = TRUE)),
+             bulk_density_n = case_when(
+               !is.na(bulk_density) ~
+               sum(!is.na(c_across(all_of(bulk_density_columns))))),
+             bulk_density_se = case_when(
+               !is.na(bulk_density) ~
+          bulk_density_sd / sqrt(bulk_density_n)),
+             bulk_density_t = case_when(
+               !is.na(bulk_density) ~
+          qt(0.975, df = (.data$bulk_density_n - 1))),
+             bulk_density_avg = case_when(
+               !is.na(bulk_density) ~
+          mean(c_across(all_of(bulk_density_columns)),
+                                     na.rm = TRUE)),
+             bulk_density_min_ci = case_when(
+               !is.na(bulk_density) ~
+               round(bulk_density_avg - bulk_density_t * bulk_density_se)),
+             bulk_density_max_ci = case_when(
+               !is.na(bulk_density) ~
+               round(bulk_density_avg + bulk_density_t * bulk_density_se))) %>%
+      # Round
+      mutate(bulk_density = round(bulk_density)) %>%
+      select(-any_of(c(
+        "bulk_density_afscdb",
+        "bulk_density_layer_weight",
+        "som_bulk_density", "som_bulk_density_survey_year",
+        "som_bulk_density_min", "som_bulk_density_max",
+        "pfh_horizon_bulk_dens_measure",
+        "pfh_horizon_bulk_dens_measure_survey_year",
+        "pfh_horizon_bulk_dens_measure_min",
+        "pfh_horizon_bulk_dens_measure_max",
+        "pfh_horizon_bulk_dens_est", "pfh_horizon_bulk_dens_est_survey_year",
+        "pfh_horizon_bulk_dens_est_min", "pfh_horizon_bulk_dens_est_max",
+        "swc_bulk_density", "swc_bulk_density_survey_year",
+        "swc_bulk_density_min", "swc_bulk_density_max",
+        "bulk_density_sd", "bulk_density_n",
+        "bulk_density_se", "bulk_density_t",
+        "bulk_density_avg"))) %>%
+      relocate(any_of(c("bulk_density_min_ci", "bulk_density_max_ci")),
+               .after = "bulk_density")
+
+
+
+    ### 3.1.2. Coarse fragments ----
+
+    coarse_fragment_columns <- df %>%
+      select(contains("coarse_frag"),
+             -contains("source"), -contains("survey_year")) %>%
+      names
+
+    df <- df %>%
+      # Gap-fill
+      mutate(
+        coarse_fragment_vol_source = ifelse(
+          !is.na(coarse_fragment_vol) &
+            (!is.na(som_coarse_fragment_vol_survey_year) &
+               (survey_year == som_coarse_fragment_vol_survey_year)),
+          # Original data are kept
+          coarse_fragment_vol_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(som_coarse_fragment_vol) ~
+              paste0("som_", .data$som_coarse_fragment_vol_survey_year),
+            !is.na(pfh_coarse_fragment_vol_converted) ~
+              paste0("pfh_weight_",
+                     .data$pfh_coarse_fragment_vol_converted_survey_year),
+            !is.na(pfh_coarse_fragment_vol_avg) ~
+              paste0("pfh_code_vol_",
+                     .data$pfh_coarse_fragment_vol_avg_survey_year))),
+        coarse_fragment_vol = ifelse(
+          !is.na(coarse_fragment_vol) &
+            (!is.na(som_coarse_fragment_vol_survey_year) &
+                  (survey_year == som_coarse_fragment_vol_survey_year)),
+          # Keep the original cf data
+          coarse_fragment_vol,
+          # Else, gap-fill
+          coalesce(
+            som_coarse_fragment_vol,
+            pfh_coarse_fragment_vol_converted,
+            pfh_coarse_fragment_vol_avg))) %>%
+      # Confidence intervals
+      mutate(coarse_fragment_vol_sd = case_when(
+        !is.na(coarse_fragment_vol) ~
+          sd(c_across(all_of(coarse_fragment_columns)), na.rm = TRUE)),
+             coarse_fragment_vol_n = case_when(
+               !is.na(coarse_fragment_vol) ~
+               sum(!is.na(c_across(all_of(coarse_fragment_columns))))),
+             coarse_fragment_vol_se =  case_when(
+               !is.na(coarse_fragment_vol) ~
+               coarse_fragment_vol_sd / sqrt(coarse_fragment_vol_n)),
+             coarse_fragment_vol_t = case_when(
+               !is.na(coarse_fragment_vol) ~
+               qt(0.975, df = (.data$coarse_fragment_vol_n - 1))),
+             coarse_fragment_vol_avg = case_when(
+               !is.na(coarse_fragment_vol) ~
+               mean(c_across(all_of(coarse_fragment_columns)), na.rm = TRUE)),
+             coarse_fragment_vol_min_ci = case_when(
+               !is.na(coarse_fragment_vol) ~
+               round(coarse_fragment_vol_avg -
+                       coarse_fragment_vol_t * coarse_fragment_vol_se, 1)),
+             coarse_fragment_vol_max_ci = case_when(
+               !is.na(coarse_fragment_vol) ~
+               round(coarse_fragment_vol_avg +
+                       coarse_fragment_vol_t * coarse_fragment_vol_se, 1))) %>%
+      # Round
+      mutate(coarse_fragment_vol = round(coarse_fragment_vol, 1)) %>%
+      select(-c(
+        "coarse_fragment_vol_afscdb",
+        "som_coarse_fragment_vol", "som_coarse_fragment_vol_survey_year",
+        "som_coarse_fragment_vol_min", "som_coarse_fragment_vol_max",
+        "pfh_coarse_fragment_vol_converted",
+        "pfh_coarse_fragment_vol_converted_survey_year",
+        "pfh_coarse_fragment_vol_converted_min",
+        "pfh_coarse_fragment_vol_converted_max",
+        "pfh_coarse_fragment_vol_avg",
+        "pfh_coarse_fragment_vol_avg_survey_year",
+        "pfh_coarse_fragment_vol_avg_min", "pfh_coarse_fragment_vol_avg_max",
+        "coarse_fragment_vol_sd", "coarse_fragment_vol_n",
+        "coarse_fragment_vol_se", "coarse_fragment_vol_t",
+        "coarse_fragment_vol_avg")) %>%
+      relocate(any_of(c("coarse_fragment_vol_min_ci",
+                        "coarse_fragment_vol_max_ci")),
+               .after = "coarse_fragment_vol")
+
+
+
+    ### 3.1.3. Clay ----
+
+    clay_columns <- df %>%
+      select(contains("clay"),
+             -contains("source"), -contains("survey_year"),
+             -contains("_rt"), -contains("_loq")) %>%
+      names
+
+    df <- df %>%
+      # Gap-fill
+      mutate(
+        part_size_clay_source = ifelse(
+          !is.na(part_size_clay) &
+            (!is.na(som_texture_survey_year) &
+               (survey_year == som_texture_survey_year)),
+          # Original data are kept
+          part_size_clay_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(som_part_size_clay) ~
+              paste0("som_", .data$som_texture_survey_year),
+            !is.na(pfh_horizon_clay) ~
+              paste0("pfh_",
+                     .data$pfh_texture_survey_year))),
+        part_size_clay = ifelse(
+          !is.na(part_size_clay) &
+            (!is.na(som_texture_survey_year) &
+               (survey_year == som_texture_survey_year)),
+          # Keep the original data
+          part_size_clay,
+          # Else, gap-fill
+          coalesce(
+            som_part_size_clay,
+            pfh_horizon_clay))) %>%
+      # Confidence intervals
+      mutate(part_size_clay_sd = case_when(
+        !is.na(part_size_clay) ~
+          sd(c_across(all_of(clay_columns)), na.rm = TRUE)),
+        part_size_clay_n = case_when(
+          !is.na(part_size_clay) ~
+            sum(!is.na(c_across(all_of(clay_columns))))),
+        part_size_clay_se =  case_when(
+          !is.na(part_size_clay) ~
+            part_size_clay_sd / sqrt(part_size_clay_n)),
+        part_size_clay_t = case_when(
+          !is.na(part_size_clay) ~
+            qt(0.975, df = (.data$part_size_clay_n - 1))),
+        part_size_clay_avg = case_when(
+          !is.na(part_size_clay) ~
+            mean(c_across(all_of(clay_columns)), na.rm = TRUE)),
+        part_size_clay_min_ci = case_when(
+          !is.na(part_size_clay) ~
+            round(part_size_clay_avg -
+                    part_size_clay_t * part_size_clay_se, 1)),
+        part_size_clay_max_ci = case_when(
+          !is.na(part_size_clay) ~
+            round(part_size_clay_avg +
+                    part_size_clay_t * part_size_clay_se, 1))) %>%
+      # Round
+      mutate(part_size_clay = round(part_size_clay, 1)) %>%
+      select(-c(
+        "part_size_clay_afscdb",
+        "som_part_size_clay",
+        "som_part_size_clay_min", "som_part_size_clay_max",
+        "pfh_horizon_clay",
+        "pfh_horizon_clay_min",
+        "pfh_horizon_clay_max",
+        "part_size_clay_sd", "part_size_clay_n",
+        "part_size_clay_se", "part_size_clay_t",
+        "part_size_clay_avg")) %>%
+      relocate(any_of(c("part_size_clay_min_ci",
+                        "part_size_clay_max_ci")),
+               .after = "part_size_clay")
+
+
+
+    ### 3.1.4. Silt ----
+
+    silt_columns <- df %>%
+      select(contains("silt"),
+             -contains("source"), -contains("survey_year"),
+             -contains("_rt"), -contains("_loq")) %>%
+      names
+
+    df <- df %>%
+      # Gap-fill
+      mutate(
+        part_size_silt_source = ifelse(
+          !is.na(part_size_silt) &
+            (!is.na(som_texture_survey_year) &
+               (survey_year == som_texture_survey_year)),
+          # Original data are kept
+          part_size_silt_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(som_part_size_silt) ~
+              paste0("som_", .data$som_texture_survey_year),
+            !is.na(pfh_horizon_silt) ~
+              paste0("pfh_",
+                     .data$pfh_texture_survey_year))),
+        part_size_silt = ifelse(
+          !is.na(part_size_silt) &
+            (!is.na(som_texture_survey_year) &
+               (survey_year == som_texture_survey_year)),
+          # Keep the original data
+          part_size_silt,
+          # Else, gap-fill
+          coalesce(
+            som_part_size_silt,
+            pfh_horizon_silt))) %>%
+      # Confidence intervals
+      mutate(part_size_silt_sd = case_when(
+        !is.na(part_size_silt) ~
+          sd(c_across(all_of(silt_columns)), na.rm = TRUE)),
+        part_size_silt_n = case_when(
+          !is.na(part_size_silt) ~
+            sum(!is.na(c_across(all_of(silt_columns))))),
+        part_size_silt_se =  case_when(
+          !is.na(part_size_silt) ~
+            part_size_silt_sd / sqrt(part_size_silt_n)),
+        part_size_silt_t = case_when(
+          !is.na(part_size_silt) ~
+            qt(0.975, df = (.data$part_size_silt_n - 1))),
+        part_size_silt_avg = case_when(
+          !is.na(part_size_silt) ~
+            mean(c_across(all_of(silt_columns)), na.rm = TRUE)),
+        part_size_silt_min_ci = case_when(
+          !is.na(part_size_silt) ~
+            round(part_size_silt_avg -
+                    part_size_silt_t * part_size_silt_se, 1)),
+        part_size_silt_max_ci = case_when(
+          !is.na(part_size_silt) ~
+            round(part_size_silt_avg +
+                    part_size_silt_t * part_size_silt_se, 1))) %>%
+      # Round
+      mutate(part_size_silt = round(part_size_silt, 1)) %>%
+      select(-c(
+        "part_size_silt_afscdb",
+        "som_part_size_silt",
+        "som_part_size_silt_min", "som_part_size_silt_max",
+        "pfh_horizon_silt",
+        "pfh_horizon_silt_min",
+        "pfh_horizon_silt_max",
+        "part_size_silt_sd", "part_size_silt_n",
+        "part_size_silt_se", "part_size_silt_t",
+        "part_size_silt_avg")) %>%
+      relocate(any_of(c("part_size_silt_min_ci",
+                        "part_size_silt_max_ci")),
+               .after = "part_size_silt")
+
+
+    ### 3.1.5. Sand ----
+
+    sand_columns <- df %>%
+      select(contains("sand"),
+             -contains("source"), -contains("survey_year"),
+             -contains("_rt"), -contains("_loq")) %>%
+      names
+
+    df <- df %>%
+      # Gap-fill
+      mutate(
+        part_size_sand_source = ifelse(
+          !is.na(part_size_sand) &
+            (!is.na(som_texture_survey_year) &
+               (survey_year == som_texture_survey_year)),
+          # Original data are kept
+          part_size_sand_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(som_part_size_sand) ~
+              paste0("som_", .data$som_texture_survey_year),
+            !is.na(pfh_horizon_sand) ~
+              paste0("pfh_",
+                     .data$pfh_texture_survey_year))),
+        part_size_sand = ifelse(
+          !is.na(part_size_sand) &
+            (!is.na(som_texture_survey_year) &
+               (survey_year == som_texture_survey_year)),
+          # Keep the original data
+          part_size_sand,
+          # Else, gap-fill
+          coalesce(
+            som_part_size_sand,
+            pfh_horizon_sand))) %>%
+      # Confidence intervals
+      mutate(part_size_sand_sd = case_when(
+        !is.na(part_size_sand) ~
+          sd(c_across(all_of(sand_columns)), na.rm = TRUE)),
+        part_size_sand_n = case_when(
+          !is.na(part_size_sand) ~
+            sum(!is.na(c_across(all_of(sand_columns))))),
+        part_size_sand_se =  case_when(
+          !is.na(part_size_sand) ~
+            part_size_sand_sd / sqrt(part_size_sand_n)),
+        part_size_sand_t = case_when(
+          !is.na(part_size_sand) ~
+            qt(0.975, df = (.data$part_size_sand_n - 1))),
+        part_size_sand_avg = case_when(
+          !is.na(part_size_sand) ~
+            mean(c_across(all_of(sand_columns)), na.rm = TRUE)),
+        part_size_sand_min_ci = case_when(
+          !is.na(part_size_sand) ~
+            round(part_size_sand_avg -
+                    part_size_sand_t * part_size_sand_se, 1)),
+        part_size_sand_max_ci = case_when(
+          !is.na(part_size_sand) ~
+            round(part_size_sand_avg +
+                    part_size_sand_t * part_size_sand_se, 1))) %>%
+      # Round
+      mutate(part_size_sand = round(part_size_sand, 1)) %>%
+      select(-c(
+        "part_size_sand_afscdb",
+        "som_part_size_sand", "som_texture_survey_year",
+        "som_part_size_sand_min", "som_part_size_sand_max",
+        "pfh_horizon_sand", "pfh_texture_survey_year",
+        "pfh_horizon_sand_min",
+        "pfh_horizon_sand_max",
+        "part_size_sand_sd", "part_size_sand_n",
+        "part_size_sand_se", "part_size_sand_t",
+        "part_size_sand_avg")) %>%
+      relocate(any_of(c("part_size_sand_min_ci",
+                        "part_size_sand_max_ci")),
+               .after = "part_size_sand")
+
+
+
+    ### 3.1.6. Organic layer weight ----
+
+    df <- df %>%
+      # Gap-fill
+      mutate(
+        organic_layer_weight_bd = ifelse(
+            !is.na(bulk_density) &
+            !is.na(layer_thickness) &
+            layer_type %in% c("peat", "forest_floor"),
+          # kg m-2
+          round(.data$bulk_density * (.data$layer_thickness * 1e-2), 3),
+          NA_real_),
+        organic_layer_weight_source = ifelse(
+          layer_type %in% c("peat", "forest_floor"),
+          # Sources for gap-filling
+          case_when(
+            !is.na(organic_layer_weight) ~
+              .data$organic_layer_weight_source,
+            !is.na(organic_layer_weight_bd) ~
+              paste0("bulk_density (", .data$bulk_density_source, ")")),
+          NA_character_),
+        organic_layer_weight = ifelse(
+          layer_type %in% c("peat", "forest_floor"),
+          coalesce(organic_layer_weight,
+                   organic_layer_weight_bd),
+          NA_real_)) %>%
+      # Confidence intervals
+      mutate(
+        organic_layer_weight_bd_min = ifelse(
+          !is.na(bulk_density) &
+            !is.na(bulk_density_min_ci) &
+            !is.na(layer_thickness) &
+            layer_type %in% c("peat", "forest_floor"),
+          # kg m-2
+          round(.data$bulk_density_min_ci * (.data$layer_thickness * 1e-2), 3),
+          NA_real_),
+        organic_layer_weight_bd_max = ifelse(
+          !is.na(bulk_density) &
+            !is.na(bulk_density_max_ci) &
+            !is.na(layer_thickness) &
+            layer_type %in% c("peat", "forest_floor"),
+          # kg m-2
+          round(.data$bulk_density_max_ci * (.data$layer_thickness * 1e-2), 3),
+          NA_real_),
+        organic_layer_weight_min_ci = case_when(
+          !is.na(organic_layer_weight) ~
+            round(min(c(.data$organic_layer_weight,
+                        .data$organic_layer_weight_bd_min)), 1)),
+        organic_layer_weight_max_ci = case_when(
+          !is.na(organic_layer_weight) ~
+            round(max(c(.data$organic_layer_weight,
+                        .data$organic_layer_weight_bd_max)), 1))) %>%
+      # Round
+      mutate(part_size_sand = round(part_size_sand, 1)) %>%
+      select(-c(
+        "organic_layer_weight_afscdb", "organic_layer_weight_bd",
+        "organic_layer_weight_bd_min", "organic_layer_weight_bd_max") %>%
+      relocate(any_of(c("organic_layer_weight_min_ci",
+                        "organic_layer_weight_max_ci")),
+               .after = "organic_layer_weight")
+
+
+
+
+
+
+  # OLW niet vergeten
+
+  }
+
+
+
+
+
+  ## 3.2. "pfh" ----
+
+  if (survey_form_type == "pfh") {
+
+    ### 3.2.1. Bulk density ----
+
+    range_mineral_min <- parameter_ranges$range_min[
+      which(parameter_ranges$parameter == "bulk_density")]
+    range_mineral_max <- parameter_ranges$range_max[
+      which(parameter_ranges$parameter == "bulk_density")]
+
+    bulk_density_columns <- df %>%
+      select(contains("bulk_dens"),
+             -contains("source"), -contains("survey_year")) %>%
+      names
+
+    df <- df %>%
+      # Copy horizon_bulk_dens_measure to a new column bulk_density
+      mutate(bulk_density = horizon_bulk_dens_measure) %>%
+      # Rename horizon_bulk_dens_measure_source
+      rename(bulk_density_source = horizon_bulk_dens_measure_source) %>%
+      # Remove values outside of the bulk density range
+      mutate(bulk_density = ifelse(
+        (!is.na(bulk_density)) &
+          ((.data$layer_type != "mineral" &
+              .data$bulk_density > quant_bd_org[1] &
+              .data$bulk_density < quant_bd_org[2]) |
+             (.data$layer_type == "mineral" &
+                .data$bulk_density >= range_mineral_min &
+                .data$bulk_density <= range_mineral_max)),
+        bulk_density,
+        NA),
+        bulk_density_source = ifelse(
+          (!is.na(bulk_density_source)) &
+            ((.data$layer_type != "mineral" &
+                .data$bulk_density > quant_bd_org[1] &
+                .data$bulk_density < quant_bd_org[2]) |
+               (.data$layer_type == "mineral" &
+                  .data$bulk_density >= range_mineral_min &
+                  .data$bulk_density <= range_mineral_max)),
+          bulk_density_source,
+          NA)) %>%
+      # Gap-fill
+      mutate(
+        bulk_density_source = ifelse(
+          !is.na(bulk_density) &
+            ((layer_type %in% c("forest_floor", "peat")) |
+               (layer_type == "mineral" &
+                  !is.na(pfh_bulk_dens_measure_survey_year) &
+                  (survey_year == pfh_bulk_dens_measure_survey_year))),
+          # Original data are kept
+          bulk_density_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(pfh_horizon_bulk_dens_measure) ~
+              paste0("pfh_measure_",
+                     .data$pfh_horizon_bulk_dens_measure_survey_year),
+            exists("swc_bulk_density") && !is.na(swc_bulk_density) ~
+              paste0("swc_", .data$swc_bulk_density_survey_year),
+            !is.na(som_bulk_density) ~
+              paste0("som_",
+                     .data$som_bulk_density_survey_year),
+            !is.na(pfh_horizon_bulk_dens_est) ~
+              paste0("pfh_est_", .data$pfh_horizon_bulk_dens_est_survey_year))),
+        bulk_density = ifelse(
+          !is.na(bulk_density) &
+            ((layer_type %in% c("forest_floor", "peat")) |
+               (layer_type == "mineral" &
+                  !is.na(pfh_bulk_dens_measure_survey_year) &
+                  (survey_year == pfh_bulk_dens_measure_survey_year))),
+          # Keep the original bulk density data
+          bulk_density,
+          # Else, gap-fill
+          coalesce(
+            pfh_horizon_bulk_dens_measure,
+            ifelse(exists("swc_bulk_density"), swc_bulk_density, NULL),
+            som_bulk_density,
+            pfh_horizon_bulk_dens_est))) %>%
+      # Confidence intervals
+      mutate(bulk_density_sd = case_when(
+        !is.na(bulk_density) ~
+          sd(c_across(all_of(bulk_density_columns)),
+             na.rm = TRUE)),
+        bulk_density_n = case_when(
+          !is.na(bulk_density) ~
+            sum(!is.na(c_across(all_of(bulk_density_columns))))),
+        bulk_density_se = case_when(
+          !is.na(bulk_density) ~
+            bulk_density_sd / sqrt(bulk_density_n)),
+        bulk_density_t = case_when(
+          !is.na(bulk_density) ~
+            qt(0.975, df = (.data$bulk_density_n - 1))),
+        bulk_density_avg = case_when(
+          !is.na(bulk_density) ~
+            mean(c_across(all_of(bulk_density_columns)),
+                 na.rm = TRUE)),
+        bulk_density_min_ci = case_when(
+          !is.na(bulk_density) ~
+            round(bulk_density_avg - bulk_density_t * bulk_density_se)),
+        bulk_density_max_ci = case_when(
+          !is.na(bulk_density) ~
+            round(bulk_density_avg + bulk_density_t * bulk_density_se))) %>%
+      # Round
+      mutate(bulk_density = round(bulk_density)) %>%
+      select(-any_of(c(
+        "bulk_density_afscdb",
+        "bulk_density_layer_weight",
+        "som_bulk_density", "som_bulk_density_survey_year",
+        "som_bulk_density_min", "som_bulk_density_max",
+        "pfh_horizon_bulk_dens_measure",
+        "pfh_horizon_bulk_dens_measure_survey_year",
+        "pfh_horizon_bulk_dens_measure_min",
+        "pfh_horizon_bulk_dens_measure_max",
+        "pfh_horizon_bulk_dens_est", "pfh_horizon_bulk_dens_est_survey_year",
+        "pfh_horizon_bulk_dens_est_min", "pfh_horizon_bulk_dens_est_max",
+        "swc_bulk_density", "swc_bulk_density_survey_year",
+        "swc_bulk_density_min", "swc_bulk_density_max",
+        "bulk_density_sd", "bulk_density_n",
+        "bulk_density_se", "bulk_density_t",
+        "bulk_density_avg"))) %>%
+      relocate(any_of(c("bulk_density_min_ci", "bulk_density_max_ci")),
+               .after = "bulk_density")
+
+
+
+    ### 3.2.2. Coarse fragments ----
+
+    coarse_fragment_columns <- df %>%
+      select(contains("coarse_frag"),
+             -contains("source"), -contains("survey_year")) %>%
+      names
+
+    df <- df %>%
+      # Copy coarse_fragment_vol_converted to a new column coarse_fragment_vol
+      mutate(coarse_fragment_vol = coarse_fragment_vol_converted) %>%
+      # Rename horizon_coarse_weight_source
+      rename(coarse_fragment_vol_source = horizon_coarse_weight_source) %>%
+      # Gap-fill
+      mutate(
+        coarse_fragment_vol_source = ifelse(
+          !is.na(coarse_fragment_vol) &
+            (!is.na(pfh_coarse_fragment_vol_converted_survey_year) &
+               (survey_year == pfh_coarse_fragment_vol_converted_survey_year)),
+          # Original data are kept
+          coarse_fragment_vol_source,
+          # Sources for gap-filling
+          case_when(
+            !is.na(pfh_coarse_fragment_vol_converted) ~
+              paste0("pfh_weight_",
+                     .data$pfh_coarse_fragment_vol_converted_survey_year),
+            !is.na(som_coarse_fragment_vol) ~
+              paste0("som_", .data$som_coarse_fragment_vol_survey_year),
+            !is.na(pfh_coarse_fragment_vol_avg) ~
+              paste0("pfh_code_vol_",
+                     .data$pfh_coarse_fragment_vol_avg_survey_year))),
+        coarse_fragment_vol = ifelse(
+          !is.na(coarse_fragment_vol) &
+            (!is.na(pfh_coarse_fragment_vol_converted_survey_year) &
+               (survey_year == pfh_coarse_fragment_vol_converted_survey_year)),
+          # Keep the original cf data
+          coarse_fragment_vol,
+          # Else, gap-fill
+          coalesce(
+            pfh_coarse_fragment_vol_converted,
+            som_coarse_fragment_vol,
+            pfh_coarse_fragment_vol_avg))) %>%
+      # Confidence intervals
+      mutate(coarse_fragment_vol_sd = case_when(
+        !is.na(coarse_fragment_vol) ~
+          sd(c_across(all_of(coarse_fragment_columns)), na.rm = TRUE)),
+        coarse_fragment_vol_n = case_when(
+          !is.na(coarse_fragment_vol) ~
+            sum(!is.na(c_across(all_of(coarse_fragment_columns))))),
+        coarse_fragment_vol_se =  case_when(
+          !is.na(coarse_fragment_vol) ~
+            coarse_fragment_vol_sd / sqrt(coarse_fragment_vol_n)),
+        coarse_fragment_vol_t = case_when(
+          !is.na(coarse_fragment_vol) ~
+            qt(0.975, df = (.data$coarse_fragment_vol_n - 1))),
+        coarse_fragment_vol_avg = case_when(
+          !is.na(coarse_fragment_vol) ~
+            mean(c_across(all_of(coarse_fragment_columns)), na.rm = TRUE)),
+        coarse_fragment_vol_min_ci = case_when(
+          !is.na(coarse_fragment_vol) ~
+            round(coarse_fragment_vol_avg -
+                    coarse_fragment_vol_t * coarse_fragment_vol_se, 1)),
+        coarse_fragment_vol_max_ci = case_when(
+          !is.na(coarse_fragment_vol) ~
+            round(coarse_fragment_vol_avg +
+                    coarse_fragment_vol_t * coarse_fragment_vol_se, 1))) %>%
+      # Round
+      mutate(coarse_fragment_vol = round(coarse_fragment_vol, 1)) %>%
+      select(-c(
+        "coarse_fragment_vol_afscdb",
+        "som_coarse_fragment_vol", "som_coarse_fragment_vol_survey_year",
+        "som_coarse_fragment_vol_min", "som_coarse_fragment_vol_max",
+        "pfh_coarse_fragment_vol_converted",
+        "pfh_coarse_fragment_vol_converted_survey_year",
+        "pfh_coarse_fragment_vol_converted_min",
+        "pfh_coarse_fragment_vol_converted_max",
+        "pfh_coarse_fragment_vol_avg",
+        "pfh_coarse_fragment_vol_avg_survey_year",
+        "pfh_coarse_fragment_vol_avg_min", "pfh_coarse_fragment_vol_avg_max",
+        "coarse_fragment_vol_sd", "coarse_fragment_vol_n",
+        "coarse_fragment_vol_se", "coarse_fragment_vol_t",
+        "coarse_fragment_vol_avg")) %>%
+      relocate(any_of(c("coarse_fragment_vol_min_ci",
+                        "coarse_fragment_vol_max_ci")),
+               .after = "coarse_fragment_vol")
+
+
+
+
+
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+  # Change names of pfh columns back to the original ones
+
+
+# . ----
+# . ----
+
+
+  # Redundant layers do need to be removed so this column is needed
+
+  assertthat::assert_that("layer_number" %in% names(pfh))
+
+  # This takes some time, so check whether this form already exists
+  # in the global environment
+
+  name <- paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh_plot_layer")
+
+  if (!exists(name) ||
+      (exists(name) &&
+       any(!"data.frame" %in% class(get_env(name))))) {
+
+    pfh_plot <-
+      harmonise_per_plot_layer(
+        survey_form_input =
+          paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"),
+        data_frame_input =
+          get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh")))
+
+    assign_env(name,
+               pfh_plot)
+
+    write.table(sw_plot,
+                file = paste0("./output/gap_filling_details/",
+                              name,
+                              ".csv"),
+                row.names = FALSE,
+                na = "",
+                sep = ";",
+                dec = ".")
+
+  } else {
+
+    pfh_fixed <- get_env(name)
+
+  }
+
+
 
 
 
@@ -295,7 +1235,7 @@ gapfill_internally <- function(survey_form,
 
   df <- df %>%
     # sw_swc same year
-    left_join(sw_swc_adds_sameyear %>%
+    left_join(swc_fixed %>%
                 select(-unique_layer) %>%
                 rename(bulk_density_sw_swc_sameyear =
                          bulk_density),
@@ -350,7 +1290,7 @@ gapfill_internally <- function(survey_form,
 
   df <- df %>%
     # sw_swc other year
-    left_join(sw_swc_adds_otheryear %>%
+    left_join(swc_fixed_otheryear %>%
                 rename(bulk_density_sw_swc_otheryear =
                          bulk_density),
               by = "unique_layer")
@@ -473,6 +1413,10 @@ gapfill_internally <- function(survey_form,
 
 
   ## 4.4. Total organic carbon: combine columns ----
+
+
+
+  # TO REMOVE !!!!
 
   if (!"organic_carbon_total_orig" %in% names(df)) {
     df$organic_carbon_total_orig <- df$organic_carbon_total
@@ -603,7 +1547,7 @@ gapfill_internally <- function(survey_form,
   print(table(df$organic_layer_weight_source))
 
 
-  } # End of "som"
+#  } # End of "som"
 
 
 
