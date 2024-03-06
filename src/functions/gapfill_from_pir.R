@@ -432,7 +432,8 @@ gapfill_from_pir <- function(code_survey,
     # - if data were resubmitted under another survey_year
 
     if (identical(row_ind, integer(0)) &&
-        pir_checked_survey_form$updated_value[i] != "record_to_be_removed") {
+        !identical(
+        pir_checked_survey_form$updated_value[i], "record_to_be_removed")) {
 
       # Try to find the record using unique_layer_repetition or
       # unique_survey_profile
@@ -462,7 +463,8 @@ gapfill_from_pir <- function(code_survey,
 
 
     if (identical(row_ind, integer(0)) &&
-        pir_checked_survey_form$updated_value[i] != "record_to_be_removed") {
+        !identical(
+        pir_checked_survey_form$updated_value[i], "record_to_be_removed")) {
 
       # Try to find the record without the survey_year
 
