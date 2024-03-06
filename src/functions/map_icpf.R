@@ -1,18 +1,18 @@
 
 #' Generate and save an ICP Forests map
 #'
-#' This function generates an ICP Forests map based on provided layers, 
+#' This function generates an ICP Forests map based on provided layers,
 #' titles, legends, and other parameters, with biogeographical regions in
 #' the background.
 #'
 #' @param layers A character vector specifying the names of the spatial layers
 #' (sf data frames in the global environment) to be used in the map.
 #' @param title A character string specifying the title of the overall map.
-#' @param legend_title A character string specifying the title of the legend 
+#' @param legend_title A character string specifying the title of the legend
 #' (which refers to the layers in the 'layers' argument).
-#' @param legend_classes A character vector specifying the names of the legend 
+#' @param legend_classes A character vector specifying the names of the legend
 #' classes (in the same order as the layers).
-#' @param export_name A character string specifying the name of the exported 
+#' @param export_name A character string specifying the name of the exported
 #' map file (exported as .png).
 #' @param export_folder A character string specifying the name of the export
 #' subfolder (i.e. subfolder of './output/plots/').
@@ -24,7 +24,8 @@
 #' @param biogeo_palette A character value specifying the colour palette to be
 #' used for the biogeographical regions layer. The default is "biogeo_col",
 #' a custom colour palette in mostly green-blue hues. Another option is
-#' "viridis".
+#' "viridis". NULL means that the background does not show biogeographical
+#' regions.
 #'
 #' @return None
 #'
@@ -34,24 +35,24 @@
 #' @import cowplot
 #' @import ggspatial
 #'
-#' @details 
+#' @details
 #' By default, this function plots a map of Europe with small inset maps for the
-#' Azores, Canary Islands and Cyprus. The map shows biogeographical regions 
+#' Azores, Canary Islands and Cyprus. The map shows biogeographical regions
 #' as well as country borders. On top, it shows the
 #' data layers in the 'layers' argument categorically as points.
-#' 
+#'
 #' Note that this map is quite sensitive to changes in dimensions, since the
 #' location of the small inset maps is relative to the whole map (including the
 #' surrounding white space) rather than to the main map panel. As such, it is
 #' recommended for the legend title and legend classes to occupy less
 #' horizontal space than the title 'Biogeographical region'. If needed, the
-#' legend title and classes can be split in multiple rows using "\n". 
-#' 
+#' legend title and classes can be split in multiple rows using "\n".
+#'
 #' References:
 #' - European Environment Agency (2016). Biogeographical regions shapefile.
 #'   Retrieved from
 #'   https://www.eea.europa.eu/data-and-maps/data/biogeographical-regions-europe-3
-#' - Hijmans, R. J., Barbosa, M., Ghosh, A., Mandel, A. (2023). geodata: 
+#' - Hijmans, R. J., Barbosa, M., Ghosh, A., Mandel, A. (2023). geodata:
 #'   Functions for downloading of geographic data for use in spatial analysis
 #'   and mapping. R package version 0.4.11.
 #'
@@ -73,7 +74,7 @@ map_icpf <- function(layers,
                      export_name,
                      export_folder,
                      point_size,
-                     point_col,
+                     point_col = NULL,
                      biogeo_palette = "biogeo_col") {
 
   # Install packages ----
@@ -84,7 +85,8 @@ map_icpf <- function(layers,
                          "grid",
                          "cowplot",    # To put maps together
                          "ggspatial",  # For scale bar and north arrow
-                         "geodata")    # To download country borders
+                         "geodata",    # To download country borders
+                         "ggtext")     # Markdown text
 
   # Install all packages that are not already installed
   install.packages(setdiff(packages_map_icpf, rownames(installed.packages())))
@@ -97,6 +99,8 @@ map_icpf <- function(layers,
   # Import biogeographical regions layer ----
   # if this does not exist yet in the global environment, or if this exists
   # in the wrong class
+
+  if (!is.null(biogeo_palette)) {
 
   if (!exists("biogeo_sf") ||
       (exists("biogeo_sf") &&
@@ -128,7 +132,7 @@ map_icpf <- function(layers,
   # always have to be repeated
   assign("biogeo_sf", biogeo_sf, envir = globalenv())
   }
-
+}
 
 
   # Import country borders ----
@@ -156,6 +160,42 @@ map_icpf <- function(layers,
 
 
   # Define colours ----
+
+  country_border_col <- "black"
+
+  if (is.null(point_col)) {
+
+    if (!is.null(biogeo_palette)) {
+
+       point_col <- c("#b34646",  #"#b03232",  #"#E66101",
+                      "#F8C4B4",
+                      "#780116",
+                      "#FF0000")
+    } else {
+
+      point_col <- c("#8C9605",
+                     "#C99800",
+                     "white",#006E6A",
+                     "#03593b")
+
+      point_col <- c("#039c96",
+                     "#02c74b",
+                     "#b3de02",
+                     "#69413D")
+
+      point_col <- c("#c40275",
+                     "#ed5e2f",
+                     "#fabe02",
+                     "#F0F921")
+
+      country_border_col <- "#5b7273" #"#2b4445"
+
+    }
+
+    point_col <- point_col[seq_len(length(layers))]
+
+  }
+
 
   # Legend: create a character vector with the colours and the corresponding
   # class as name
@@ -185,6 +225,11 @@ map_icpf <- function(layers,
                   "#00001f",
                   "#33002d")
 
+  if (is.null(biogeo_palette)) {
+    background_col <- "black" # "#293333" #"#203233" #"#14293a"
+  }
+
+
   # Make a map for the first layer ----
 
   # Retrieve the first spatial layer of the 'layers' argument
@@ -196,6 +241,13 @@ map_icpf <- function(layers,
     ggplot() +
     # Map the fill colour of the countries (outside of Europe)
     geom_sf(data = world_spat, color = NA, fill = background_col) +
+    # Give title to plot (input argument)
+    ggtitle(title)
+
+
+  if (!is.null(biogeo_palette)) {
+
+    base_map <- base_map +
     # Map the biogeographical regions
     geom_sf(data = biogeo_sf, aes(fill = .data$code), color = NA)
 
@@ -207,23 +259,28 @@ map_icpf <- function(layers,
     }
 
     # Create a legend for the biogeographical regions
-  base_map <- base_map + 
+  base_map <- base_map +
     guides(fill = guide_legend(title = "Biogeographical region", # Title
                                # Size of legend symbols (squares)
                                override.aes = list(size = 5),
                                # Order of this legend relative to other legends
                                # in the plot, i.e. second (from top)
-                               order = 2)) +
+                               order = 2))
+  }
+
+
+  base_map <- base_map +
     # Customise the theme of the plot
     theme(
-      # Set the size of the legend title to 10
-      legend.title = element_text(size = 10),
+      # # Set the size of the legend title to 10
+      # legend.title = element_text(size = 10),
       # Set the font family to "sans" and colour to black for text elements
       text = element_text(family = "sans", color = "black"),
       # Black coordinates
       axis.text = element_text(color = "black"),
       # Set the size of the plot title to 10 and make it bold
-      title = element_text(size = 10, face = "bold"),
+      legend.title = element_markdown(size = 10),
+      plot.title = element_markdown(size = 10),
       # Position the legend at the top right corner of the plot
       legend.justification = c("right", "top"),
       # Set the background colour of the plot panel using the 'sea_col' variable
@@ -239,9 +296,14 @@ map_icpf <- function(layers,
                            l = 0.5,  # Set left margin of the plot to 0.5 cm
                            # Set the unit of measurement for margins
                            # to centimeters
-                           unit = "cm")) +
+                           unit = "cm"),
+      legend.text =
+        element_text(vjust = 0,
+                     margin =
+                       margin(b = 5))) +
     # Map the borders of the countries (without fill)
-    geom_sf(data = world_spat, color = "black", fill = NA, linewidth = 0.5) +
+    geom_sf(data = world_spat, color = country_border_col,
+            fill = NA, linewidth = 0.5) +
     # Map a square to cover Greenland (in order to plot the scale bar on top)
     # in 'sea_col' colour.
     geom_rect(aes(xmin = 2000000,
@@ -288,9 +350,7 @@ map_icpf <- function(layers,
       width = unit(1, "cm"),
       # Set the vertical distance between the north arrow and the edge of the
       # panel
-      pad_y = unit(1, "cm")) +
-    # Give title to plot (input argument)
-    ggtitle(title)
+      pad_y = unit(1, "cm"))
 
     # At this point, the limits of the x axis and y axis have not yet been
     # specified (using coord_sf()). This is necessary to restrict the visible
@@ -300,16 +360,21 @@ map_icpf <- function(layers,
   # Create the Azores inset map
   azores_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col) +
-    geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
+    geom_sf(data = world_spat, color = NA, fill = background_col)
+
+  if (!is.null(biogeo_palette)) {
+
+    azores_map <- azores_map +
+      geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
 
     if (biogeo_palette == "viridis") {
       azores_map <- azores_map + scale_fill_viridis_d()
     } else if (biogeo_palette == "biogeo_col") {
       azores_map <- azores_map + scale_fill_manual(values = biogeo_col)
     }
+  }
 
-  azores_map <- azores_map + 
+  azores_map <- azores_map +
     theme(legend.title = element_text(size = 10),
           text = element_text(family = "sans", color = "black"),
           # Adjust the margins around the plot title
@@ -328,7 +393,8 @@ map_icpf <- function(layers,
           # Set the background color of the plot panel using the sea_col
           # variable
           panel.background = element_rect(fill = sea_col)) +
-    geom_sf(data = world_spat, color = "black", fill = NA, linewidth = 0.5) +
+    geom_sf(data = world_spat, color = country_border_col,
+            fill = NA, linewidth = 0.5) +
     geom_sf(data = spat_layer_1,
             aes(color = legend_classes[1]),
             size = point_size) +
@@ -338,11 +404,15 @@ map_icpf <- function(layers,
     ggtitle("Azores (Portugal)") +
     # Update the size of the plot title and justify horizontally to the left
     theme(plot.title = element_text(hjust = 0.02, size = 7.5))
-  
+
   # Create the Canary Islands inset map
   canary_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col) +
+    geom_sf(data = world_spat, color = NA, fill = background_col)
+
+  if (!is.null(biogeo_palette)) {
+
+    canary_map <- canary_map +
     geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
 
     if (biogeo_palette == "viridis") {
@@ -350,6 +420,7 @@ map_icpf <- function(layers,
     } else if (biogeo_palette == "biogeo_col") {
       canary_map <- canary_map + scale_fill_manual(values = biogeo_col)
     }
+  }
 
   canary_map <- canary_map +
     theme(legend.title = element_text(size = 10),
@@ -364,7 +435,8 @@ map_icpf <- function(layers,
           axis.ticks = element_blank(),
           plot.background = element_blank(),
           panel.background = element_rect(fill = sea_col)) +
-    geom_sf(data = world_spat, color = "black", fill = NA, linewidth = 0.5) +
+    geom_sf(data = world_spat, color = country_border_col,
+            fill = NA, linewidth = 0.5) +
     geom_sf(data = spat_layer_1,
             aes(color = legend_classes[1]),
             size = point_size) +
@@ -377,9 +449,13 @@ map_icpf <- function(layers,
   # coord_sf(xlim = c(1550000,2050000), ylim = c(1200000,920000)) +
 
   # Create the Cyprus inset map
-  cyprus_map <- 
-    ggplot() + 
-    geom_sf(data = world_spat, color = NA, fill = background_col) +
+  cyprus_map <-
+    ggplot() +
+    geom_sf(data = world_spat, color = NA, fill = background_col)
+
+  if (!is.null(biogeo_palette)) {
+
+    cyprus_map <- cyprus_map +
     geom_sf(data = biogeo_sf, aes(fill = .data$short_name), color = NA)
 
     if (biogeo_palette == "viridis") {
@@ -387,6 +463,7 @@ map_icpf <- function(layers,
     } else if (biogeo_palette == "biogeo_col") {
       cyprus_map <- cyprus_map + scale_fill_manual(values = biogeo_col)
     }
+  }
 
   cyprus_map <- cyprus_map +
     theme(legend.title = element_text(size = 10),
@@ -405,7 +482,8 @@ map_icpf <- function(layers,
           axis.ticks = element_blank(),
           plot.background = element_blank(),
           panel.background = element_rect(fill = sea_col)) +
-    geom_sf(data = world_spat, color = "black", fill = NA, linewidth = 0.5) +
+    geom_sf(data = world_spat, color = country_border_col,
+            fill = NA, linewidth = 0.5) +
     geom_sf(data = spat_layer_1,
             aes(color = legend_classes[1]),
             size = point_size) +
@@ -417,7 +495,7 @@ map_icpf <- function(layers,
 
 
   # Add coordinate system (limits of x and y) in case of one layer ----
-  
+
   if (length(layers) == 1) {
     base_map <- base_map +
     coord_sf(xlim = c(2400000, 6000000),
@@ -456,7 +534,7 @@ map_icpf <- function(layers,
               aes(color = legend_classes[2]),
               size = point_size) +
       coord_sf(xlim = c(929000, 1370000),
-               ylim = c(2800000, 2200000)) 
+               ylim = c(2800000, 2200000))
 
     canary_map <- canary_map +
       geom_sf(data = spat_layer_2,
@@ -525,17 +603,17 @@ map_icpf <- function(layers,
 
 
 
-  
-  
+
+
   # Add the second + third + 4th layer and coordinate system in case of 4 ----
-  
+
   if (length(layers) == 4) {
-    
+
     # Retrieve the second + third spatial layer of the 'layers' argument
     spat_layer_2 <- get(layers[2], envir = .GlobalEnv)
     spat_layer_3 <- get(layers[3], envir = .GlobalEnv)
     spat_layer_4 <- get(layers[4], envir = .GlobalEnv)
-    
+
     base_map <- base_map +
       geom_sf(data = spat_layer_2,
               aes(color = legend_classes[2]),
@@ -548,7 +626,7 @@ map_icpf <- function(layers,
               size = point_size) +
       coord_sf(xlim = c(2400000, 6000000),
                ylim = c(1000000, 5400000))
-    
+
     azores_map <- azores_map +
       geom_sf(data = spat_layer_2,
               aes(color = legend_classes[2]),
@@ -561,7 +639,7 @@ map_icpf <- function(layers,
               size = point_size) +
       coord_sf(xlim = c(929000, 1370000),
                ylim = c(2800000, 2200000))
-    
+
     canary_map <- canary_map +
       geom_sf(data = spat_layer_2,
               aes(color = legend_classes[2]),
@@ -574,7 +652,7 @@ map_icpf <- function(layers,
               size = point_size) +
       coord_sf(xlim = c(1550000, 2050000),
                ylim = c(1200000, 920000))
-    
+
     cyprus_map <- cyprus_map +
       geom_sf(data = spat_layer_2,
               aes(color = legend_classes[2]),
@@ -596,7 +674,7 @@ map_icpf <- function(layers,
   full_map <-
     ggdraw() +
     # Draw base map
-    draw_plot(base_map) + 
+    draw_plot(base_map) +
     # Draw the left rectangle on which the Canary Islands inset map will be
     # plotted
     draw_grob(
