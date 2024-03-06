@@ -143,7 +143,9 @@ list_man <- c("country", "partner_short", "partner", "survey_year",
               "code_layer_orig", "part_size_clay_orig", "part_size_silt_orig",
               "part_size_sand_orig", "bulk_density_orig",
               "coarse_fragment_vol_orig", "organic_layer_weight_orig",
-              "organic_carbon_total_orig", "n_total_orig")
+              "organic_carbon_total_orig", "n_total_orig",
+              "part_size_clay_source", "part_size_silt_source",
+              "part_size_sand_source", "coarse_fragment_vol_source")
 
   # Rule:
   # if both values are the same: take the unique value,

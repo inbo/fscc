@@ -5037,6 +5037,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
     for (i in seq_along(unique(df$unique_survey_profile))) {
 
+
     # Determine index of layers with the given unique_survey_profile in df
 
     vec <- which(unique(df$unique_survey_profile)[i] ==
@@ -5917,11 +5918,21 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
         assertthat::assert_that(
           paste(df$horizon_master[vec_ff], collapse = "_") %in%
-            all_combinations,
+            all_combinations ||
+            (length(unique(df$horizon_master[vec_ff])) == 1 &&
+               length(unique(df$horizon_number[vec_ff])) == 2),
           msg = paste0("Unknown combination of two forest floor layers ('",
                        df$horizon_master[vec_ff[1]], "' and '",
                        df$horizon_master[vec_ff[2]],
                        "')."))
+
+        if (!paste(df$horizon_master[vec_ff], collapse = "_") %in%
+            all_combinations &&
+            (length(unique(df$horizon_master[vec_ff])) == 1 &&
+             length(unique(df$horizon_number[vec_ff])) == 2)) {
+          df$layer_number[vec_ff] <- rank(df$horizon_number[vec_ff],
+                                          na.last = "keep")
+        }
 
           # If the forest floor layers are not called "O" and "O2"
 
@@ -5966,12 +5977,20 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                 function(x) paste(sort(x), collapse = "_"))
 
         assertthat::assert_that(
-          paste(sort(layers_ff), collapse = "_") %in% sorted_combinations,
+          paste(sort(layers_ff), collapse = "_") %in% sorted_combinations ||
+            (length(unique(df$horizon_number[vec_ff])) == 3),
           msg = paste0("Unknown combination of three forest floor layers ('",
                        df$horizon_master[vec_ff[1]], "', '",
                        df$horizon_master[vec_ff[2]], "' and '",
                        df$horizon_master[vec_ff[3]],
                        "')."))
+
+        if (!paste(sort(layers_ff), collapse = "_") %in% sorted_combinations &&
+            (length(unique(df$horizon_number[vec_ff])) == 3)) {
+          df$layer_number[vec_ff] <- rank(df$horizon_number[vec_ff],
+                                          na.last = "keep")
+        }
+
 
         col_table <-
           sorted_combinations[which(sorted_combinations ==
@@ -6055,6 +6074,20 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
         which(!is.na(df$horizon_limit_up[vec_horizon_number]) &
                           !is.na(df$horizon_limit_low[vec_horizon_number]))]
 
+      # Check for redundant layers
+
+      if (length(vec_nonempty) > 1) {
+
+      source("./src/functions/get_redundant_layers.R")
+
+      redundant_layers <- get_redundant_layers(
+        layers = layers[which(vec %in% vec_nonempty)],
+        superior_layer_limits = df$horizon_limit_up[vec_nonempty],
+        inferior_layer_limits = df$horizon_limit_low[vec_nonempty],
+        df_sub = as.data.frame(df[vec_nonempty, ]))
+      } else {
+        redundant_layers <- as_tibble(data.frame(col = NULL))
+      }
 
       # Check if the ranking based on horizon_limit_up is the same
       # like the ranking based on horizon_limit_low
@@ -6070,7 +6103,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
           identical(rank(as.numeric(df$horizon_limit_up[vec_nonempty]),
                          na.last = "keep"),
                     rank(as.numeric(df$horizon_number[vec_nonempty]),
-                         na.last = "keep"))) {
+                         na.last = "keep")) &&
+          nrow(redundant_layers) == 0) {
 
         # Rank the layers based on horizon_number
         # (including layers without layer limit information)
@@ -6120,13 +6154,13 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
         # Check for redundant layers
 
-        source("./src/functions/get_redundant_layers.R")
-
-        redundant_layers <- get_redundant_layers(
-          layers = layers[which(vec %in% vec_nonempty)],
-          superior_layer_limits = df$horizon_limit_up[vec_nonempty],
-          inferior_layer_limits = df$horizon_limit_low[vec_nonempty],
-          df_sub = as.data.frame(df[vec_nonempty, ]))
+        # source("./src/functions/get_redundant_layers.R")
+        #
+        # redundant_layers <- get_redundant_layers(
+        #   layers = layers[which(vec %in% vec_nonempty)],
+        #   superior_layer_limits = df$horizon_limit_up[vec_nonempty],
+        #   inferior_layer_limits = df$horizon_limit_low[vec_nonempty],
+        #   df_sub = as.data.frame(df[vec_nonempty, ]))
 
         # If there are any redundant layers
 
@@ -6244,8 +6278,12 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
     vec_r <-
       vec_non_redundant[which(df$horizon_master[vec_non_redundant] == "R")]
 
+    layer_numbers_remaining <- df[vec_non_redundant, ] %>%
+      filter(!layer_number %in% df$layer_number[vec_r]) %>%
+      pull(layer_number)
+
     if (!identical(vec_r, integer(0)) &&
-        df$layer_number[vec_r] == max(df$layer_number[vec_non_redundant])) {
+        all(df$layer_number[vec_r] > max(layer_numbers_remaining))) {
 
       # Consider this layer redundant, since no soil in bedrock
       # (largely unweathered hard rock)

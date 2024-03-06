@@ -780,6 +780,47 @@ if (survey_form == "s1_som") {
 
   }
 
+
+
+  ## Czech Republic ----
+
+  # Due to former mistake in database: Czech plot 2188 actually
+  # doesn't exist and refers to plot 188 (see read_raw)
+
+  lines_to_check <- df %>%
+    filter(plot_id == "58_188") %>%
+    filter(survey_year == 1995)
+
+  if (nrow(lines_to_check) > 0 &&
+      length(which(lines_to_check$code_layer == "M01")) == 2 &&
+      length(which(lines_to_check$code_layer == "M12")) == 2 &&
+      length(unique(lines_to_check$repetition)) == 1 &&
+      length(unique(lines_to_check$code_plot_orig)) == 2) {
+
+    lines_to_check <- lines_to_check %>%
+      filter(code_plot_orig != 188) %>%
+      pull(code_line)
+
+    df <- df %>%
+      mutate(repetition = ifelse((!is.na(code_line)) &
+                                   code_line %in% lines_to_check,
+                                 2,
+                                 repetition)) %>%
+      mutate(unique_survey_repetition =
+               ifelse((!is.na(code_line)) &
+                        code_line %in% lines_to_check,
+                      paste0(code_country, "_", survey_year, "_",
+                             code_plot, "_", repetition),
+                      unique_survey_repetition),
+             unique_layer_repetition =
+               ifelse((!is.na(code_line)) &
+                        code_line %in% lines_to_check,
+                      paste0(code_country, "_", survey_year, "_",
+                             code_plot, "_", code_layer, "_", repetition),
+                      unique_layer_repetition))
+
+  }
+
 } # End of "if s1_som"
 
 
