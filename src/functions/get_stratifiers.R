@@ -9,11 +9,12 @@ get_stratifiers <- function(level) {
   stopifnot(require("tidyverse"),
             require("assertthat"),
             require("aqp"),
-            require("mpspline2"),
-            require("sf"))
+            require("sf"),
+            require("elevatr"))
 
   source("./src/functions/as_sf.R")
   source("./src/functions/get_env.R")
+  source("./src/functions/overlay_tif.R")
 
   d_forest_type <-
     read.csv2("./data/additional_data/d_forest_type.csv") %>%
@@ -23,6 +24,9 @@ get_stratifiers <- function(level) {
   d_soil_group <-
     read.csv2("./data/raw_data/so/adds/dictionaries/d_soil_group.csv") %>%
     select(code, description)
+
+  d_soil_adjective <-
+    read.csv2("./data/raw_data/so/adds/dictionaries/d_soil_adjective.csv")
 
   d_humus <-
     read.csv2("./data/raw_data/so/adds/dictionaries/d_humus.csv") %>%
@@ -75,6 +79,11 @@ get_stratifiers <- function(level) {
            plot_id = PLOT_ID) %>%
     filter(!is.na(plot_id))
 
+
+  assertthat::assert_that(
+    n_distinct(get_env("data_availability_so")$plot_id) ==
+      nrow(get_env("data_availability_so")))
+
   df_strat <- so_prf_adds %>%
     mutate(soil_wrb = paste0(RSGu, "_",
                              QUALu, "_",
@@ -85,6 +94,10 @@ get_stratifiers <- function(level) {
                              EFTC, "_",
                              unified_humus, "_",
                              remark)) %>%
+    # Filter for the most recent survey_year
+    group_by(plot_id) %>%
+    filter(survey_year == max(survey_year)) %>%
+    ungroup() %>%
     group_by(plot_id) %>%
     # Sometimes there are different options, e.g. plot_id 60_9
     # No good way to solve this - we just have to pick one
@@ -125,11 +138,13 @@ get_stratifiers <- function(level) {
 
   # Add biogeographical region
 
-  df_strat <- st_join(df_strat_sf, biogeo_sf) %>%
+  df_strat <-
+    # Add biogeographical region
+    st_join(df_strat_sf, biogeo_sf) %>%
     rename(biogeo = code) %>%
     st_drop_geometry() %>%
     distinct(plot_id, .keep_all = TRUE) %>%
-    arrange(partner_short) %>%
+    arrange(partner_short, code_plot) %>%
     # Add main tree species
     left_join(get_env("si_sta") %>%
                 select(plot_id, code_tree_species) %>%
@@ -295,29 +310,106 @@ get_stratifiers <- function(level) {
 
   if (level == "LI") {
 
-  df_strat <- get_env("s1_som") %>%
-    distinct(plot_id) %>%
-    left_join(get_env("data_availability_s1") %>%
-                select(plot_id, partner_short),
-              by = "plot_id") %>%
-    relocate(partner_short, .before = plot_id)
+  # Base saturation source
+  if (!"base_saturation" %in% names(get_env("s1_som"))) {
+    df_bs <- read.csv("./data/layer1_data/s1/s1_som.csv",
+                      sep = ";")
+  } else {
+    df_bs <- get_env("s1_som")
+  }
 
-  df_strat_sf <- df_strat %>%
+  if (!"base_saturation" %in% names(df_bs)) {
+    df_bs <- df_bs %>%
+      mutate(base_saturation =
+               ifelse(!is.na(sum_base_cations) &
+                        !is.na(sum_acid_cations),
+                      sum_base_cations / (sum_base_cations +
+                                            sum_acid_cations),
+                      NA))
+  }
+
+  assertthat::assert_that(file.exists(paste0("./data/additional_data/",
+                                             "S1_PRF_ADDS.csv")),
+                          msg = paste0("'./data/additional_data/",
+                                       "S1_PRF_ADDS.csv' ",
+                                       "does not exist."))
+
+  # Retrieve harmonised stratifiers and aggregate per plot
+
+  s1_prf_adds_agg <-
+    read.csv(paste0("./data/additional_data/",
+                    "S1_PRF_ADDS.csv"), sep = ";") %>%
+    mutate(date_profile_desc =
+             as.Date(parsedate::parse_iso_8601(parsedate::parse_date(
+               date_profile_desc)))) %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    mutate(soil_wrb = paste0(WRB14RSG, "_",
+                             WRB14QUAL, "_",
+                             EFTC_final, "_",
+                             Unified_humus, "_",
+                             STOCKDEPTH)) %>%
+    # Filter for the most recent survey_year
+    group_by(plot_id) %>%
+    filter(survey_year == max(survey_year)) %>%
+    ungroup() %>%
+    group_by(plot_id) %>%
+    # Sometimes there are different options
+    # No good way to solve this - we just have to pick one profile
+    reframe(soil_wrb =
+              names(which.max(table(soil_wrb[!is.na(soil_wrb)]))),
+            survey_year = max(survey_year),
+            date_profile_desc = ifelse(
+              all(is.na(.data$date_profile_desc)),
+              NA_Date_,
+              as.Date(max(as.Date(date_profile_desc, format = "%Y-%m-%d"),
+                          na.rm = TRUE),
+                      origin = "1970-01-01",
+                      format = "%Y-%m-%d"))) %>%
+    ungroup() %>%
+    mutate(date_profile_desc = as.Date(date_profile_desc,
+                                       format = "%Y-%m-%d")) %>%
+    # Split the data back into the original columns
+    separate(soil_wrb,
+             into = c("code_wrb_soil_group",
+                      "code_wrb_qualifier_1",
+                      "code_forest_type",
+                      "humus_type",
+                      "eff_soil_depth"),
+             sep = "_") %>%
+    mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
+    mutate_if(
+      function(x) !is.Date(x),
+      ~ifelse(. == "NA" | . == "", NA_character_, .))
+
+  # Compile a stratifier list for all plots in the survey
+
+  assertthat::assert_that(
+    n_distinct(get_env("data_availability_s1")$plot_id) ==
+      nrow(get_env("data_availability_s1")))
+
+  df_strat_sf <- get_env("data_availability_s1") %>%
+    select(country, partner_short, plot_id, code_plot) %>%
     left_join(get_env("coordinates_s1"), by = "plot_id") %>%
     as_sf
 
   df_strat <-
+    # Add biogeographical region
     st_join(df_strat_sf, biogeo_sf) %>%
     rename(biogeo = code) %>%
     st_drop_geometry() %>%
     distinct(partner_short, plot_id, longitude_dec, latitude_dec,
              .keep_all = TRUE) %>%
-    arrange(partner_short) %>%
+    arrange(partner_short, code_plot) %>%
+    # Add manually harmonised stratifiers
+    left_join(s1_prf_adds_agg %>%
+                select(-survey_year),
+              by = "plot_id") %>%
     # Add WRB etc
     left_join(get_env("s1_prf") %>%
                 select(plot_id, code_wrb_soil_group,
                        code_wrb_qualifier_1, code_wrb_spezifier_1,
-                       change_date) %>%
+                       change_date,
+                       date_profile_desc) %>%
                 filter(!is.na(code_wrb_soil_group)) %>%
                 # Filter for records with the most recent change_date
                 # per plot
@@ -333,6 +425,7 @@ get_stratifiers <- function(level) {
                 group_by(plot_id, code_wrb_soil_group,
                          code_wrb_qualifier_1, code_wrb_spezifier_1) %>%
                 summarise(count = n(),
+                          date_profile_desc = first(date_profile_desc),
                           .groups = "drop") %>%
                 group_by(plot_id) %>%
                 filter(count == max(count)) %>%
@@ -343,15 +436,44 @@ get_stratifiers <- function(level) {
                            NA),
                   code_wrb_soil_group = first(code_wrb_soil_group),
                   code_wrb_qualifier_1 = first(code_wrb_qualifier_1),
-                  code_wrb_spezifier_1 = first(code_wrb_spezifier_1)) %>%
+                  code_wrb_spezifier_1 = first(code_wrb_spezifier_1),
+                  date_profile_desc = first(date_profile_desc)) %>%
                 ungroup() %>%
                 select(plot_id, code_wrb_soil_group,
                        code_wrb_qualifier_1, code_wrb_spezifier_1,
-                       uncertain_soil_group_options),
+                       uncertain_soil_group_options,
+                       date_profile_desc) %>%
+                # with 0 referring to "layer 0"
+                rename(code_wrb_soil_group_0 = code_wrb_soil_group) %>%
+                rename(code_wrb_qualifier_1_0 = code_wrb_qualifier_1) %>%
+                rename(date_profile_desc_0 = date_profile_desc),
               by = "plot_id") %>%
+    # Combine sources (i.e. harmonised data and layer 0)
+    mutate(
+      uncertain_soil_group_options = ifelse(
+        is.na(code_wrb_soil_group) & !is.na(uncertain_soil_group_options),
+        uncertain_soil_group_options,
+        NA),
+      date_profile_desc = coalesce(as.Date(date_profile_desc),
+                                   as.Date(date_profile_desc_0)),
+      code_wrb_qualifier_1 = ifelse(
+        !is.na(code_wrb_soil_group),
+        code_wrb_qualifier_1,
+        code_wrb_qualifier_1_0),
+      code_wrb_soil_group = coalesce(code_wrb_soil_group,
+                                     code_wrb_soil_group_0)) %>%
+    select(-code_wrb_soil_group_0,
+           -code_wrb_qualifier_1_0,
+           -code_wrb_spezifier_1, # actually not needed since not harmonised
+           -date_profile_desc_0) %>%
     left_join(d_soil_group,
               by = join_by(code_wrb_soil_group == code)) %>%
     rename(wrb_soil_group = description) %>%
+    left_join(d_soil_adjective %>%
+                select(code, description) %>%
+                rename(code_wrb_qualifier_1 = code) %>%
+                rename(wrb_qualifier_1 = description),
+              by = "code_wrb_qualifier_1") %>%
     # Add forest type
     left_join(get_env("y1_st1") %>%
                 select(plot_id, code_forest_type) %>%
@@ -365,8 +487,12 @@ get_stratifiers <- function(level) {
                 slice_head() %>%
                 ungroup() %>%
                 select(plot_id, code_forest_type) %>%
-                mutate(code_forest_type = as.character(code_forest_type)),
+                mutate(code_forest_type = as.character(code_forest_type)) %>%
+                rename(code_forest_type_0 = code_forest_type),
               by = "plot_id") %>%
+    mutate(code_forest_type = coalesce(code_forest_type,
+                                       code_forest_type_0)) %>%
+    select(-code_forest_type_0) %>%
     left_join(d_forest_type,
               by = join_by(code_forest_type == code)) %>%
     rename(forest_type = short_descr) %>%
@@ -388,11 +514,13 @@ get_stratifiers <- function(level) {
               by = "plot_id") %>%
     left_join(d_humus,
               by = join_by(code_humus == code)) %>%
-    rename(humus_type = description) %>%
-    mutate(humus_type = case_when(
-      humus_type == "Amphi (or Amphihumus)" ~ "Amphi",
-      humus_type %in% c("Histomull", "Histomoder") ~ "Peat",
-      TRUE ~ humus_type)) %>%
+    rename(humus_type_0 = description) %>%
+    mutate(humus_type_0 = case_when(
+      humus_type_0 == "Amphi (or Amphihumus)" ~ "Amphi",
+      humus_type_0 %in% c("Histomull", "Histomoder") ~ "Peat",
+      TRUE ~ humus_type_0)) %>%
+    mutate(humus_type = coalesce(humus_type, humus_type_0)) %>%
+    select(-code_humus, -humus_type_0) %>%
     # Add parent_material
     left_join(get_env("s1_prf") %>%
                 select(plot_id, code_parent_material_1) %>%
@@ -440,7 +568,6 @@ get_stratifiers <- function(level) {
                 ungroup() %>%
                 select(plot_id, slope),
               by = "plot_id") %>%
-    mutate(bs_class = NA) %>%
     # Add soil depth
     left_join(get_env("s1_prf") %>%
                 rowwise() %>%
@@ -486,10 +613,30 @@ get_stratifiers <- function(level) {
                 summarise(
                   eff_soil_depth = first(eff_soil_depth)) %>%
                 ungroup() %>%
-                select(plot_id, eff_soil_depth),
+                select(plot_id, eff_soil_depth) %>%
+                rename(eff_soil_depth_0 = eff_soil_depth),
               by = "plot_id") %>%
-    mutate(bs_class = NA) %>%
-    select(partner_short,
+    mutate(eff_soil_depth = coalesce(eff_soil_depth,
+                                     eff_soil_depth_0)) %>%
+    mutate(eff_soil_depth = ifelse(!is.na(eff_soil_depth) &
+                                     (eff_soil_depth > 100),
+                                   100,
+                                   eff_soil_depth)) %>%
+    # Base saturation class
+    # Add base saturation
+    left_join(df_bs %>%
+                filter(layer_limit_superior >= 20) %>%
+                filter(!is.na(base_saturation)) %>%
+                group_by(plot_id) %>%
+                reframe(base_saturation = mean(base_saturation)) %>%
+                ungroup(),
+              by = "plot_id") %>%
+    mutate(bs_class = case_when(
+      grepl("eutr", wrb_qualifier_1, ignore.case = TRUE) ~ ">= 50 %",
+      grepl("dystr", wrb_qualifier_1, ignore.case = TRUE) ~ "< 50 %",
+      (!is.na(base_saturation) & base_saturation >= 0.5) ~ ">= 50 %",
+      (!is.na(base_saturation) & base_saturation < 0.5) ~ "< 50 %")) %>%
+    select(country,
            plot_id,
            longitude_dec,
            latitude_dec,
@@ -502,14 +649,19 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
+           wrb_qualifier_1,
            code_wrb_soil_group,
            uncertain_soil_group_options,
            code_wrb_qualifier_1,
-           code_wrb_spezifier_1,
            code_forest_type,
-           code_humus,
            code_parent_material_1,
-           code_tree_species)
+           code_tree_species,
+           eff_soil_depth_0)
+
+  if (length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
+    df_strat <- df_strat %>%
+      select(-uncertain_soil_group_options)
+  }
 
 
 }
