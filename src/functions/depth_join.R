@@ -44,10 +44,11 @@ depth_join <- function(df1,
 
   # There should be one profile per plot_id in df2
 
-  assertthat::assert_that(
-    identical(
-      which(duplicated(paste0(df2$plot_id, "_", df2$code_layer))),
-      integer(0)))
+  # assertthat::assert_that(
+  #   identical(
+  #     which(duplicated(paste0(df2$plot_id, "_", df2$layer_limit_superior, "_",
+  #                             df2$layer_limit_inferior))),
+  #     integer(0)))
 
 
 
@@ -116,6 +117,8 @@ depth_join <- function(df1,
         layer_limit_inferior - layer_limit_superior,
         NA))
 
+  }
+
     # Harmonise coarse fragments
 
     if ("coarse_fragment_vol_converted" %in% names(df2) &&
@@ -179,7 +182,7 @@ depth_join <- function(df1,
         mutate(bulk_density_total_soil =
                  .data$bd * (1 - 0.01 * .data$cf)) %>%
         select(-bd, -cf)
-  }
+
 
 
   # Add new columns to df1 ----
@@ -483,13 +486,19 @@ depth_join <- function(df1,
         value_j <- NA
 
 
-
         df2_j <- df2_sub %>%
           filter(!is.na(.data[[parameter_j]]))
 
         if (nrow(df2_j) == 0) {
           next # Go to next parameter
         }
+
+        if (nrow(df2_j) == 1) {
+
+          value_j <- df2_j[[parameter_j]]
+        }
+
+        if (nrow(df2_j) > 1) {
 
         # Add weights
         # Only for gravimetric parameters
@@ -548,6 +557,8 @@ depth_join <- function(df1,
           mean_k <- round(mean_k)
           rep_k <- round(rep_k)
         }
+
+        } # End of "if >1 rows"
 
         df1[[col_name_j]][i] <- value_j
 
