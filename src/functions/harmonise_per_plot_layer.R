@@ -29,16 +29,8 @@ harmonise_per_plot_layer <- function(survey_form_input,
     ranges_qaqc <-
       read.csv("./data/additional_data/ranges_qaqc.csv", sep = ";")
 
-    source("./src/functions/get_bulk_density_stats.R")
-    quant_bd <- get_bulk_density_stats(mode = "quantile",
-                                       matrix_type = "mineral",
-                                       quantile = 99)
-    quant_bd_org <- get_bulk_density_stats(mode = "quantile",
-                                           matrix_type = "organic",
-                                           quantile = 99)
-    quant_bd <- c(294, 1920)
-    quant_bd_org <- c(6, 1250)
-
+    quant_bd <- c(6, 1991) # Based on minimum and maximum in
+                           # bd_upper and bd_lower functions
 
     parameter_ranges <- bind_rows(
       data.frame(parameter = "bulk_density",
@@ -67,6 +59,24 @@ harmonise_per_plot_layer <- function(survey_form_input,
                  range_min = 0,
                  range_max = 100,
                  incl_ff = FALSE))
+
+    # Upper limit plausibility function ULPF = 1991 - (81,1*sqrt(TOC))
+    bd_upper <- function(toc) {
+      ifelse(is.na(toc), 1991, 1991 - (81.1 * sqrt(toc)))
+    }
+
+    # Lower limit plausibility function LLPF = 1031 - (81,1*sqrt(TOC))
+    # Use an ultimate minimum of 6
+    # (i.e. the lower 0.05 % quantile of all organic bulk density data)
+    # Else, some organic layers contain bulk densities of 1 or so,
+    # which is highly unrealistic
+    bd_lower <- function(toc) {
+      ifelse(is.na(toc) | (1031 - (81.1 * sqrt(toc)) < 6),
+             6,
+             1031 - (81.1 * sqrt(toc)))
+    }
+
+
 
 
 
@@ -112,7 +122,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
     }
 
 
-    if (survey_form_type == "sw_swc") {
+    if (survey_form_type == "swc") {
 
       parameters <- c("bulk_density")
 
@@ -194,7 +204,8 @@ harmonise_per_plot_layer <- function(survey_form_input,
         rename(layer_limit_superior = horizon_limit_up) %>%
         rename(layer_limit_inferior = horizon_limit_low) %>%
         rename(code_layer = horizon_master) %>%
-        rename(unique_survey_repetition = unique_survey_profile)
+        rename(unique_survey_repetition = unique_survey_profile) %>%
+        rename(organic_carbon_total = horizon_c_organic_total)
 
       # In order to retrieve forest floor bulk density data from "som"
       # (in order to calculate organic_layer_weight in "pfh",
@@ -213,12 +224,19 @@ harmonise_per_plot_layer <- function(survey_form_input,
 
     if (survey_form_type == "swc") {
 
+      d_depth_level_soil <-
+        read.csv("./data/additional_data/d_depth_level_soil.csv",
+                 sep = ";") %>%
+        rename(code_layer = code) %>%
+        select(code_layer, layer_limit_superior, layer_limit_inferior)
+
       # Harmonise the variable names with those of "som"
 
       df <- df %>%
         rename(layer_limit_superior = ring_depth_upper) %>%
         rename(layer_limit_inferior = ring_depth_lower) %>%
         rename(code_layer = code_depth_layer) %>%
+        mutate(organic_carbon_total = NA) %>%
         mutate(layer_thickness =
                  (layer_limit_inferior - layer_limit_superior)) %>%
         mutate(unique_survey_repetition = paste0(unique_survey, "_",
@@ -272,7 +290,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
                            "M05", "M51", "M12", "M24", "M48", "M815"))) %>%
         ungroup() %>%
         # Add depths
-        left_join(fixed_depths, by = "code_layer") %>%
+        left_join(d_depth_level_soil, by = "code_layer") %>%
         mutate(
           layer_limit_superior = ifelse(
             code_layer == "M815", 80, layer_limit_superior),
@@ -324,6 +342,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
 
 
 
+    # som and pfh ----
 
 
     if (survey_form_type == "pfh" || survey_form_type == "som") {
@@ -334,13 +353,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
         filter(!is.na(layer_number))
 
 
-    }
-
-
-      assertthat::assert_that(all(parameters %in% names(df)))
-
-
-      if (survey_form_type %in% c("som", "pfh")) {
+    assertthat::assert_that(all(parameters %in% names(df)))
 
     df_target <- NULL
 
@@ -363,6 +376,12 @@ harmonise_per_plot_layer <- function(survey_form_input,
       if (all(df_i$layer_number <= 3) &&
           all(df_i$layer_type == "forest_floor") &&
           all(is.na(df_i$layer_limit_superior))) {
+        next # Go to next plot
+      }
+
+      # if below-ground layer limits are unknown (e.g. in s1_pfh 51_328)
+      if (all(is.na(df_i$layer_limit_superior[
+        which(df_i$layer_type != "forest_floor")]))) {
         next # Go to next plot
       }
 
@@ -397,9 +416,9 @@ harmonise_per_plot_layer <- function(survey_form_input,
 
       profiles_to_be_removed <- df_i %>%
         group_by(unique_survey_repetition) %>%
-        reframe(all_unknown_limits = all(is.na(layer_limit_superior) &
-                                           (layer_type == "forest_floor") &
-                                           (layer_number <= 3))) %>%
+        reframe(all_unknown_limits = all(is.na(layer_limit_superior))) %>%
+                                           # (layer_type == "forest_floor") &
+                                           # (layer_number <= 3))) %>%
         filter(all_unknown_limits == TRUE) %>%
         pull(unique_survey_repetition)
 
@@ -509,6 +528,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
 
         parameter_incl_ff <- parameter_ranges$incl_ff[
           which(parameter_ranges$parameter == parameter_j)]
+
         range_min_j <- parameter_ranges$range_min[
           which(parameter_ranges$parameter == parameter_j)]
         range_max_j <- parameter_ranges$range_max[
@@ -524,20 +544,19 @@ harmonise_per_plot_layer <- function(survey_form_input,
           select(survey_year, unique_survey_repetition,
                  code_layer, layer_number, layer_type,
                  layer_limit_superior, layer_limit_inferior, weights,
+                 organic_carbon_total,
                  {{ parameter_j }}) %>%
-          filter(.data$layer_type != "mineral" |
-                   (.data$layer_type == "mineral" &
-                      .data[[parameter_j]] >= range_min_j &
-                      .data[[parameter_j]] <= range_max_j))
+          filter(.data[[parameter_j]] >= range_min_j &
+                   .data[[parameter_j]] <= range_max_j)
 
-        if (parameter_j %in% c("bulk_density", "horizon_bulk_dens_measure",
-                               "horizon_bulk_dens_est")) {
+        if (grepl("bulk_dens", parameter_j)) {
 
           df_summ_i <- df_summ_i %>%
-            filter(.data$layer_type == "mineral" |
-                     (.data$layer_type != "mineral" &
-                        .data[[parameter_j]] > quant_bd_org[1] &
-                        .data[[parameter_j]] < quant_bd_org[2]))
+            mutate(bd_up = bd_upper(organic_carbon_total),
+                   bd_low = bd_lower(organic_carbon_total)) %>%
+            filter(.data[[parameter_j]] > bd_low &
+                        .data[[parameter_j]] < bd_up) %>%
+            select(-bd_low, -bd_up)
         }
 
         if (nrow(df_summ_i) == 0) {
@@ -1059,7 +1078,9 @@ harmonise_per_plot_layer <- function(survey_form_input,
       close(progress_bar)
     }
 
-}
+} # End of "if pfh/som"
+
+
 
     if (survey_form_type == "pfh") {
 
@@ -1172,14 +1193,12 @@ harmonise_per_plot_layer <- function(survey_form_input,
                      code_layer, layer_type,
                      layer_limit_superior, layer_limit_inferior, weights,
                      {{ parameter_j }}) %>%
-              filter(.data$layer_type != "mineral" |
-                       (.data$layer_type == "mineral" &
-                          .data[[parameter_j]] >= range_min_j &
-                          .data[[parameter_j]] <= range_max_j)) %>%
-              filter(.data$layer_type == "mineral" |
-                       (.data$layer_type != "mineral" &
-                          .data[[parameter_j]] > quant_bd_org[1] &
-                          .data[[parameter_j]] < quant_bd_org[2]))
+              # As we don't know the TOC content for these samples,
+              # we just use the minimum and maximum plausible values
+              # of the formulas to create the upper and lower boundaries
+              # (bd_upper and bd_lower)
+              filter(.data[[parameter_j]] >= range_min_j &
+                       .data[[parameter_j]] <= range_max_j)
 
             if (nrow(df_summ_i) == 0) {
               next
@@ -1384,7 +1403,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
 
 
 
-      }
+      } # End of "if sw_swc"
 
 
     return(df_target)
