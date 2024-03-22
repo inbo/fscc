@@ -116,7 +116,7 @@ compare_ranks <- function(df, additional_info) {
   df[comparison_cols] <- lapply(df[comparison_cols], as.numeric)
 
   # Calculate maximum values for each comparison column
-  max_values <- reframe(df, across(comparison_cols, max))
+  max_values <- reframe(df, across(all_of(comparison_cols), max))
   focus_row_values <- select(focus_row, comparison_cols)
 
   selected_coord_advantages <- names(max_values)[max_values > focus_row_values]
@@ -143,14 +143,14 @@ level <- "LI"
 
 if (level == "LI") {
 
-  # s1
-  source("./src/functions/read_raw.R")
-  read_raw("s1", save_to_env = TRUE)
-
-
-  # y1
-  source("./src/functions/read_raw.R")
-  read_raw("y1", save_to_env = TRUE)
+  # # s1
+  # source("./src/functions/read_raw.R")
+  # read_raw("s1", save_to_env = TRUE)
+  #
+  #
+  # # y1
+  # source("./src/functions/read_raw.R")
+  # read_raw("y1", save_to_env = TRUE)
 
 
   # LI plots to ignore in external sources
@@ -245,6 +245,33 @@ if (level == "LI") {
     mutate(change_date = NA) %>%
     as_tibble
 
+  # FSCDB_access
+
+  dir <- paste0("data/additional_data/fscdb_LI/original_access_versions/",
+                "SYN_DATA_PLOT.xlsx")
+
+  assertthat::assert_that(file.exists(dir),
+                          msg = paste0("'", dir, "' ",
+                                       "does not exist."))
+
+  coord_fscdb_access <- openxlsx::read.xlsx(
+    dir, sheet = 1) %>%
+    rename(longitude = LONGITUDE) %>%
+    rename(latitude = LATITUDE) %>%
+    rename(code_plot = PLOTNR) %>%
+    rename(code_country = COUNTRYID) %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    mutate_all(~ifelse((.) == "", NA, .)) %>%
+    # Only relevant for Italian plots
+    filter(code_country == 5) %>%
+    mutate(survey_year = NA_integer_,
+           remark = NA,
+           change_date = as.character(as.Date("2002-01-01"))) %>%
+    filter(!is.na(longitude) &
+             !is.na(latitude)) %>%
+    select(code_country, plot_id, survey_year, longitude, latitude, remark,
+           change_date)
+
 
   # Heavy metal study 2020
   dir <- paste0("./data/additional_data/coordinates_plots/s1/",
@@ -276,6 +303,19 @@ if (level == "LI") {
     mutate(change_date = NA) %>%
     as_tibble
 
+  # Estonian coordinates LI
+
+  coord_estonian_pl1 <-
+    read.csv("./data/additional_data/coordinates_plots/s1/59_pl1.csv",
+             sep = ";") %>%
+    rename(code_country = country) %>%
+    mutate(plot_id = paste0(code_country, "_", plot)) %>%
+    mutate(survey_year = NA,
+           remark = NA,
+           change_date = as.character(as.Date("2024-02-21"))) %>%
+    select(code_country, plot_id, survey_year, longitude, latitude, remark) %>%
+    mutate(change_date = NA) %>%
+    as_tibble
 
 
  # Compile
@@ -341,9 +381,25 @@ if (level == "LI") {
                code_country, plot_id, survey_year, longitude, latitude,
                remark,
                change_date),
+      # coord_fscdb_access
+      coord_fscdb_access %>%
+        mutate(source = "fscdb_access") %>%
+        filter(!plot_id %in% plots_to_ignore_li) %>%
+        select(source,
+               code_country, plot_id, survey_year, longitude, latitude,
+               remark,
+               change_date),
       # coord_hm
       coord_hm %>%
         mutate(source = "heavy_metals") %>%
+        filter(!plot_id %in% plots_to_ignore_li) %>%
+        select(source,
+               code_country, plot_id, survey_year, longitude, latitude,
+               remark,
+               change_date),
+      # coord_estonian_pl1
+      coord_estonian_pl1 %>%
+        mutate(source = "estonia_y1_pl1") %>%
         filter(!plot_id %in% plots_to_ignore_li) %>%
         select(source,
                code_country, plot_id, survey_year, longitude, latitude,
@@ -770,7 +826,7 @@ coord_sources <- coord_sources %>%
 
 
 plot_ids <- coord_sources %>%
-  filter(grepl("^s1|^so|afscdb", source)) %>%
+  filter(grepl("^s1|^so|afscdb|access", source)) %>%
   mutate(code_plot = as.numeric(str_extract(plot_id, "(?<=_)\\d+$"))) %>%
   arrange(code_country, code_plot) %>%
   distinct(plot_id) %>%
@@ -847,7 +903,7 @@ for (i in seq_along(plot_ids)) {
     # Subset of dataframe at most recent change_date
 
     change_date_recent_sx <- coord_sources_i %>%
-      filter(grepl("^s1|^so|afscdb", source)) %>%
+      filter(grepl("^s1|^so|afscdb|access", source)) %>%
       slice_max(order_by =
                   as.Date(change_date, format = "%Y-%m-%d")) %>%
       distinct(change_date) %>%
@@ -1053,6 +1109,15 @@ for (i in seq_along(plot_ids)) {
           arrange(composite_index)
       }
 
+      if (any(grepl("estonia", coord_summ_i$sources))) {
+
+        coord_summ_i <- coord_summ_i %>%
+          mutate(composite_index =
+                   ifelse(grepl("estonia", sources),
+                          0.99,
+                          composite_index)) %>%
+          arrange(composite_index)
+      }
 
 
       # Check if there is a clear "winner" with the lowest composite_index
