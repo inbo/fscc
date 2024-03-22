@@ -1388,6 +1388,49 @@ get_primary_inconsistencies <- function(code_survey,
     }
 
 
+    if (survey_form == "s1_pfh") {
+
+      # The one Swedish record in 13_2005_624 clearly belongs to
+      # the records in survey_year 2006 rather than 2005
+
+      line_to_correct <- df %>%
+        filter(unique_survey == "13_2005_624") %>%
+        pull(code_line)
+
+      df <- df %>%
+        mutate(
+          layer_number = ifelse(
+            (!is.na(.data$code_line) & code_line == line_to_correct),
+            5,
+            layer_number),
+          survey_year = ifelse(
+            (!is.na(.data$code_line) & code_line == line_to_correct),
+            2006,
+            survey_year),
+          unique_survey = ifelse(
+            (!is.na(.data$code_line) & code_line == line_to_correct),
+            "13_2006_624",
+            unique_survey),
+          unique_survey_profile = ifelse(
+            (!is.na(.data$code_line) & code_line == line_to_correct),
+            "13_2006_624_1",
+            unique_survey_profile),
+          unique_survey_layer = ifelse(
+            (!is.na(.data$code_line) & code_line == line_to_correct),
+            "13_2006_624_B",
+            unique_survey_layer),
+          unique_layer_repetition = ifelse(
+            (!is.na(.data$code_line) & code_line == line_to_correct),
+            "13_2006_624_B_1",
+            unique_layer_repetition)) %>%
+        arrange(country,
+                code_plot,
+                survey_year,
+                profile_pit_id,
+                layer_number)
+
+    }
+
 
 
 
