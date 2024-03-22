@@ -334,6 +334,24 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
 
 
+  # Before estimating layer limits when needed,
+  # duplicate the columns with layer limits (to keep the original layer limits)
+  # Only the layer limit columns without "_orig" can be altered
+
+  if (!"layer_limit_inferior_orig" %in% names(df)) {
+    df$layer_limit_inferior_orig <- df$layer_limit_inferior
+  }
+
+  if (!"layer_limit_superior_orig" %in% names(df)) {
+    df$layer_limit_superior_orig <- df$layer_limit_superior
+  }
+
+  # Same for code_layer, since this is absent for some Latvian plots in so_som
+
+  if (!"code_layer_orig" %in% names(df)) {
+    df$code_layer_orig <- df$code_layer
+  }
+
 
   # This script is automatically moving the null line of
   # the profile in accordance with the location/thickness of
@@ -587,6 +605,55 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
                                -5,
                                layer_limit_inferior)))
     }
+
+    if (df$layer_limit_superior[which(df$unique_layer_repetition ==
+                                      "2_1993_57_O_1")] == 0.5) {
+    df <- df %>%
+      # Belgium
+      mutate(
+        layer_limit_superior = ifelse(
+          unique_layer_repetition == "2_1993_57_O_1",
+          -0.5,
+          layer_limit_superior),
+        layer_number = ifelse(
+          unique_survey_repetition == "2_1993_57_1",
+          ifelse(is.na(layer_number),
+                 1,
+                 layer_number + 1),
+          layer_number))
+    }
+
+    if (df$layer_limit_inferior[which(df$unique_layer_repetition ==
+                                      "59_1993_117_H_1")] == -40) {
+
+    df <- df %>%
+      # Estonia
+      mutate(
+        layer_limit_inferior = ifelse(
+          unique_layer_repetition == "59_1993_117_H_1",
+          40,
+          layer_limit_inferior))
+    }
+
+    if (all(df$layer_limit_inferior_orig[which(df$unique_survey_repetition ==
+                                               "62_2009_5112_5" &
+                                               df$layer_type == "peat")] <
+            df$layer_limit_superior_orig[which(df$unique_survey_repetition ==
+                                               "62_2009_5112_5" &
+                                               df$layer_type == "peat")])) {
+
+    df <- df %>%
+      # Russia
+      mutate(layer_limit_superior = ifelse(
+        unique_survey_repetition == "62_2009_5112_5",
+        layer_limit_inferior_orig,
+        layer_limit_superior),
+        layer_limit_inferior = ifelse(
+          unique_survey_repetition == "62_2009_5112_5",
+          layer_limit_superior_orig,
+          layer_limit_inferior))
+    }
+
   }
 
 
@@ -636,24 +703,6 @@ df$layer_number <- NA # Final layer numbers
   # no longer generated?
 
 
-
-  # Before estimating layer limits when needed,
-  # duplicate the columns with layer limits (to keep the original layer limits)
-  # Only the layer limit columns without "_orig" can be altered
-
-if (!"layer_limit_inferior_orig" %in% names(df)) {
-df$layer_limit_inferior_orig <- df$layer_limit_inferior
-}
-
-if (!"layer_limit_superior_orig" %in% names(df)) {
-df$layer_limit_superior_orig <- df$layer_limit_superior
-}
-
-  # Same for code_layer, since this is absent for some Latvian plots in so_som
-
-if (!"code_layer_orig" %in% names(df)) {
-df$code_layer_orig <- df$code_layer
-}
 
   # The intention is to create a list_layer_inconsistencies of
   # the following format to store inconsistencies found in the survey data:
