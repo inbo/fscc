@@ -222,14 +222,6 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  # kg m-2
                  round(.data$bulk_density * (.data$layer_thickness * 1e-2), 3),
                  NA_real_),
-        # Organic layer weight thickness based on
-        # a median value for bulk density
-        organic_layer_weight_bd_median =
-          ifelse(!is.na(.data$layer_thickness) &
-                   (.data$layer_type %in% c("forest_floor", "peat")),
-                 # kg m-2
-                 round(bd_org_median * (.data$layer_thickness * 1e-2), 3),
-                 NA_real_),
         # Sum texture
         # This should be between 97 and 103 %
         sum_texture =
@@ -319,14 +311,6 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  # kg m-2
                  round(.data$bulk_density_harm *
                          (.data$layer_thickness * 1e-2), 3),
-                 NA_real_),
-        # Organic layer weight thickness based on thickness and
-        # a median value for bulk density
-        organic_layer_weight_bd_median =
-          ifelse(!is.na(.data$layer_thickness) &
-                   (.data$layer_type %in% c("forest_floor", "peat")),
-                 # kg m-2
-                 round(bd_org_median * (.data$layer_thickness * 1e-2), 3),
                  NA_real_),
         # Sum texture
         sum_texture =
