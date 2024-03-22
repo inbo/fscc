@@ -63,6 +63,23 @@ get_stratifiers <- function(level) {
 
   if (level == "LII") {
 
+  # Base saturation source
+  if (!"sum_base_cations" %in% names(get_env("so_som"))) {
+    df_bs <- read.csv("./data/layer1_data/so/so_som.csv",
+                      sep = ";")
+  } else {
+    df_bs <- get_env("so_som")
+  }
+
+  df_bs <- df_bs %>%
+    mutate(base_saturation = case_when(
+      (!is.na(base_saturation)) ~ 0.01 * base_saturation,
+      (!is.na(sum_base_cations) & !is.na(sum_acid_cations)) ~
+        sum_base_cations / (sum_base_cations + sum_acid_cations),
+      .default = NA))
+
+
+
   # Get manually harmonised WRB and EFTC
 
   assertthat::assert_that(file.exists(paste0("./data/additional_data/",
@@ -71,20 +88,13 @@ get_stratifiers <- function(level) {
                                        "SO_PRF_ADDS.xlsx' ",
                                        "does not exist."))
 
-  so_prf_adds <-
+  so_prf_adds_agg <-
     openxlsx::read.xlsx(paste0("./data/additional_data/",
                                "SO_PRF_ADDS.xlsx"),
                         sheet = 1) %>%
-    rename(bs_class = "BS.(high/low)",
-           plot_id = PLOT_ID) %>%
-    filter(!is.na(plot_id))
-
-
-  assertthat::assert_that(
-    n_distinct(get_env("data_availability_so")$plot_id) ==
-      nrow(get_env("data_availability_so")))
-
-  df_strat <- so_prf_adds %>%
+    rename(bs_class = "BS.(high/low)") %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    filter(!is.na(plot_id)) %>%
     mutate(soil_wrb = paste0(RSGu, "_",
                              QUALu, "_",
                              SPECu, "_",
@@ -101,42 +111,38 @@ get_stratifiers <- function(level) {
     group_by(plot_id) %>%
     # Sometimes there are different options, e.g. plot_id 60_9
     # No good way to solve this - we just have to pick one
-    summarise(soil_wrb =
+    reframe(soil_wrb =
                 names(which.max(table(soil_wrb[!is.na(soil_wrb)])))) %>%
+    ungroup() %>%
     # Split the data back into the original columns
     separate(soil_wrb,
              into = c("code_wrb_soil_group",
                       "code_wrb_qualifier_1",
                       "code_wrb_spezifier_1",
                       "method_wrb_harmonisation_fscc",
-                      "depth_stock",
+                      "eff_soil_depth",
                       "bs_class",
                       "code_forest_type",
                       "humus_type",
                       "remark_harmonisation_fscc"),
              sep = "_") %>%
-    left_join(data_availability_so %>%
-                select(plot_id, partner_short),
-              by = "plot_id") %>%
-    relocate(partner_short, .before = plot_id) %>%
-    # mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
-    mutate_all(~ifelse((.) == "NA", NA, .)) %>%
-    mutate_all(~ifelse((.) == "", NA, .)) %>%
-    left_join(d_forest_type,
-              by = join_by(code_forest_type == code)) %>%
-    rename(forest_type = short_descr) %>%
-    left_join(d_soil_group,
-              by = join_by(code_wrb_soil_group == code)) %>%
-    rename(wrb_soil_group = description)
+    mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
+    mutate_if(
+      function(x) !is.Date(x),
+      ~ifelse(. == "NA" | . == "", NA_character_, .)) %>%
+    select(-code_wrb_spezifier_1)
 
 
-  # Add coordinates
+  assertthat::assert_that(
+    n_distinct(get_env("data_availability_so")$plot_id) ==
+      nrow(get_env("data_availability_so")))
 
-  df_strat_sf <- df_strat %>%
+  df_strat_sf <- get_env("data_availability_so") %>%
+    select(country, partner_short, plot_id, code_plot) %>%
     left_join(get_env("coordinates_so"), by = "plot_id") %>%
     as_sf
 
-  # Add biogeographical region
+
 
   df_strat <-
     # Add biogeographical region
@@ -145,40 +151,120 @@ get_stratifiers <- function(level) {
     st_drop_geometry() %>%
     distinct(plot_id, .keep_all = TRUE) %>%
     arrange(partner_short, code_plot) %>%
-    # Add main tree species
+    # Add manually harmonised stratifiers
+    left_join(so_prf_adds_agg,
+              by = "plot_id") %>%
+    # Add WRB etc
+    left_join(get_env("so_prf") %>%
+                select(plot_id, code_wrb_soil_group,
+                       code_wrb_qualifier_1, code_wrb_spezifier_1,
+                       change_date,
+                       date_profile_desc) %>%
+                filter(!is.na(code_wrb_soil_group)) %>%
+                # Filter for records with the most recent change_date
+                # per plot
+                group_by(plot_id) %>%
+                slice_max(order_by =
+                            as.Date(change_date, format = "%Y-%m-%d")) %>%
+                ungroup() %>%
+                # Take the most abundant value
+                # Sometimes there are different WRBs of the same most recent
+                # change_date for a plot. In that case it is at this stage
+                # not yet clear which WRB is more reliable at the plot level.
+                # To do: clarify this
+                group_by(plot_id, code_wrb_soil_group,
+                         code_wrb_qualifier_1, code_wrb_spezifier_1) %>%
+                summarise(count = n(),
+                          date_profile_desc = first(date_profile_desc),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                filter(count == max(count)) %>%
+                summarise(
+                  uncertain_soil_group_options =
+                    ifelse(n_distinct(code_wrb_soil_group) > 1,
+                           paste0(unique(code_wrb_soil_group), collapse = "_"),
+                           NA),
+                  code_wrb_soil_group = first(code_wrb_soil_group),
+                  code_wrb_qualifier_1 = first(code_wrb_qualifier_1),
+                  code_wrb_spezifier_1 = first(code_wrb_spezifier_1),
+                  date_profile_desc = first(date_profile_desc)) %>%
+                ungroup() %>%
+                select(plot_id, code_wrb_soil_group,
+                       code_wrb_qualifier_1, code_wrb_spezifier_1,
+                       uncertain_soil_group_options,
+                       date_profile_desc) %>%
+                # with 0 referring to "layer 0"
+                rename(code_wrb_soil_group_0 = code_wrb_soil_group) %>%
+                rename(code_wrb_qualifier_1_0 = code_wrb_qualifier_1),
+              by = "plot_id") %>%
+    # Combine sources (i.e. harmonised data and layer 0)
+    mutate(
+      uncertain_soil_group_options = ifelse(
+        is.na(code_wrb_soil_group) & !is.na(uncertain_soil_group_options),
+        uncertain_soil_group_options,
+        NA),
+      code_wrb_qualifier_1 = ifelse(
+        !is.na(code_wrb_soil_group),
+        code_wrb_qualifier_1,
+        code_wrb_qualifier_1_0),
+      code_wrb_soil_group = coalesce(code_wrb_soil_group,
+                                     code_wrb_soil_group_0)) %>%
+    select(-code_wrb_soil_group_0,
+           -code_wrb_qualifier_1_0,
+           -code_wrb_spezifier_1) %>% # actually not needed since not harmonised
+    left_join(d_soil_group,
+              by = join_by(code_wrb_soil_group == code)) %>%
+    rename(wrb_soil_group = description) %>%
+    left_join(d_soil_adjective %>%
+                select(code, description) %>%
+                rename(code_wrb_qualifier_1 = code) %>%
+                rename(wrb_qualifier_1 = description),
+              by = "code_wrb_qualifier_1") %>%
+    # Add forest type
     left_join(get_env("si_sta") %>%
-                select(plot_id, code_tree_species) %>%
-                filter(code_tree_species != -9) %>%
-                filter(!is.na(code_tree_species)) %>%
-                group_by(plot_id, code_tree_species) %>%
+                select(plot_id, code_forest_type) %>%
+                filter(code_forest_type != 99) %>%
+                filter(!is.na(code_forest_type)) %>%
+                group_by(plot_id, code_forest_type) %>%
                 summarise(count = n(),
                           .groups = "drop") %>%
                 group_by(plot_id) %>%
                 arrange(-count) %>%
                 slice_head() %>%
                 ungroup() %>%
-                select(plot_id, code_tree_species),
+                select(plot_id, code_forest_type) %>%
+                mutate(code_forest_type = as.character(code_forest_type)) %>%
+                rename(code_forest_type_0 = code_forest_type),
               by = "plot_id") %>%
-    left_join(d_tree_spec,
-              by = join_by(code_tree_species == code)) %>%
-    rename(main_tree_species = description) %>%
+    mutate(code_forest_type = coalesce(code_forest_type,
+                                       code_forest_type_0)) %>%
+    select(-code_forest_type_0) %>%
+    left_join(d_forest_type,
+              by = join_by(code_forest_type == code)) %>%
+    rename(forest_type = short_descr) %>%
     # Add humus type
-    # left_join(get_env("so_prf") %>%
-    #             select(plot_id, code_humus) %>%
-    #             filter(code_humus != 99) %>%
-    #             filter(!is.na(code_humus)) %>%
-    #             group_by(plot_id, code_humus) %>%
-    #             summarise(count = n(),
-    #                       .groups = "drop") %>%
-    #             group_by(plot_id) %>%
-    #             arrange(-count) %>%
-    #             slice_head() %>%
-    #             ungroup() %>%
-    #             select(plot_id, code_humus),
-    #           by = "plot_id") %>%
-    # left_join(d_humus,
-    #           by = join_by(code_humus == code)) %>%
-    # rename(humus_type = description) %>%
+    left_join(get_env("so_prf") %>%
+                select(plot_id, code_humus) %>%
+                filter(code_humus != 99) %>%
+                filter(!is.na(code_humus)) %>%
+                group_by(plot_id, code_humus) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, code_humus),
+              by = "plot_id") %>%
+    left_join(d_humus,
+              by = join_by(code_humus == code)) %>%
+    rename(humus_type_0 = description) %>%
+    mutate(humus_type_0 = case_when(
+      humus_type_0 == "Amphi (or Amphihumus)" ~ "Amphi",
+      humus_type_0 %in% c("Histomull", "Histomoder") ~ "Peat",
+      TRUE ~ humus_type_0)) %>%
+    mutate(humus_type = coalesce(humus_type, humus_type_0)) %>%
+    select(-code_humus, -humus_type_0) %>%
     # Add parent_material
     left_join(get_env("so_prf") %>%
                 select(plot_id, code_parent_material_1) %>%
@@ -196,6 +282,23 @@ get_stratifiers <- function(level) {
     left_join(d_parent_material,
               by = join_by(code_parent_material_1 == code)) %>%
     rename(parent_material = description) %>%
+    # Add main tree species
+    left_join(get_env("si_sta") %>%
+                select(plot_id, code_tree_species) %>%
+                filter(code_tree_species != -9) %>%
+                filter(!is.na(code_tree_species)) %>%
+                group_by(plot_id, code_tree_species) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, code_tree_species),
+              by = "plot_id") %>%
+    left_join(d_tree_spec,
+              by = join_by(code_tree_species == code)) %>%
+    rename(main_tree_species = description) %>%
     # Add slope
     left_join(get_env("si_plt") %>%
                 select(plot_id, slope) %>%
@@ -211,6 +314,10 @@ get_stratifiers <- function(level) {
               by = "plot_id") %>%
     # Add soil depth
     left_join(get_env("so_prf") %>%
+                mutate(eff_soil_depth_orig =
+                         ifelse("eff_soil_depth" %in% colnames(.),
+                                eff_soil_depth,
+                                NA)) %>%
                 rowwise() %>%
                 mutate(eff_soil_depth = ifelse(.data$eff_soil_depth_orig == 0,
                                                NA,
@@ -254,12 +361,15 @@ get_stratifiers <- function(level) {
                 summarise(
                   eff_soil_depth = first(eff_soil_depth)) %>%
                 ungroup() %>%
-                select(plot_id, eff_soil_depth),
+                select(plot_id, eff_soil_depth) %>%
+                rename(eff_soil_depth_0 = eff_soil_depth),
               by = "plot_id") %>%
-    mutate(eff_soil_depth = ifelse(is.na(eff_soil_depth) &
-                                     !is.na(depth_stock),
-                                   .data$depth_stock,
-                                   .data$eff_soil_depth)) %>%
+    mutate(eff_soil_depth = coalesce(eff_soil_depth,
+                                     eff_soil_depth_0)) %>%
+    mutate(eff_soil_depth = ifelse(!is.na(eff_soil_depth) &
+                                     (eff_soil_depth > 100),
+                                   100,
+                                   eff_soil_depth)) %>%
     # Add rooting depth
     left_join(get_env("so_prf") %>%
                 mutate(rooting_depth = ifelse(.data$rooting_depth == 0,
@@ -282,7 +392,26 @@ get_stratifiers <- function(level) {
                 ungroup() %>%
                 select(plot_id, rooting_depth),
               by = "plot_id") %>%
-    select(partner_short,
+    # Base saturation class
+    # Add base saturation
+    left_join(df_bs %>%
+                filter(layer_limit_superior >= 20) %>%
+                filter(!is.na(base_saturation)) %>%
+                group_by(plot_id) %>%
+                reframe(base_saturation = mean(base_saturation)) %>%
+                ungroup(),
+              by = "plot_id") %>%
+    mutate(bs_class_0 = case_when(
+      grepl("eutr", wrb_qualifier_1, ignore.case = TRUE) ~ ">= 50 %",
+      grepl("dystr", wrb_qualifier_1, ignore.case = TRUE) ~ "< 50 %",
+      (!is.na(base_saturation) & base_saturation >= 0.5) ~ ">= 50 %",
+      (!is.na(base_saturation) & base_saturation < 0.5) ~ "< 50 %")) %>%
+    mutate(bs_class = coalesce(bs_class, bs_class_0)) %>%
+    mutate(bs_class = case_when(
+      .data$bs_class == "low" ~ "< 50 %",
+      .data$bs_class == "high" ~ ">= 50 %",
+      TRUE ~ NA_character_)) %>%
+    select(country,
            plot_id,
            longitude_dec,
            latitude_dec,
@@ -296,13 +425,20 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
+           wrb_qualifier_1,
            code_wrb_soil_group,
+           uncertain_soil_group_options,
            code_wrb_qualifier_1,
-           code_wrb_spezifier_1,
            code_forest_type,
-           #code_humus,
            code_parent_material_1,
-           code_tree_species)
+           code_tree_species,
+           eff_soil_depth_0,
+           date_profile_desc)
+
+  if (length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
+    df_strat <- df_strat %>%
+      select(-uncertain_soil_group_options)
+  }
 
 }
 
@@ -656,7 +792,8 @@ get_stratifiers <- function(level) {
            code_forest_type,
            code_parent_material_1,
            code_tree_species,
-           eff_soil_depth_0)
+           eff_soil_depth_0,
+           date_profile_desc)
 
   if (length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
     df_strat <- df_strat %>%
