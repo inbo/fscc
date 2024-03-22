@@ -4,12 +4,14 @@
 #' This function retrieves bulk density statistics from various data sources.
 #'
 #' @param mode A character string specifying the type of stat.
-#'             Possible values are "median" (default) and "quantile". If
+#'             Possible values are "median" (default), "mean" and "quantile". If
 #'             "quantile", the upper and lower quantile values of the whole
-#'             range is returned. If "median", the median of the plausible
-#'             values (i.e. those within the quantile range) is returned.
-#' @param matrix_type A character string specifying the type of matrix.
-#'                   Possible values are "organic" (default) and "mineral".
+#'             range is returned. If "median" or "mean", the median or mean
+#'              of the plausible values (i.e. those within the quantile range)
+#'              is returned.
+#' @param layer_type A character string specifying the type of layer.
+#'                   Possible values are "organic" (default), "forest_floor",
+#'                   "peat" and "mineral".
 #' @param quantile A numeric value indicating the quantile range
 #'                (default is 95).
 #'
@@ -20,7 +22,7 @@
 #' @details This function retrieves bulk density statistics from multiple
 #'          data sources based on the specified parameters. It calculates the
 #'          median or quantile bulk density values based on the specified mode
-#'          and matrix type.
+#'          and layer type.
 #'
 #' @examples
 #' get_bulk_density_stats()
@@ -28,7 +30,7 @@
 #' @export
 
 get_bulk_density_stats <- function(mode = "median",
-                                   matrix_type = "organic",
+                                   layer_type = "organic",
                                    quantile = 95) {
 
   source("./src/functions/get_env.R")
@@ -48,7 +50,7 @@ get_bulk_density_stats <- function(mode = "median",
 
   if ("bulk_density_source" %in% names(df_s1_som)) {
     df_s1_som <- df_s1_som %>%
-      filter(bulk_density_source == "som (same year)")
+      filter(!(grepl("pfh|swc", bulk_density_source)))
   }
 
   # s1_pfh
@@ -58,7 +60,12 @@ get_bulk_density_stats <- function(mode = "median",
 
   if ("bulk_density_source" %in% names(df_s1_pfh)) {
     df_s1_pfh <- df_s1_pfh %>%
-      filter(bulk_density_source == "pfh (measured)")
+      filter(!(grepl("som|swc", bulk_density_source)))
+  }
+
+  if (!"bulk_density" %in% names(df_s1_pfh)) {
+    df_s1_pfh <- df_s1_pfh %>%
+      mutate(bulk_density = horizon_bulk_dens_measure)
   }
 
   # so_som
@@ -68,7 +75,7 @@ get_bulk_density_stats <- function(mode = "median",
 
   if ("bulk_density_source" %in% names(df_so_som)) {
     df_so_som <- df_so_som %>%
-      filter(bulk_density_source == "som (same year)")
+      filter(!(grepl("pfh|swc", bulk_density_source)))
   }
 
   # so_pfh
@@ -78,8 +85,14 @@ get_bulk_density_stats <- function(mode = "median",
 
   if ("bulk_density_source" %in% names(df_so_pfh)) {
     df_so_pfh <- df_so_pfh %>%
-      filter(bulk_density_source == "pfh (measured)")
+      filter(!(grepl("som|swc", bulk_density_source)))
   }
+
+  if (!"bulk_density" %in% names(df_so_pfh)) {
+    df_so_pfh <- df_so_pfh %>%
+      mutate(bulk_density = horizon_bulk_dens_measure)
+  }
+
 
   # sw_swc
 
@@ -90,6 +103,10 @@ get_bulk_density_stats <- function(mode = "median",
 
 
   # Assemble bulk densities including implausible ones ----
+
+
+
+
 
   bulk_densities_complete <- bind_rows(
     # s1_som
@@ -124,7 +141,7 @@ get_bulk_density_stats <- function(mode = "median",
 
     # s1_pfh
     df_s1_pfh %>%
-      mutate(bulk_density_harm = .data$horizon_bulk_dens_measure) %>%
+      mutate(bulk_density_harm = .data$bulk_density) %>%
       filter(!is.na(bulk_density_harm)) %>%
       rename(code_layer = horizon_master) %>%
       select(layer_type, code_layer, survey_year, bulk_density_harm),
@@ -161,7 +178,7 @@ get_bulk_density_stats <- function(mode = "median",
 
     # so_pfh
     df_so_pfh %>%
-      mutate(bulk_density_harm = .data$horizon_bulk_dens_measure) %>%
+      mutate(bulk_density_harm = .data$bulk_density) %>%
       filter(!is.na(bulk_density_harm)) %>%
       rename(code_layer = horizon_master) %>%
       select(layer_type, code_layer, survey_year, bulk_density_harm),
@@ -177,7 +194,7 @@ get_bulk_density_stats <- function(mode = "median",
 
 
 
-  if (matrix_type == "organic") {
+  if (layer_type == "organic") {
 
     bulk_densities_complete <- bulk_densities_complete %>%
       filter(layer_type %in% c("forest_floor", "peat")) %>%
@@ -186,7 +203,25 @@ get_bulk_density_stats <- function(mode = "median",
 
   }
 
-  if (matrix_type == "mineral") {
+  if (layer_type == "forest_floor") {
+
+    bulk_densities_complete <- bulk_densities_complete %>%
+      filter(layer_type %in% c("forest_floor")) %>%
+      arrange(bulk_density_harm) %>%
+      pull(bulk_density_harm)
+
+  }
+
+  if (layer_type == "peat") {
+
+    bulk_densities_complete <- bulk_densities_complete %>%
+      filter(layer_type %in% c("peat")) %>%
+      arrange(bulk_density_harm) %>%
+      pull(bulk_density_harm)
+
+  }
+
+  if (layer_type == "mineral") {
 
     bulk_densities_complete <- bulk_densities_complete %>%
       filter(layer_type %in% c("mineral")) %>%
@@ -217,16 +252,46 @@ get_bulk_density_stats <- function(mode = "median",
 
     median_plausible <- round(median(bulk_densities_plausible))
 
-    if (matrix_type == "organic") {
+    if (layer_type == "organic") {
       assertthat::assert_that(median_plausible > 75 &
-                                median_plausible < 130)
+                                median_plausible < 160)
     }
 
-    if (matrix_type == "mineral") {
+    if (layer_type == "mineral") {
       assertthat::assert_that(median_plausible > 1100 &
                                 median_plausible < 1250)
     }
 
     return(median_plausible)
   }
+
+
+  if (mode == "mean") {
+
+    # Since the data for an organic matrix are skewed, with a long tail
+    # of larger values, the median may be a better measure of central
+    # tendency. The median is less influenced by extreme values or
+    # outliers compared to the average, making it more robust in skewed
+    # distributions.
+
+    bulk_densities_plausible <-
+      bulk_densities_complete[which(
+        bulk_densities_complete > as.numeric(quantiles_complete[1]) &
+          bulk_densities_complete < as.numeric(quantiles_complete[2]))]
+
+    mean_plausible <- round(mean(bulk_densities_plausible))
+
+    if (layer_type == "organic") {
+      assertthat::assert_that(mean_plausible > 75 &
+                                mean_plausible < 160)
+    }
+
+    if (layer_type == "mineral") {
+      assertthat::assert_that(mean_plausible > 1100 &
+                                mean_plausible < 1250)
+    }
+
+    return(mean_plausible)
+  }
+
 }
