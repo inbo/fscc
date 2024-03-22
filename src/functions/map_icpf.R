@@ -75,7 +75,9 @@ map_icpf <- function(layers,
                      export_folder,
                      point_size,
                      point_col = NULL,
-                     biogeo_palette = "biogeo_col") {
+                     biogeo_palette = "biogeo_col",
+                     with_logo = FALSE,
+                     count_plots_legend = FALSE) {
 
   # Install packages ----
 
@@ -83,6 +85,7 @@ map_icpf <- function(layers,
   packages_map_icpf <- c("sf",
                          "tidyverse",
                          "grid",
+                         "magick",     # To place a logo on top
                          "cowplot",    # To put maps together
                          "ggspatial",  # For scale bar and north arrow
                          "geodata",    # To download country borders
@@ -188,7 +191,28 @@ map_icpf <- function(layers,
                      "#fabe02",
                      "#F0F921")
 
-      country_border_col <- "#5b7273" #"#2b4445"
+      point_col <- c("#37565c",
+                     "#7a741f",
+                     "#cf7e15",
+                     "#f09caa")
+
+      point_col <- c("#912905",
+                     "#e06302",
+                     "#fabe02",
+                     "#F0F921")
+
+      point_col <- c("#01635f",
+                     "#219e2e",
+                     "#b3de02",
+                     "#69413D")
+
+      point_col <- c("#77203B",
+                     "#d44102",
+                     "#fabe02",
+                     "#F0F921")
+
+      country_border_col <- "#3a494a" #"#5b7273" #"#2b4445"
+
 
     }
 
@@ -199,6 +223,25 @@ map_icpf <- function(layers,
 
   # Legend: create a character vector with the colours and the corresponding
   # class as name
+
+  if (count_plots_legend == TRUE) {
+
+    # Get the number of plots for each layer
+    n_plots <- c(nrow(get(layers[1], envir = .GlobalEnv)),
+                 nrow(get(layers[2], envir = .GlobalEnv)),
+                 nrow(get(layers[3], envir = .GlobalEnv)))
+
+    # Generate adjusted Markdown classes with counts
+    legend_classes <- mapply(function(cls, col, count) {
+      paste0("<span style='color:black;'>",
+             cls, "</span>",
+             "<span style='color:", col, ";'><br>n = ", count, "</span>")
+    },
+    legend_classes, point_col, n_plots) %>% as.vector
+  }
+
+
+
 
   legend_values <- point_col
 
@@ -226,7 +269,9 @@ map_icpf <- function(layers,
                   "#33002d")
 
   if (is.null(biogeo_palette)) {
-    background_col <- "black" # "#293333" #"#203233" #"#14293a"
+    background_col <- "#222222"
+      #"black" # "#293333" #"#203233" #"#14293a"
+    sea_col <- "#C2CECE"   #"#a1b3b3"
   }
 
 
@@ -298,9 +343,9 @@ map_icpf <- function(layers,
                            # to centimeters
                            unit = "cm"),
       legend.text =
-        element_text(vjust = 0,
-                     margin =
-                       margin(b = 5))) +
+        element_markdown(vjust = -1,
+                         lineheight = 1.2,
+                         margin = margin(b = 5))) +
     # Map the borders of the countries (without fill)
     geom_sf(data = world_spat, color = country_border_col,
             fill = NA, linewidth = 0.5) +
@@ -327,6 +372,7 @@ map_icpf <- function(layers,
                                 # Order of this legend relative to other legends
                                 # in the plot, i.e. first (from top)
                                 order = 1)) +
+                                #label.vjust = -1)) +
     # Add a scale bar to the plot
     ggspatial::annotation_scale(
       # Specify the width of the scale bar relative to the plot width
@@ -752,5 +798,74 @@ map_icpf <- function(layers,
          # Set the width and height of the saved plot in inches
          width = 6.81,
          height = 5.3)
+
+
+
+  if (with_logo == TRUE) {
+
+
+    # Call back the plot
+    plot <- magick::image_read(path = path)
+
+    # Import the logo
+    logo <-
+      magick::image_read(paste0("./data/additional_data/",
+                                "ICP_LOGO_transparent_background.png")) %>%
+      magick::image_resize("500x")
+
+    # Calculate the offset for the lower right corner
+    offset_x <- magick::image_info(plot)$width -
+      magick::image_info(logo)$width - 480  # Adjust the margin as needed
+    offset_y <- magick::image_info(plot)$height -
+      magick::image_info(logo)$height - 180  # Adjust the margin as needed
+
+    diff_x <- 300
+
+    # Overlay the logo onto the old graph
+    final_image <-
+      magick::image_composite(plot, logo,
+                              offset = paste0("+", offset_x,
+                                              "+", offset_y)) %>%
+      magick::image_crop(paste0((magick::image_info(plot)$width - diff_x), "x",
+                                magick::image_info(plot)$height, "+",
+                                diff_x / 2, "+0"))
+
+    # Save or display the final composite image
+    image_write(final_image, path = path)
+
+  }
+
+  # if (count_plots_legend == TRUE) {
+  #
+  #
+  #   # Call back the plot
+  #   plot <- magick::image_read(path = path)
+  #
+  #   # Import the logo
+  #   logo <-
+  #     magick::image_read(paste0("./data/additional_data/",
+  #                               "ICP_LOGO_transparent_background.png")) %>%
+  #     magick::image_resize("500x")
+  #
+  #   # Calculate the offset for the lower right corner
+  #   offset_x <- magick::image_info(plot)$width - 980
+  #   offset_y <- magick::image_info(plot)$height - 420
+  #
+  #   # Overlay the logo onto the old graph
+  #   final_image <-
+  #     magick::image_composite(plot,
+  #                             magick::image_crop(plot,
+  #                                                "900x1000+2450+320"),
+  #                             offset = paste0("+", "2450", "+", "380"))
+  #
+  #   # Save or display the final composite image
+  #   image_write(final_image, path = path)
+  #
+  # }
+
+
+
+
+
 
 }
