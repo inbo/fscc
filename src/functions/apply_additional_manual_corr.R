@@ -46,7 +46,7 @@ apply_additional_manual_corr <- function(survey_form,
         mutate(code_line = as.character(code_line)) %>%
         rename(observation_date = change_date) %>%
         # Assuming the Excel epoch is 1899-12-30
-        mutate(observation_date = as.Date(.data$observation_date - 1,
+        mutate(observation_date = as.Date(.data$observation_date,
                                             origin = "1899-12-30")) %>%
         mutate(observation_date =
                  as.Date(parsedate::parse_iso_8601(.data$observation_date)))
@@ -54,7 +54,8 @@ apply_additional_manual_corr <- function(survey_form,
 
 
       assertthat::assert_that(length(which(!is.na(df_to_correct$code_line))) ==
-                                nrow(df_to_correct))
+                                nrow(df_to_correct),
+                              msg = "Not all records have a known code_line")
 
 
 
@@ -70,6 +71,11 @@ apply_additional_manual_corr <- function(survey_form,
         # To do: systematically implement these issues in
         # ./src/functions/get_layer_inconsistencies.R
         filter(parameter != "code_layer") %>%
+        # !!! The list of additional manual corrections dates from before
+        # the systematic changes in the bulk density harmonisation
+        # Better to use the same approach across different records
+        # during internal gap-filling and using the PTFs
+        filter(!grepl("bulk_dens", parameter)) %>%
         # Filter for inconsistencies of the given survey form
         filter(.data$survey_form == name_survey_form) %>%
         # Create column "unique_inconsistency_id"
@@ -291,19 +297,31 @@ apply_additional_manual_corr <- function(survey_form,
         if (!is_the_same(pull(df[row_ind, col_ind]),
                      df_to_correct_survey_form$parameter_value_updated[i])) {
 
-          if (df_to_correct_survey_form$parameter[i] %in% numeric_columns) {
+          # Not if the original data are empty
+          if (!is.na(pull(df[row_ind, col_ind]))) {
 
-            df[row_ind, col_ind] <-
+          if (df_to_correct_survey_form$parameter_value_updated[i] %in%
+              c("NA", "")) {
+
+            value_to_update <- NA
+
+          } else
+            if (df_to_correct_survey_form$parameter[i] %in% numeric_columns) {
+
+            value_to_update <-
               as.numeric(df_to_correct_survey_form$parameter_value_updated[i])
 
           } else {
 
-            df[row_ind, col_ind] <-
+            value_to_update <-
               type.convert(df_to_correct_survey_form$parameter_value_updated[i],
                            as.is = TRUE)
           }
 
+          df[row_ind, col_ind] <- value_to_update
+
           df_to_correct_survey_form$fscc_action[i] <- "updated"
+        }
         }
 
     }
