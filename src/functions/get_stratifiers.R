@@ -244,7 +244,8 @@ get_stratifiers <- function(level) {
     rename(forest_type = short_descr) %>%
     # Add humus type
     left_join(get_env("so_prf") %>%
-                select(plot_id, code_humus) %>%
+                select(plot_id, code_humus_orig) %>%
+                rename(code_humus = code_humus_orig) %>%
                 filter(code_humus != 99) %>%
                 filter(!is.na(code_humus)) %>%
                 group_by(plot_id, code_humus) %>%
@@ -636,7 +637,8 @@ get_stratifiers <- function(level) {
     left_join(bind_rows(get_env("y1_st1") %>%
                           select(plot_id, code_humus),
                         get_env("s1_prf") %>%
-                          select(plot_id, code_humus)) %>%
+                          select(plot_id, code_humus_orig) %>%
+                          rename(code_humus = code_humus_orig)) %>%
                 filter(code_humus != 99) %>%
                 filter(!is.na(code_humus)) %>%
                 group_by(plot_id, code_humus) %>%
