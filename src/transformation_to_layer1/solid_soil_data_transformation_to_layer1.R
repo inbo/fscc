@@ -194,10 +194,16 @@ openxlsx::saveWorkbook(wb,
 # To do: expand for other parameters
 # To do: expand for LI
 
+source("./src/functions/gapfill_from_old_data.R")
+
+if (level == "LI") {
+
+  s1_som <- gapfill_from_old_data(survey_form = "s1_som",
+                                  data_frame = s1_som,
+                                  save_to_env = FALSE)
+}
 
 if (level == "LII") {
-
-  source("./src/functions/gapfill_from_old_data.R")
 
   so_som <- gapfill_from_old_data(survey_form = "so_som",
                                   data_frame = so_som,
@@ -207,88 +213,25 @@ if (level == "LII") {
 
 
 
-## 4.3. Gap-fill "so_prf" using manually harmonised profile data Nathalie ----
+## 4.3. Gap-fill "prf" using manually harmonised profile data Nathalie ----
 
+source("./src/functions/harmonise_prf.R")
+
+if (level == "LI") {
+
+  s1_prf <- harmonise_prf(survey_form = "s1_prf",
+                          data_frame = s1_prf,
+                          save_to_env = FALSE)
+}
 
 if (level == "LII") {
 
-cat("Gap-fill 'so_prf' using manually harmonised profile data\n")
-
-assertthat::assert_that(file.exists(paste0("./data/additional_data/",
-                                           "SO_PRF_ADDS.xlsx")),
-                        msg = paste0("'./data/additional_data/",
-                                     "SO_PRF_ADDS.xlsx' ",
-                                     "does not exist."))
-
-# This file was created by Nathalie on 17 Oct 2023
-
-so_prf_adds <-
-  openxlsx::read.xlsx(paste0("./data/additional_data/",
-                             "SO_PRF_ADDS.xlsx"),
-                      sheet = 1) %>%
-  mutate(unique_survey_profile =
-           paste0(code_country, "_",
-                  survey_year, "_",
-                  code_plot, "_",
-                  profile_pit_id)) %>%
-  mutate(unique_survey =
-           paste0(code_country, "_",
-                  survey_year, "_",
-                  code_plot)) %>%
-  mutate(unique_profile =
-           paste0(code_country, "_",
-                  code_plot, "_",
-                  profile_pit_id)) %>%
-  rename(bs_class = "BS.(high/low)",
-         plot_id = PLOT_ID) %>%
-  filter(!is.na(plot_id))
-
-
-# Aggregate per plot_id
-
-so_prf_adds_agg <- so_prf_adds %>%
-  mutate(soil_wrb = paste0(RSGu, "_",
-                           QUALu, "_",
-                           SPECu, "_",
-                           METHOD_RSGu, "_",
-                           DEPTHSTOCK, "_",
-                           bs_class, "_",
-                           EFTC, "_",
-                           remark, "_",
-                           unified_humus)) %>%
-  group_by(plot_id) %>%
-  # Sometimes there are different options, e.g. plot_id 60_9
-  # No good way to solve this - we just have to pick one
-  summarise(soil_wrb =
-              names(which.max(table(soil_wrb[!is.na(soil_wrb)])))) %>%
-  # Split the data back into the original columns
-  separate(soil_wrb,
-           into = c("code_wrb_soil_group",
-                    "code_wrb_qualifier_1",
-                    "code_wrb_spezifier_1",
-                    "method_wrb_harmonisation_fscc",
-                    "eff_soil_depth",
-                    "bs_class",
-                    "forest_type",
-                    "remark_harmonisation_fscc",
-                    "humus_type"),
-           sep = "_") %>%
-  mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
-  mutate_all(function(x) ifelse((x) == "NA", NA, x)) %>%
-  mutate_all(function(x) ifelse((x) == "", NA, x))
-
-
-so_prf <- so_prf %>%
-  rename(code_wrb_soil_group_orig = code_wrb_soil_group,
-         code_wrb_qualifier_1_orig = code_wrb_qualifier_1,
-         code_wrb_spezifier_1_orig = code_wrb_spezifier_1,
-         eff_soil_depth_orig = eff_soil_depth,
-         code_humus_orig = code_humus) %>%
-  left_join(so_prf_adds_agg,
-            by = "plot_id")
-
-
+  so_prf <- harmonise_prf(survey_form = "so_prf",
+                          data_frame = so_prf,
+                          save_to_env = FALSE)
 }
+
+
 
 
 
@@ -405,126 +348,6 @@ if (level == "LII") {
 
 
 
-# Additional manual corrections
-
-# Some issues have not been picked up during the automated corrections
-
-# if (level == "LII") {
-#
-#   cat("Apply additional manual corrections\n")
-#
-#   # Romania: organic_carbon_total of forest floors seem to be reported in %,
-#   # while those of the mineral layers are fine.
-#   # This is in line with the data in AFSCDB_LII.
-#
-#   # Update: this is already corrected via the PIRs. It won't be solved
-#   # because of the "if" statement.
-#
-#   # Forest floor layers
-#
-#   unique_layers_to_convert <- so_som %>%
-#     filter(code_country == 52) %>%
-#     filter(layer_type == "forest_floor") %>%
-#     mutate(unit_issue_toc =
-#              # Upper limit of organic_carbon_total plausible range in %
-#              ifelse(.data$organic_carbon_total < 59,
-#                     TRUE,
-#                     FALSE))
-#
-#   if (!identical(which(unique_layers_to_convert$unit_issue_toc == TRUE),
-#                  integer(0)) &&
-#       length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
-#       0.9 * nrow(unique_layers_to_convert) &&
-#       nrow(unique_layers_to_convert) >= 2) {
-#
-#     unique_layers_to_convert <-
-#       unique(unique_layers_to_convert$unique_layer_repetition)
-#
-#     so_som <- so_som %>%
-#       mutate(organic_carbon_total =
-#                ifelse(.data$unique_layer_repetition %in%
-#                         unique_layers_to_convert,
-#                       10 * .data$organic_carbon_total,
-#                       .data$organic_carbon_total))
-#   }
-#
-#   # Plot 52_10
-#   # n_total of mineral layers should be divided by 10
-#   # (in comparison with AFSCDB_LII)
-#
-#   # Update: this is already corrected via the PIRs. It won't be solved
-#   # because of the "if" statement.
-#
-#   unique_layers_to_convert <- so_som %>%
-#     filter(plot_id == "52_10") %>%
-#     filter(layer_type != "forest_floor") %>%
-#     mutate(unit_issue_tn =
-#              # Upper limit of n_total plausible range
-#              ifelse(.data$n_total > 10,
-#                     TRUE,
-#                     FALSE))
-#
-#   if (!identical(which(unique_layers_to_convert$unit_issue_tn == TRUE),
-#                  integer(0)) &&
-#       length(which(unique_layers_to_convert$unit_issue_tn == TRUE)) >=
-#       0.7 * nrow(unique_layers_to_convert) &&
-#       nrow(unique_layers_to_convert) >= 2) {
-#
-#     unique_layers_to_convert <-
-#       unique(unique_layers_to_convert$unique_layer_repetition)
-#
-#     so_som <- so_som %>%
-#       mutate(n_total =
-#                ifelse(.data$unique_layer_repetition %in%
-#                         unique_layers_to_convert,
-#                       0.1 * .data$n_total,
-#                       .data$n_total))
-#   }
-#
-#   # Plot 52_12
-#   # organic_carbon_total of mineral layers should be a factor 10 higher
-#   # (in comparison with AFSCDB_LII)
-#
-#   unique_layers_to_convert <- so_som %>%
-#     filter(plot_id == "52_12") %>%
-#     filter(layer_type != "forest_floor") %>%
-#     mutate(unit_issue_toc =
-#              # Upper limit of organic_carbon_total plausible range in %
-#              ifelse(.data$organic_carbon_total < 15 &
-#                       .data$organic_carbon_total <
-#                          0.2 * .data$organic_carbon_total_afscdb,
-#                     TRUE,
-#                     NA))
-#
-#   if (!identical(which(unique_layers_to_convert$unit_issue_toc == TRUE),
-#                  integer(0)) &&
-#       nrow(unique_layers_to_convert) >= 2) {
-#
-#     unique_layers_to_convert <-
-#       unique_layers_to_convert %>%
-#       filter(unit_issue_toc == TRUE) %>%
-#       distinct(unique_layer_repetition) %>%
-#       pull(unique_layer_repetition)
-#
-#     so_som <- so_som %>%
-#       mutate(organic_carbon_total =
-#                ifelse(.data$unique_layer_repetition %in%
-#                         unique_layers_to_convert,
-#                       .data$organic_carbon_total_afscdb,
-#                       .data$organic_carbon_total),
-#              organic_carbon_total_source =
-#                ifelse(.data$unique_layer_repetition %in%
-#                         unique_layers_to_convert,
-#                       "FSCDB.LII (2012)",
-#                       .data$organic_carbon_total_source))
-#   }
-#
-# }
-
-
-
-
-
 
 ## 5.3. Inconsistencies in soil layers ----
 # "solve" indicates whether the obvious mistakes can be solved
@@ -618,18 +441,6 @@ if (level == "LII") {
 
 # Some issues have not been picked up during the automated corrections
 
-
-
-if (level == "LI") {
-
-  s1_som <- s1_som %>%
-    mutate(organic_layer_weight =
-             ifelse(layer_type == "mineral",
-                    NA,
-                    .data$organic_layer_weight))
-
-}
-
 # Add "additional_manual_corrections_fscc"
 
 source("./src/functions/apply_additional_manual_corr.R")
@@ -654,7 +465,81 @@ if (level == "LII") {
 
 
 
+#
+# # The one Swedish record in 13_2005_624 clearly belongs to
+# # the records in survey_year 2006
+#
+# line_to_correct <- s1_pfh %>%
+#   filter(unique_survey == "13_2005_624") %>%
+#   pull(code_line)
+#
+# s1_pfh <- s1_pfh %>%
+#   mutate(
+#     layer_number = ifelse(
+#       (!is.na(.data$code_line) & code_line == line_to_correct),
+#       5,
+#       layer_number),
+#     survey_year = ifelse(
+#       (!is.na(.data$code_line) & code_line == line_to_correct),
+#       2006,
+#       survey_year),
+#     unique_survey = ifelse(
+#       (!is.na(.data$code_line) & code_line == line_to_correct),
+#       "13_2006_624",
+#       unique_survey),
+#     unique_survey_profile = ifelse(
+#       (!is.na(.data$code_line) & code_line == line_to_correct),
+#       "13_2006_624_1",
+#       unique_survey_profile),
+#     unique_survey_layer = ifelse(
+#       (!is.na(.data$code_line) & code_line == line_to_correct),
+#       "13_2006_624_B",
+#       unique_survey_layer),
+#     unique_layer_repetition = ifelse(
+#       (!is.na(.data$code_line) & code_line == line_to_correct),
+#       "13_2006_624_B_1",
+#       unique_layer_repetition)) %>%
+#   arrange(country,
+#           code_plot,
+#           survey_year,
+#           profile_pit_id,
+#           layer_number)
 
+
+# s1_som <- s1_som %>%
+#   # Belgium
+#   mutate(
+#     layer_limit_superior = ifelse(
+#       unique_layer_repetition == "2_1993_57_O_1",
+#       -0.5,
+#       layer_limit_superior),
+#     layer_number = ifelse(
+#       unique_survey_repetition == "2_1993_57_1",
+#       ifelse(is.na(layer_number),
+#              1,
+#              layer_number + 1),
+#       layer_number)) %>%
+#   # Estonia
+#   mutate(
+#     layer_limit_inferior = ifelse(
+#       unique_layer_repetition == "59_1993_117_H_1",
+#       40,
+#       layer_limit_inferior)) %>%
+#   # Russia
+#   mutate(layer_limit_superior = ifelse(
+#     unique_survey_repetition == "62_2009_5112_5",
+#     layer_limit_inferior_orig,
+#     layer_limit_superior),
+#     layer_limit_inferior = ifelse(
+#       unique_survey_repetition == "62_2009_5112_5",
+#       layer_limit_superior_orig,
+#       layer_limit_inferior)) %>%
+#   arrange(country,
+#           code_plot,
+#           survey_year,
+#           profile_pit_id,
+#           layer_number)
+#
 
 
 
@@ -678,21 +563,12 @@ s1_som <- gapfill_internally(survey_form = "s1_som",
                            data_frame = s1_som,
                            save_to_env = FALSE)
 
-write.csv2(s1_pfh_fixed,
-           paste0("./output/gap_filling_details/",
-                  "s1_pfh_fixed_depths.csv"),
-           row.names = FALSE,
-           na = "")
 
 s1_pfh <- gapfill_internally(survey_form = "s1_pfh",
                              data_frame = s1_pfh,
                              save_to_env = FALSE)
 
-write.csv2(s1_som_pedogenic,
-           paste0("./output/gap_filling_details/",
-                  "s1_som_pedogenic.csv"),
-           row.names = FALSE,
-           na = "")
+
 
 }
 
@@ -704,22 +580,23 @@ so_som <- gapfill_internally(survey_form = "so_som",
                              data_frame = so_som,
                              save_to_env = FALSE)
 
-write.csv2(so_pfh_fixed,
-           paste0("./output/gap_filling_details/",
-                  "so_pfh_fixed_depths.csv"),
-           row.names = FALSE,
-           na = "")
 
 so_pfh <- gapfill_internally(survey_form = "so_pfh",
                              data_frame = so_pfh,
                              save_to_env = FALSE)
 
-write.csv2(so_som_pedogenic,
-           paste0("./output/gap_filling_details/",
-                  "so_som_pedogenic.csv"),
-           row.names = FALSE,
-           na = "")
 }
+
+
+
+# TO DO: add uncertainty ranges for TOC etc
+
+# TOC:
+# layer_type organic and survey_year < 2000: +-11.8 g kg-1
+# layer_type organic and survey_year >= 2000: +- 5.2 g kg-1
+# layer_type mineral and survey_year < 2000: +- 3.5 g kg-1
+# layer_type mineral and survey_year >= 2000: +- 1.5 g kg-1
+
 
 
 
