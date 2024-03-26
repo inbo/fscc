@@ -61,7 +61,7 @@ get_stocks <- function(survey_form,
   # Define data ----
 
   if (length(unlist(str_split(survey_form, "_"))) == 1 &&
-      is.na(data_frame)) {
+      is.null(data_frame)) {
 
     survey_form_orig <- survey_form
 
@@ -182,19 +182,19 @@ get_stocks <- function(survey_form,
 
   # 1. Preparations ----
 
-  for (survey_form in survey_forms) {
+  for (survey_form_i in survey_forms) {
 
   ## 1.1. Retrieve data ----
 
     if (is.null(data_frame)) {
-      df <- get_env(survey_form)
+      df <- get_env(survey_form_i)
     } else {
       df <- data_frame
     }
 
   ## 1.2. Assert that the input parameters are correct ----
 
-  assertthat::assert_that(survey_form %in% c("s1_som",
+  assertthat::assert_that(survey_form_i %in% c("s1_som",
                                              "s1_pfh",
                                              "so_som",
                                              "so_pfh"))
@@ -203,7 +203,7 @@ get_stocks <- function(survey_form,
 
   # "pfh"
 
-  if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
+  if (unlist(strsplit(survey_form_i, "_"))[2] == "pfh") {
 
     assertthat::assert_that(all(c(
       # Descriptive profile information
@@ -236,7 +236,7 @@ get_stocks <- function(survey_form,
 
   # "som"
 
-  if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+  if (unlist(strsplit(survey_form_i, "_"))[2] == "som") {
 
     assertthat::assert_that(all(c(
       # Descriptive profile information
@@ -300,42 +300,52 @@ get_stocks <- function(survey_form,
 
   cat(" \nAdd eff_soil_depth\n")
 
-    prf <- get_env(paste0(code_survey, "_prf")) %>%
-      rowwise() %>%
-      mutate(eff_soil_depth = ifelse(.data$eff_soil_depth == 0,
-                                     NA,
-                                     .data$eff_soil_depth),
-             rooting_depth = ifelse(.data$rooting_depth == 0,
-                                     NA,
-                                     .data$rooting_depth),
-             rock_depth = ifelse(.data$rock_depth == 0,
-                                     NA,
-                                     .data$rock_depth),
-             obstacle_depth = ifelse(.data$obstacle_depth == 0,
-                                     NA,
-                                     .data$obstacle_depth)) %>%
-      mutate(eff_soil_depth = ifelse(is.na(.data$eff_soil_depth) &
-                                       any(!is.na(c(.data$rooting_depth,
-                                                    .data$rock_depth,
-                                                    .data$obstacle_depth))),
-                                     # Maximum of these three depths
-                                     max(c(.data$rooting_depth,
-                                           .data$rock_depth,
-                                           .data$obstacle_depth),
-                                         na.rm = TRUE),
-                                     .data$eff_soil_depth)) %>%
-      ungroup()
+    if (code_survey == "s1") {
+      df_soil_depth <- get_stratifiers(level = "LI") %>%
+        select(plot_id, eff_soil_depth)
+    }
 
-    # Aggregate per plot_id
+    if (code_survey == "so") {
+      df_soil_depth <- get_stratifiers(level = "LII") %>%
+        select(plot_id, eff_soil_depth)
+    }
 
-    prf_agg <- prf %>%
-      # Aggregate per plot_id
-      group_by(plot_id) %>%
-      summarise(eff_soil_depth = mean(eff_soil_depth, na.rm = TRUE))
+    # prf <- get_env(paste0(code_survey, "_prf")) %>%
+    #   rowwise() %>%
+    #   mutate(eff_soil_depth = ifelse(.data$eff_soil_depth == 0,
+    #                                  NA,
+    #                                  .data$eff_soil_depth),
+    #          rooting_depth = ifelse(.data$rooting_depth == 0,
+    #                                  NA,
+    #                                  .data$rooting_depth),
+    #          rock_depth = ifelse(.data$rock_depth == 0,
+    #                                  NA,
+    #                                  .data$rock_depth),
+    #          obstacle_depth = ifelse(.data$obstacle_depth == 0,
+    #                                  NA,
+    #                                  .data$obstacle_depth)) %>%
+    #   mutate(eff_soil_depth = ifelse(is.na(.data$eff_soil_depth) &
+    #                                    any(!is.na(c(.data$rooting_depth,
+    #                                                 .data$rock_depth,
+    #                                                 .data$obstacle_depth))),
+    #                                  # Maximum of these three depths
+    #                                  max(c(.data$rooting_depth,
+    #                                        .data$rock_depth,
+    #                                        .data$obstacle_depth),
+    #                                      na.rm = TRUE),
+    #                                  .data$eff_soil_depth)) %>%
+    #   ungroup()
+    #
+    # # Aggregate per plot_id
+    #
+    # prf_agg <- prf %>%
+    #   # Aggregate per plot_id
+    #   group_by(plot_id) %>%
+    #   summarise(eff_soil_depth = mean(eff_soil_depth, na.rm = TRUE))
 
     df <- df %>%
       # Add soil depth data
-      left_join(prf_agg,
+      left_join(df_soil_depth,
                 by = "plot_id")
   }
 
@@ -349,7 +359,7 @@ get_stocks <- function(survey_form,
             layer_number) %>%
     ungroup() %>%
     # Add survey_form
-    mutate(survey_form = survey_form) %>%
+    mutate(survey_form = survey_form_i) %>%
     # If the effective soil depth is deeper than 100 cm or unknown (NA):
     # assume it is 100 cm (for stocks)
     mutate(soil_depth =
@@ -365,6 +375,15 @@ get_stocks <- function(survey_form,
              ifelse(is.na(.data$coarse_fragment_vol),
                     0,
                     .data$coarse_fragment_vol / 100)) %>%
+    mutate(coarse_fragment_vol_min_frac =
+             ifelse(is.na(.data$coarse_fragment_vol_min),
+                    0,
+                    .data$coarse_fragment_vol / 100)) %>%
+    mutate(coarse_fragment_vol_max_frac =
+             ifelse(is.na(.data$coarse_fragment_vol_max),
+                    # Quick approximation as the stdev of coarse_fragment_vol
+                    0.22,
+                    .data$coarse_fragment_vol / 100)) %>%
     # profile_id is basically the same like unique_survey_repetition
     # (to do: harmonise names across project)
     mutate(profile_id = paste0(survey_year, "_",
@@ -375,7 +394,34 @@ get_stocks <- function(survey_form,
            depth_bottom = layer_limit_inferior,
            depth_avg = ifelse(!is.na(depth_top) & !is.na(depth_bottom),
                               rowMeans(cbind(depth_top, depth_bottom)),
-                              NA))
+                              NA)) %>%
+    # Uncertainty ranges TOC
+    mutate(parameter_for_stock_min = ifelse(
+      !is.na(parameter_for_stock),
+      case_when(
+        layer_type %in% c("forest_floor", "peat") & survey_year < 2000 ~
+          pmax(.data$parameter_for_stock - 11.8, 0),
+        layer_type %in% c("forest_floor", "peat") & survey_year >= 2000 ~
+          pmax(.data$parameter_for_stock - 5.2, 0),
+        layer_type == "mineral" & survey_year < 2000 ~
+          pmax(.data$parameter_for_stock - 3.5, 0),
+        layer_type == "mineral" & survey_year >= 2000 ~
+          pmax(.data$parameter_for_stock - 1.5, 0)),
+      NA_integer_),
+      parameter_for_stock_max = ifelse(
+        !is.na(parameter_for_stock),
+        case_when(
+          layer_type %in% c("forest_floor", "peat") & survey_year < 2000 ~
+            pmin(parameter_for_stock + 11.8, 1000),
+          layer_type %in% c("forest_floor", "peat") & survey_year >= 2000 ~
+            pmin(parameter_for_stock + 5.2, 1000),
+          layer_type == "mineral" & survey_year < 2000 ~
+            pmin(parameter_for_stock + 3.5, 1000),
+          layer_type == "mineral" & survey_year >= 2000 ~
+            pmin(parameter_for_stock + 1.5, 1000)),
+        NA_integer_))
+
+
 
   ## 1.4. Create function format_stocks ----
 
@@ -418,7 +464,9 @@ get_stocks <- function(survey_form,
   ## 2.1. Derive layer-based dataset for mineral and peat layers ----
 
   df_below_ground <- df_working %>%
-    filter(.data$layer_type %in% c("mineral", "peat")) %>%
+    filter(.data$layer_type %in% c("mineral", "peat") &
+             !is.na(depth_top) &
+             (depth_top >= 0)) %>%
     # Filter out redundant layers
     # (i.e. layers not needed to compose the complete profile)
     filter(!is.na(.data$layer_number)) %>%
@@ -440,10 +488,18 @@ get_stocks <- function(survey_form,
            layer_thickness,
            soil_depth,
            bulk_density,
+           bulk_density_min,
+           bulk_density_max,
            organic_layer_weight,
+           organic_layer_weight_min,
+           organic_layer_weight_max,
            coarse_fragment_vol,
            coarse_fragment_vol_frac,
-           parameter_for_stock) %>%
+           coarse_fragment_vol_min_frac,
+           coarse_fragment_vol_max_frac,
+           parameter_for_stock,
+           parameter_for_stock_min,
+           parameter_for_stock_max) %>%
     # Calculate carbon density per cm (t C ha-1 cm-1)
     # Units: (g C/kg fine earth) * (kg fine earth/m3 soil) = g C/m3 soil
     # 1 ha * 1 cm = 100 m * 100 m * 0.01 m = 100 m3
@@ -452,30 +508,62 @@ get_stocks <- function(survey_form,
     mutate(density =
              (.data$parameter_for_stock * .data$bulk_density *
                 (1 - .data$coarse_fragment_vol_frac)) / 10000) %>%
+    mutate(density_min =
+             (.data$parameter_for_stock_min * .data$bulk_density_min *
+                (1 - .data$coarse_fragment_vol_max_frac)) / 10000) %>%
+    mutate(density_max =
+             (.data$parameter_for_stock_max * .data$bulk_density_max *
+                (1 - .data$coarse_fragment_vol_min_frac)) / 10000) %>%
     # Carbon stock per layer (instead of per cm)
     # Units: t C ha-1 (per layer)
-    mutate(stock_layer =
-             .data$density * .data$layer_thickness) %>%
+    # mutate(stock_layer =
+    #          .data$density * .data$layer_thickness) %>%
     # In peat layers, organic layer weight may have been reported
     # instead of bulk density etc
     # In that case, use the formula for forest floor
-    mutate(stock_layer =
-             ifelse(is.na(.data$stock_layer) &
+    # mutate(stock_layer =
+    #          ifelse(is.na(.data$stock_layer) &
+    #                   !is.na(.data$organic_layer_weight),
+    #                 (.data$parameter_for_stock * .data$organic_layer_weight) /
+    #                   100,
+    #                 .data$stock_layer)) %>%
+    mutate(density_org =
+             ifelse(layer_type == "peat" &
                       !is.na(.data$organic_layer_weight),
                     (.data$parameter_for_stock * .data$organic_layer_weight) /
-                      100,
-                    .data$stock_layer)) %>%
-    mutate(density =
-             ifelse(is.na(.data$density) &
-                      !is.na(.data$stock_layer),
-                    .data$stock_layer / .data$layer_thickness,
-                    .data$density)) %>%
+                      (.data$layer_thickness * 100),
+                    NA_integer_)) %>%
+    mutate(density_min_org =
+             ifelse(layer_type == "peat" &
+                      !is.na(.data$organic_layer_weight),
+                    (.data$parameter_for_stock_min *
+                       .data$organic_layer_weight_min) /
+                      (.data$layer_thickness * 100),
+                    NA_integer_)) %>%
+    mutate(density_max_org =
+             ifelse(layer_type == "peat" &
+                      !is.na(.data$organic_layer_weight),
+                    (.data$parameter_for_stock_max *
+                       .data$organic_layer_weight_max) /
+                      (.data$layer_thickness * 100),
+                    NA_integer_)) %>%
+    # mutate(density =
+    #          ifelse(is.na(.data$density) &
+    #                   !is.na(.data$stock_layer),
+    #                 .data$stock_layer / .data$layer_thickness,
+    #                 .data$density)) %>%
+    mutate(density = coalesce(density_org, density),
+           density_min = coalesce(density_min_org, density_min),
+           density_max = coalesce(density_max_org, density_max)) %>%
     # Add data availability index
     mutate(avail_thick = ifelse(is.na(.data$layer_thickness), 0, 1),
            avail_toc = ifelse(is.na(.data$parameter_for_stock), 0, 1),
            avail_bd = ifelse(is.na(.data$bulk_density), 0, 1),
            avail_cf = ifelse(is.na(.data$coarse_fragment_vol), 0, 1)) %>%
-    select(-coarse_fragment_vol)
+    select(-coarse_fragment_vol,
+           -density_org,
+           -density_min_org,
+           -density_max_org)
 
 
 
@@ -598,7 +686,9 @@ get_stocks <- function(survey_form,
                bulk_density,
                coarse_fragment_vol_frac,
                layer_thickness,
-               density)
+               density,
+               density_min,
+               density_max)
 
       limit_sup <- max(min(df_sub_selected$layer_limit_superior),
                        min(depth_range_missing))
@@ -611,6 +701,18 @@ get_stocks <- function(survey_form,
                                   limit_inf = limit_inf,
                                   df_sub_selected = df_sub_selected,
                                   parameter_name = "density")
+
+      density_min_i <-
+        harmonise_layer_to_depths(limit_sup = limit_sup,
+                                  limit_inf = limit_inf,
+                                  df_sub_selected = df_sub_selected,
+                                  parameter_name = "density_min")
+
+      density_max_i <-
+        harmonise_layer_to_depths(limit_sup = limit_sup,
+                                  limit_inf = limit_inf,
+                                  df_sub_selected = df_sub_selected,
+                                  parameter_name = "density_max")
 
       bulk_density_i <-
         harmonise_layer_to_depths(limit_sup = limit_sup,
@@ -650,9 +752,16 @@ get_stocks <- function(survey_form,
                depth_avg = mean(c(limit_sup, limit_inf)),
                layer_thickness = diff(c(limit_sup, limit_inf)),
                bulk_density = bulk_density_i,
-               density = density_i) %>%
-        mutate(across(c("organic_layer_weight", "coarse_fragment_vol_frac",
-                      "parameter_for_stock", "stock_layer",
+               density = density_i,
+               density_min = density_min_i,
+               density_max = density_max_i) %>%
+        mutate(across(c("organic_layer_weight", "organic_layer_weight_min",
+                        "organic_layer_weight_max", "coarse_fragment_vol_frac",
+                        "coarse_fragment_vol_min_frac",
+                        "coarse_fragment_vol_max_frac",
+                      "parameter_for_stock", "parameter_for_stock_min",
+                      "parameter_for_stock_max",
+                      #"stock_layer",
                       "avail_thick", "avail_toc", "avail_bd", "avail_cf"),
                     ~ NA_real_))
 
@@ -675,7 +784,8 @@ get_stocks <- function(survey_form,
                   mutate(gapfilled_post_layer1 = NA),
                 extra_rows %>%
                   mutate(gapfilled_post_layer1 = "rule: constant below 40 cm"))
-  }
+
+  } # End of "if constant subsoil is true"
 
 
 
@@ -688,7 +798,7 @@ get_stocks <- function(survey_form,
     if (parameter == "organic_carbon_total") {
 
       cat(paste0(" \nGap-fill below-80-cm subsoil with a fixed ",
-                 "carbon density value (0.1 t C ha-1 cm-1).\n"))
+                 "carbon density value (0.31 t C ha-1 cm-1).\n"))
 
       source("./src/functions/harmonise_layer_to_depths.R")
 
@@ -774,7 +884,9 @@ get_stocks <- function(survey_form,
 
               limit_inf <- max(depth_range_missing)
 
-              density_i <- 0.1 # t C ha-1 cm-1
+              density_i <- 0.31 # t C ha-1 cm-1
+              density_min_i <- 0.06 # 5 % quantile
+              density_max_i <- 2.23 # 95 % quantile
 
               df_profile_i <- df_profile_i %>%
                 mutate(diff_with_limit_sup =
@@ -816,10 +928,25 @@ get_stocks <- function(survey_form,
                        depth_avg = mean(c(limit_sup, limit_inf)),
                        layer_thickness = diff(c(limit_sup, limit_inf)),
                        bulk_density = NA,
-                       density = density_i) %>%
+                       density = density_i,
+                       density_min = density_min_i,
+                       density_max = density_max_i) %>%
+                # mutate(across(c("organic_layer_weight",
+                #                 "coarse_fragment_vol_frac",
+                #                 "parameter_for_stock", "stock_layer",
+                #                 "avail_thick", "avail_toc", "avail_bd",
+                #                 "avail_cf"),
+                #               ~ NA_real_)) %>%
                 mutate(across(c("organic_layer_weight",
+                                "organic_layer_weight_min",
+                                "organic_layer_weight_max",
                                 "coarse_fragment_vol_frac",
-                                "parameter_for_stock", "stock_layer",
+                                "coarse_fragment_vol_min_frac",
+                                "coarse_fragment_vol_max_frac",
+                                "parameter_for_stock",
+                                "parameter_for_stock_min",
+                                "parameter_for_stock_max",
+                                #"stock_layer",
                                 "avail_thick", "avail_toc", "avail_bd",
                                 "avail_cf"),
                               ~ NA_real_))
@@ -866,7 +993,7 @@ get_stocks <- function(survey_form,
                  distinct(profile_id) %>%
                  nrow,
                " profiles in '",
-               survey_form, "'.\n",
+               survey_form_i, "'.\n",
                "--------------------------------------------------------\n"))
 
 }
@@ -879,14 +1006,14 @@ get_stocks <- function(survey_form,
   # Save the df_below_ground dataset (all data, also missing data)
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form, "_below_ground"),
+    assign_env(paste0(survey_form_i, "_below_ground"),
                df_below_ground)
   }
 
   # if (save_to_gdrive == TRUE) {
   #
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form, "_below_ground"),
+  #                          paste0(survey_form_i, "_below_ground"),
   #                        df_object_to_save = format_stocks(df_below_ground),
   #                        path_name = "./output/stocks/")
   # }
@@ -897,6 +1024,9 @@ get_stocks <- function(survey_form,
   ## 2.3. Calculate below-ground carbon stocks ----
 
   profile_stocks_below_ground <- NULL
+  profile_stocks_below_ground_min <- NULL
+  profile_stocks_below_ground_max <- NULL
+
   profile_list <- unique(df_below_ground$profile_id)
 
   cat(paste0(" \nCalculate below-ground stocks after fitting ",
@@ -932,6 +1062,8 @@ get_stocks <- function(survey_form,
              depth_top,
              depth_bottom,
              density,
+             density_min,
+             density_max,
              soil_depth,
              gapfilled_post_layer1) %>%
       # Only calculate carbon stocks based on layers
@@ -1007,10 +1139,12 @@ get_stocks <- function(survey_form,
         (min(prof$depth_top) == 0) &&
         (unique(prof$soil_depth) > 0)) {
 
+      # Mean stock
+
       profile_stock_output_i <-
         spline2stock(prof = prof,
                      variab_name = "density",
-                     survey_form = survey_form,
+                     survey_form = survey_form_i,
                      density_per_three_cm = density_per_three_cm,
                      graph = graph)
 
@@ -1041,6 +1175,80 @@ get_stocks <- function(survey_form,
         rbind(profile_stocks_below_ground,
               profile_stocks_i)
 
+
+      # Min stock
+
+      profile_stock_output_i <-
+        spline2stock(prof = prof,
+                     variab_name = "density_min",
+                     survey_form = survey_form_i,
+                     density_per_three_cm = FALSE,
+                     graph = graph)
+
+      max_obs_depth <- prof %>%
+        filter(is.na(.data$gapfilled_post_layer1) |
+                 (.data$gapfilled_post_layer1 ==
+                    "rule: constant below 40 cm")) %>%
+        pull(depth_bottom) %>%
+        max()
+
+      profile_stocks_min_i <-
+        data.frame(survey_form = unique(df_profile_i$survey_form),
+                   partner_short = unique(df_profile_i$partner_short),
+                   plot_id = plot_id_i,
+                   profile_id = prof_id_i,
+                   survey_year = unique(df_profile_i$survey_year),
+                   partner_code = unique(df_profile_i$partner_code),
+                   code_country = unique(df_profile_i$code_country),
+                   code_plot = unique(df_profile_i$code_plot),
+                   repetition = unique(df_profile_i$repetition),
+                   contains_peat = any(df_profile_i$layer_type == "peat"),
+                   obs_depth = max_obs_depth,
+                   use_stock_topsoil = (max_obs_depth < 30),
+                   soil_depth = soil_depth_i,
+                   profile_stock_output_i)
+
+      profile_stocks_below_ground_min <-
+        rbind(profile_stocks_below_ground_min,
+              profile_stocks_min_i)
+
+
+      # Max stock
+
+      profile_stock_output_i <-
+        spline2stock(prof = prof,
+                     variab_name = "density_max",
+                     survey_form = survey_form_i,
+                     density_per_three_cm = FALSE,
+                     graph = graph)
+
+      max_obs_depth <- prof %>%
+        filter(is.na(.data$gapfilled_post_layer1) |
+                 (.data$gapfilled_post_layer1 ==
+                    "rule: constant below 40 cm")) %>%
+        pull(depth_bottom) %>%
+        max()
+
+      profile_stocks_max_i <-
+        data.frame(survey_form = unique(df_profile_i$survey_form),
+                   partner_short = unique(df_profile_i$partner_short),
+                   plot_id = plot_id_i,
+                   profile_id = prof_id_i,
+                   survey_year = unique(df_profile_i$survey_year),
+                   partner_code = unique(df_profile_i$partner_code),
+                   code_country = unique(df_profile_i$code_country),
+                   code_plot = unique(df_profile_i$code_plot),
+                   repetition = unique(df_profile_i$repetition),
+                   contains_peat = any(df_profile_i$layer_type == "peat"),
+                   obs_depth = max_obs_depth,
+                   use_stock_topsoil = (max_obs_depth < 30),
+                   soil_depth = soil_depth_i,
+                   profile_stock_output_i)
+
+      profile_stocks_below_ground_max <-
+        rbind(profile_stocks_below_ground_max,
+              profile_stocks_max_i)
+
     }
 
     # Update progress bar
@@ -1050,20 +1258,54 @@ get_stocks <- function(survey_form,
 
   close(progress_bar)
 
+
+  # Add minima and maxima stocks
+
+  profile_stocks_below_ground <- profile_stocks_below_ground %>%
+    left_join(profile_stocks_below_ground_min %>%
+                rename(stock_below_ground_min = stock_below_ground) %>%
+                rename(stock_below_ground_topsoil_min =
+                         stock_below_ground_topsoil) %>%
+                select(profile_id,
+                       stock_below_ground_min,
+                       stock_below_ground_topsoil_min),
+              by = "profile_id") %>%
+    left_join(profile_stocks_below_ground_max %>%
+                rename(stock_below_ground_max = stock_below_ground) %>%
+                rename(stock_below_ground_topsoil_max =
+                         stock_below_ground_topsoil) %>%
+                select(profile_id,
+                       stock_below_ground_max,
+                       stock_below_ground_topsoil_max),
+              by = "profile_id") %>%
+    relocate(stock_below_ground_min,
+             .after = stock_below_ground) %>%
+    relocate(stock_below_ground_max,
+             .after = stock_below_ground_min) %>%
+    relocate(stock_below_ground_topsoil_min,
+             .after = stock_below_ground_topsoil) %>%
+    relocate(stock_below_ground_topsoil_max,
+             .after = stock_below_ground_topsoil_min)
+
+
+
+
   # Save output
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form,
+
+    assign_env(paste0(survey_form_i,
                       "_profile_",
                       shorter_var_name,
                       "_stocks_below_ground"),
                profile_stocks_below_ground)
+
   }
 
   # if (save_to_gdrive == TRUE) {
   #
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form,
+  #                          paste0(survey_form_i,
   #                                 "_profile_",
   #                                 shorter_var_name,
   #                                 "_stocks_below_ground"),
@@ -1071,6 +1313,22 @@ get_stocks <- function(survey_form,
   #                          format_stocks(profile_stocks_below_ground),
   #                        path_name = "./output/stocks/")
   # }
+
+
+  # write.table(profile_stocks_below_ground,
+  #             file = paste0("./output/stocks/20240324_carbon_stocks/",
+  #                           survey_form_i,
+  #                           "_profile_",
+  #                           shorter_var_name,
+  #                           "_stocks_below_ground.csv"),
+  #             row.names = FALSE,
+  #             na = "",
+  #             sep = ";",
+  #             dec = ".")
+
+
+
+
 
 
 
@@ -1089,12 +1347,38 @@ get_stocks <- function(survey_form,
                 ifelse(length(stock_below_ground) > 1,
                        round(sd(stock_below_ground, na.rm = TRUE), 2),
                        NA),
+              stock_below_ground_min =
+                ifelse(length(stock_below_ground) > 1,
+                       # Note:
+                       # this is not correct and needs to be assessed using
+                       # Monte Carlo
+                       # This is a quick approximation
+                       # Note: this doesn't take into account the uncertainty
+                       # in fitting and extrapolating the spline
+                       (min(stock_below_ground_min, na.rm = TRUE) -
+                         stock_below_ground_stdev),
+                       unique(stock_below_ground_min)),
+              stock_below_ground_max =
+                ifelse(length(stock_below_ground) > 1,
+                       (max(stock_below_ground_max, na.rm = TRUE) +
+                          stock_below_ground_stdev),
+                       unique(stock_below_ground_max)),
               stock_below_ground_topsoil =
                 round(mean(stock_below_ground_topsoil, na.rm = TRUE), 2),
-              stock_below_ground_stdev =
+              stock_below_ground_topsoil_stdev =
                 ifelse(length(stock_below_ground_topsoil) > 1,
                        round(sd(stock_below_ground_topsoil, na.rm = TRUE), 2),
                        NA),
+              stock_below_ground_topsoil_min =
+                ifelse(length(stock_below_ground_topsoil) > 1,
+                       (min(stock_below_ground_topsoil_min, na.rm = TRUE) -
+                          stock_below_ground_topsoil_stdev),
+                       unique(stock_below_ground_topsoil_min)),
+              stock_below_ground_topsoil_max =
+                ifelse(length(stock_below_ground_topsoil) > 1,
+                       (max(stock_below_ground_topsoil_max, na.rm = TRUE) +
+                          stock_below_ground_topsoil_stdev),
+                       unique(stock_below_ground_topsoil_max)),
               nlay_below_ground_min =
                 min(nlay_below_ground, na.rm = TRUE),
               nlay_below_ground_max =
@@ -1120,7 +1404,7 @@ get_stocks <- function(survey_form,
   # Save output
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form,
+    assign_env(paste0(survey_form_i,
                       "_plot_",
                       shorter_var_name,
                       "_stocks_below_ground"),
@@ -1130,7 +1414,7 @@ get_stocks <- function(survey_form,
   # if (save_to_gdrive == TRUE) {
   #
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form,
+  #                          paste0(survey_form_i,
   #                                 "_plot_",
   #                                 shorter_var_name,
   #                                 "_stocks_below_ground"),
@@ -1139,6 +1423,16 @@ get_stocks <- function(survey_form,
   #                        path_name = "./output/stocks/")
   # }
 
+  # write.table(plot_stocks_below_ground,
+  #             file = paste0("./output/stocks/20240324_carbon_stocks/",
+  #                           survey_form_i,
+  #                           "_plot_",
+  #                           shorter_var_name,
+  #                           "_stocks_below_ground.csv"),
+  #             row.names = FALSE,
+  #             na = "",
+  #             sep = ";",
+  #             dec = ".")
 
 
 
@@ -1156,7 +1450,9 @@ get_stocks <- function(survey_form,
              "layer stocks.\n"))
 
   df_forest_floor <- df_working %>%
-    filter(layer_type == "forest_floor") %>%
+    filter(layer_type == "forest_floor" |
+             (is.na(depth_top)) |
+             (depth_top < 0)) %>%
     # Filter out redundant layers
     # (i.e. layers not needed to compose the complete profile,
     # such as overlapping layers)
@@ -1186,18 +1482,36 @@ get_stocks <- function(survey_form,
            layer_thickness,
            soil_depth,
            bulk_density,
+           bulk_density_min,
+           bulk_density_max,
            organic_layer_weight,
+           organic_layer_weight_min,
+           organic_layer_weight_max,
            coarse_fragment_vol,
            coarse_fragment_vol_frac,
-           parameter_for_stock) %>%
+           coarse_fragment_vol_min_frac,
+           coarse_fragment_vol_max_frac,
+           parameter_for_stock,
+           parameter_for_stock_min,
+           parameter_for_stock_max) %>%
     # Carbon stock per layer (t C ha-1 for each layer)
     # Units: g C/kg forest floor * kg forest floor/m2
     mutate(stock_layer =
              (.data$parameter_for_stock * .data$organic_layer_weight) /
              100) %>%
+    mutate(stock_layer_min =
+             (.data$parameter_for_stock_min * .data$organic_layer_weight_min) /
+             100) %>%
+    mutate(stock_layer_max =
+             (.data$parameter_for_stock_max * .data$organic_layer_weight_max) /
+             100) %>%
     # Carbon density (t C ha-1 cm-1)
     mutate(density =
              .data$stock_layer / .data$layer_thickness) %>%
+    mutate(density_min =
+             .data$stock_layer_min / .data$layer_thickness) %>%
+    mutate(density_max =
+             .data$stock_layer_max / .data$layer_thickness) %>%
     # Add data availability index
     mutate(avail_thick = ifelse(is.na(.data$layer_thickness), 0, 1),
            avail_toc = ifelse(is.na(.data$parameter_for_stock), 0, 1),
@@ -1209,13 +1523,13 @@ get_stocks <- function(survey_form,
   # Save the df_forest_floor dataset (all data, also missing data)
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form, "_forest_floor"),
+    assign_env(paste0(survey_form_i, "_forest_floor"),
                df_forest_floor)
   }
 
   # if (save_to_gdrive == TRUE) {
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form, "_forest_floor"),
+  #                          paste0(survey_form_i, "_forest_floor"),
   #                        df_object_to_save = format_stocks(df_forest_floor),
   #                        path_name = "./output/stocks/")
   # }
@@ -1289,7 +1603,11 @@ get_stocks <- function(survey_form,
                    # sometimes not be assigned to any of both stocks
                    # (e.g. "OLF", only "OF", only "OH", "O1", ...)
                    stock_forest_floor =
-                     round(sum(df_profile_i$stock_layer), 2))
+                     round(sum(df_profile_i$stock_layer), 2),
+                   stock_forest_floor_min =
+                     round(sum(df_profile_i$stock_layer_min), 2),
+                   stock_forest_floor_max =
+                     round(sum(df_profile_i$stock_layer_max), 2))
 
       profile_stocks_forest_floor <-
         rbind(profile_stocks_forest_floor,
@@ -1306,7 +1624,7 @@ get_stocks <- function(survey_form,
   # Save output
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form,
+    assign_env(paste0(survey_form_i,
                       "_profile_",
                       shorter_var_name,
                       "_stocks_forest_floor"),
@@ -1315,7 +1633,7 @@ get_stocks <- function(survey_form,
 
   # if (save_to_gdrive == TRUE) {
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form,
+  #                          paste0(survey_form_i,
   #                                 "_profile_",
   #                                 shorter_var_name,
   #                                 "_stocks_forest_floor"),
@@ -1323,6 +1641,18 @@ get_stocks <- function(survey_form,
   #                          format_stocks(profile_stocks_forest_floor),
   #                        path_name = "./output/stocks/")
   # }
+
+
+  # write.table(profile_stocks_forest_floor,
+  #             file = paste0("./output/stocks/20240324_carbon_stocks/",
+  #                           survey_form_i,
+  #                           "_profile_",
+  #                           shorter_var_name,
+  #                           "_stocks_forest_floor.csv"),
+  #             row.names = FALSE,
+  #             na = "",
+  #             sep = ";",
+  #             dec = ".")
 
 
 
@@ -1343,6 +1673,16 @@ get_stocks <- function(survey_form,
                 ifelse(length(stock_forest_floor) > 1,
                        round(sd(stock_forest_floor, na.rm = TRUE), 2),
                        NA),
+              stock_forest_floor_min =
+                ifelse(length(stock_forest_floor) > 1,
+                       (min(stock_forest_floor_min, na.rm = TRUE) -
+                          stock_forest_floor_stdev),
+                       unique(stock_forest_floor_min)),
+              stock_forest_floor_max =
+                ifelse(length(stock_forest_floor) > 1,
+                       (max(stock_forest_floor_max, na.rm = TRUE) +
+                          stock_forest_floor_stdev),
+                       unique(stock_forest_floor_max)),
               nlay_forest_floor_min =
                 min(nlay_forest_floor, na.rm = TRUE),
               nlay_forest_floor_max =
@@ -1363,7 +1703,7 @@ get_stocks <- function(survey_form,
   # Save output
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form,
+    assign_env(paste0(survey_form_i,
                       "_plot_",
                       shorter_var_name,
                       "_stocks_forest_floor"),
@@ -1373,7 +1713,7 @@ get_stocks <- function(survey_form,
   # if (save_to_gdrive == TRUE) {
   #
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form,
+  #                          paste0(survey_form_i,
   #                                 "_plot_",
   #                                 shorter_var_name,
   #                                 "_stocks_forest_floor"),
@@ -1382,6 +1722,16 @@ get_stocks <- function(survey_form,
   #                        path_name = "./output/stocks/")
   # }
 
+  # write.table(plot_stocks_forest_floor,
+  #             file = paste0("./output/stocks/20240324_carbon_stocks/",
+  #                           survey_form_i,
+  #                           "_plot_",
+  #                           shorter_var_name,
+  #                           "_stocks_forest_floor.csv"),
+  #             row.names = FALSE,
+  #             na = "",
+  #             sep = ";",
+  #             dec = ".")
 
 
   cat(" \n--------------------------------------------------------\n")
@@ -1408,7 +1758,7 @@ get_stocks <- function(survey_form,
                        -avail_toc,
                        -avail_bd,
                        -avail_org_layer_weight)) %>%
-    mutate(profile_id_form = paste0(survey_form, "_",
+    mutate(profile_id_form = paste0(survey_form_i, "_",
                                     profile_id)) %>%
     relocate(profile_id_form, .after = profile_id) %>%
     arrange(partner_short,
@@ -1421,7 +1771,7 @@ get_stocks <- function(survey_form,
   # Save the df_below_ground dataset (all data, also missing data)
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form, "_layers"),
+    assign_env(paste0(survey_form_i, "_layers"),
                df_layer)
   }
 
@@ -1440,13 +1790,28 @@ get_stocks <- function(survey_form,
                        -partner_code,
                        -code_country,
                        -code_plot,
-                       -repetition),
+                       -repetition,
+                       -survey_form),
               by = "profile_id") %>%
     mutate(stock =
              rowSums(select(., stock_below_ground, stock_forest_floor),
                      na.rm = TRUE),
+           stock_min =
+             rowSums(select(., stock_below_ground_min, stock_forest_floor_min),
+                     na.rm = TRUE),
+           stock_max =
+             rowSums(select(., stock_below_ground_max, stock_forest_floor_max),
+                     na.rm = TRUE),
            stock_topsoil =
              rowSums(select(., stock_below_ground_topsoil, stock_forest_floor),
+                     na.rm = TRUE),
+           stock_topsoil_min =
+             rowSums(select(., stock_below_ground_topsoil_min,
+                            stock_forest_floor_min),
+                     na.rm = TRUE),
+           stock_topsoil_max =
+             rowSums(select(., stock_below_ground_topsoil_max,
+                            stock_forest_floor_max),
                      na.rm = TRUE),
            nlay = rowSums(select(., nlay_below_ground, nlay_forest_floor),
                           na.rm = TRUE))
@@ -1454,7 +1819,7 @@ get_stocks <- function(survey_form,
   # Save output
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form,
+    assign_env(paste0(survey_form_i,
                       "_profile_",
                       shorter_var_name,
                       "_stocks"),
@@ -1464,7 +1829,7 @@ get_stocks <- function(survey_form,
   # if (save_to_gdrive == TRUE) {
   #
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form,
+  #                          paste0(survey_form_i,
   #                                 "_profile_",
   #                                 shorter_var_name,
   #                                 "_stocks"),
@@ -1473,7 +1838,16 @@ get_stocks <- function(survey_form,
   #                        path_name = "./output/stocks/")
   # }
 
-
+  # write.table(profile_stocks,
+  #             file = paste0("./output/stocks/20240324_carbon_stocks/",
+  #                           survey_form_i,
+  #                           "_profile_",
+  #                           shorter_var_name,
+  #                           "_stocks.csv"),
+  #             row.names = FALSE,
+  #             na = "",
+  #             sep = ";",
+  #             dec = ".")
 
 
 
@@ -1482,7 +1856,8 @@ get_stocks <- function(survey_form,
 
   plot_stocks <- profile_stocks %>%
     filter(stock_10 > 0) %>%
-    group_by(partner_short, partner_code, code_country, code_plot,
+    group_by(survey_form,
+             partner_short, partner_code, code_country, code_plot,
              plot_id, survey_year) %>%
     summarise(stock_avg =
                 round(mean(stock, na.rm = TRUE), 2),
@@ -1490,30 +1865,80 @@ get_stocks <- function(survey_form,
                 ifelse(length(stock) > 1,
                        round(sd(stock, na.rm = TRUE), 2),
                        NA),
+              stock_min =
+                ifelse(length(stock) > 1,
+                       (min(stock_min, na.rm = TRUE) - stock_stdev),
+                       unique(stock_min)),
+              stock_max =
+                ifelse(length(stock) > 1,
+                       (max(stock_max, na.rm = TRUE) + stock_stdev),
+                       unique(stock_max)),
               stock_topsoil_avg =
                 round(mean(stock_topsoil, na.rm = TRUE), 2),
               stock_topsoil_stdev =
                 ifelse(length(stock_topsoil) > 1,
                        round(sd(stock_topsoil, na.rm = TRUE), 2),
                        NA),
+              stock_topsoil_min =
+                ifelse(length(stock_topsoil) > 1,
+                       (min(stock_topsoil_min, na.rm = TRUE) -
+                          stock_topsoil_stdev),
+                       unique(stock_topsoil_min)),
+              stock_topsoil_max =
+                ifelse(length(stock_topsoil) > 1,
+                       (max(stock_topsoil_max, na.rm = TRUE) +
+                          stock_topsoil_stdev),
+                       unique(stock_topsoil_max)),
               stock_below_ground_avg =
                 round(mean(stock_below_ground, na.rm = TRUE), 2),
               stock_below_ground_stdev =
                 ifelse(length(stock_below_ground) > 1,
                        round(sd(stock_below_ground, na.rm = TRUE), 2),
                        NA),
+              stock_below_ground_min =
+                ifelse(length(stock_below_ground) > 1,
+                       (min(stock_below_ground_min, na.rm = TRUE) -
+                          stock_below_ground_stdev),
+                       unique(stock_below_ground_min)),
+              stock_below_ground_max =
+                ifelse(length(stock_below_ground) > 1,
+                       (max(stock_below_ground_max, na.rm = TRUE) +
+                          stock_below_ground_stdev),
+                       unique(stock_below_ground_max)),
               stock_below_ground_topsoil_avg =
                 round(mean(stock_below_ground_topsoil, na.rm = TRUE), 2),
               stock_below_ground_topsoil_stdev =
                 ifelse(length(stock_below_ground_topsoil) > 1,
                        round(sd(stock_below_ground_topsoil, na.rm = TRUE), 2),
                        NA),
+              stock_below_ground_topsoil_min =
+                ifelse(length(stock_below_ground_topsoil) > 1,
+                       (min(stock_below_ground_topsoil_min, na.rm = TRUE) -
+                          stock_below_ground_topsoil_stdev),
+                       unique(stock_below_ground_topsoil_min)),
+              stock_below_ground_topsoil_max =
+                ifelse(length(stock_below_ground_topsoil) > 1,
+                       (max(stock_below_ground_topsoil_max, na.rm = TRUE) +
+                          stock_below_ground_topsoil_stdev),
+                       unique(stock_below_ground_topsoil_max)),
               stock_forest_floor_avg =
                 round(mean(stock_forest_floor, na.rm = TRUE), 2),
               stock_forest_floor_stdev =
                 ifelse(length(stock_forest_floor) > 1,
                        round(sd(stock_forest_floor, na.rm = TRUE), 2),
                        NA),
+              stock_forest_floor_min =
+                ifelse(length(stock_forest_floor) > 1 &
+                         any(!is.na(stock_forest_floor)),
+                       (min(stock_forest_floor_min, na.rm = TRUE) -
+                          stock_forest_floor_stdev),
+                       unique(stock_forest_floor_min)),
+              stock_forest_floor_max =
+                ifelse(length(stock_forest_floor) > 1 &
+                         any(!is.na(stock_forest_floor)),
+                       (max(stock_forest_floor_max, na.rm = TRUE) +
+                          stock_forest_floor_stdev),
+                       unique(stock_forest_floor_max)),
               nlay_min = min(nlay,
                              na.rm = TRUE),
               nlay_max = max(nlay,
@@ -1552,7 +1977,7 @@ get_stocks <- function(survey_form,
   # Save output
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form,
+    assign_env(paste0(survey_form_i,
                       "_plot_",
                       shorter_var_name,
                       "_stocks"),
@@ -1562,7 +1987,7 @@ get_stocks <- function(survey_form,
   # if (save_to_gdrive == TRUE) {
   #
   #   save_to_google_drive(objects_to_save =
-  #                          paste0(survey_form,
+  #                          paste0(survey_form_i,
   #                                 "_plot_",
   #                                 shorter_var_name,
   #                                 "_stocks"),
@@ -1572,13 +1997,24 @@ get_stocks <- function(survey_form,
   # }
 
 
+  # write.table(plot_stocks,
+  #             file = paste0("./output/stocks/20240324_carbon_stocks/",
+  #                           survey_form_i,
+  #                           "_plot_",
+  #                           shorter_var_name,
+  #                           "_stocks.csv"),
+  #             row.names = FALSE,
+  #             na = "",
+  #             sep = ";",
+  #             dec = ".")
+
 
   cat(" \n--------------------------------------------------------\n")
 
   # Number of plots with stocks
 
   cat(paste0(" \nNumber of plots in '",
-             survey_form,
+             survey_form_i,
              "' with below-ground '",
              parameter,
              "' stocks:\n"))
@@ -1591,7 +2027,7 @@ get_stocks <- function(survey_form,
 
   cat(paste0(" \n",
              "Number of plots in '",
-             survey_form,
+             survey_form_i,
              "' with below-ground '",
              parameter,
              "' stocks for at least two survey years:\n"))
@@ -1611,8 +2047,8 @@ get_stocks <- function(survey_form,
 if (length(survey_forms) == 2) {
 
   df_layer <-
-    bind_rows(assign_env(paste0(code_survey, "_som_layers")),
-              assign_env(paste0(code_survey, "_pfh_layers"))) %>%
+    bind_rows(get_env(paste0(code_survey, "_som_layers")),
+              get_env(paste0(code_survey, "_pfh_layers"))) %>%
     arrange(partner_short,
             code_plot,
             survey_year,
@@ -1635,16 +2071,24 @@ if (length(survey_forms) == 2) {
                          path_name = "./output/stocks/")
   }
 
+  write.table(df_layer,
+              file = paste0("./output/stocks/20240324_carbon_stocks/",
+                            survey_form,
+                            "_layers.csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
 
   # Profile stocks: compile and save data ----
 
   if (length(survey_forms) == 2) {
 
     profile_stocks <-
-      bind_rows(assign_env(paste0(code_survey, "_som_profile_",
+      bind_rows(get_env(paste0(code_survey, "_som_profile_",
                                   shorter_var_name, "_stocks")) %>%
                   mutate(repetition = as.character(repetition)),
-                assign_env(paste0(code_survey, "_pfh_profile_",
+                get_env(paste0(code_survey, "_pfh_profile_",
                                   shorter_var_name, "_stocks")) %>%
                   mutate(repetition = as.character(repetition))) %>%
       arrange(partner_short,
@@ -1663,7 +2107,7 @@ if (length(survey_forms) == 2) {
   if (add_stratifiers == TRUE) {
 
     profile_stocks <- profile_stocks %>%
-      left_join(s1_strat,
+      left_join(df_strat,
                 by = "plot_id")
 
   }
@@ -1684,6 +2128,16 @@ if (length(survey_forms) == 2) {
                          path_name = "./output/stocks/")
   }
 
+  write.table(profile_stocks,
+              file = paste0("./output/stocks/20240324_carbon_stocks/",
+                            survey_form,
+                            "_profile_",
+                            shorter_var_name, "_stocks.csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
+
 
 
 
@@ -1692,50 +2146,55 @@ if (length(survey_forms) == 2) {
   if (length(survey_forms) == 2) {
 
     plot_stocks <-
-      bind_rows(assign_env(paste0(code_survey, "_som_profile_",
-                                  shorter_var_name, "_stocks")) %>%
-                  mutate(repetition = as.character(repetition)),
-                assign_env(paste0(code_survey, "_pfh_profile_",
-                                  shorter_var_name, "_stocks")) %>%
-                  mutate(repetition = as.character(repetition))) %>%
+      bind_rows(get_env(paste0(code_survey, "_som_plot_",
+                                  shorter_var_name, "_stocks")),
+                get_env(paste0(code_survey, "_pfh_plot_",
+                                  shorter_var_name, "_stocks"))) %>%
       arrange(partner_short,
               code_plot,
-              survey_year,
-              profile_id)
+              survey_year)
   }
 
   plot_stocks <- plot_stocks %>%
     as_tibble() %>%
-    mutate(profile_id_form = paste0(survey_form, "_",
-                                    profile_id)) %>%
-    relocate(profile_id_form, .after = profile_id)
+    mutate(plot_id_form = paste0(survey_form, "_",
+                                    plot_id)) %>%
+    relocate(plot_id_form, .after = plot_id)
 
 
   if (add_stratifiers == TRUE) {
 
     plot_stocks <- plot_stocks %>%
-      left_join(s1_strat,
+      left_join(df_strat,
                 by = "plot_id")
 
   }
 
-  # Save the profile_stocks dataset
+  # Save the plot_stocks dataset
 
   if (save_to_env == TRUE) {
-    assign_env(paste0(survey_form_orig, "_profile_",
+    assign_env(paste0(survey_form_orig, "_plot_",
                       shorter_var_name, "_stocks"),
                plot_stocks)
   }
 
   if (save_to_gdrive == TRUE) {
     save_to_google_drive(objects_to_save =
-                           paste0(survey_form_orig, "_profile_",
+                           paste0(survey_form_orig, "_plot_",
                                   shorter_var_name, "_stocks"),
                          df_object_to_save = format_stocks(plot_stocks),
                          path_name = "./output/stocks/")
   }
 
-
+  write.table(profile_stocks,
+              file = paste0("./output/stocks/20240324_carbon_stocks/",
+                            survey_form,
+                            "_plot_",
+                            shorter_var_name, "_stocks.csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
 
 
 
