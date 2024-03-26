@@ -11,7 +11,12 @@
 #' @param legend_title A character string specifying the title of the legend
 #' (which refers to the layers in the 'layers' argument).
 #' @param legend_classes A character vector specifying the names of the legend
-#' classes (in the same order as the layers).
+#' classes (in the same order as the layers). If NULL, a map in which the
+#' colours represent the continuous variable specified under
+#' "variable_continuous" is made.
+#' @param variable_continuous A character string specifying the name of the
+#' column with the continuous variable (represented by a continuous colour
+#' scale). Only activated if legend_classes is NULL. Default is NULL.
 #' @param export_name A character string specifying the name of the exported
 #' map file (exported as .png).
 #' @param export_folder A character string specifying the name of the export
@@ -26,6 +31,11 @@
 #' a custom colour palette in mostly green-blue hues. Another option is
 #' "viridis". NULL means that the background does not show biogeographical
 #' regions.
+#' @param inset_maps_offset_x A positive numeric value specifying the horizontal
+#' offset of the small inset maps of the Canary Islands, Azores and Cyprus
+#' (depending on the width of the legend, the x location of these inset maps
+#' can change)
+#'
 #'
 #' @return None
 #'
@@ -71,31 +81,26 @@ map_icpf <- function(layers,
                      title,
                      legend_title,
                      legend_classes,
+                     variable_continuous = NULL,
                      export_name,
                      export_folder,
-                     point_size,
+                     point_size = 0.6,
                      point_col = NULL,
                      biogeo_palette = "biogeo_col",
                      with_logo = FALSE,
-                     count_plots_legend = FALSE) {
+                     count_plots_legend = FALSE,
+                     inset_maps_offset_x = 0) {
 
-  # Install packages ----
+  # Load packages ----
 
-  # Define packages to install
-  packages_map_icpf <- c("sf",
-                         "tidyverse",
-                         "grid",
-                         "magick",     # To place a logo on top
-                         "cowplot",    # To put maps together
-                         "ggspatial",  # For scale bar and north arrow
-                         "geodata",    # To download country borders
-                         "ggtext")     # Markdown text
-
-  # Install all packages that are not already installed
-  install.packages(setdiff(packages_map_icpf, rownames(installed.packages())))
-
-  # Load packages
-  sapply(packages_map_icpf, library, character.only = TRUE)
+  stopifnot(require("sf"),
+            require("tidyverse"),
+            require("grid"),
+            require("magick"),      # To place a logo on top
+            require("cowplot"),     # To put maps together
+            require("ggspatial"),   # For scale bar and north arrow
+            require("geodata"),     # To download country borders
+            require("ggtext"))      # Markdown text
 
 
 
@@ -138,6 +143,8 @@ map_icpf <- function(layers,
 }
 
 
+
+
   # Import country borders ----
   # if this does not exist yet in the global environment, or if this exists
   # in the wrong class
@@ -170,48 +177,18 @@ map_icpf <- function(layers,
 
     if (!is.null(biogeo_palette)) {
 
-       point_col <- c("#b34646",  #"#b03232",  #"#E66101",
+       point_col <- c("#b34646",
                       "#F8C4B4",
                       "#780116",
                       "#FF0000")
     } else {
-
-      point_col <- c("#8C9605",
-                     "#C99800",
-                     "white",#006E6A",
-                     "#03593b")
-
-      point_col <- c("#039c96",
-                     "#02c74b",
-                     "#b3de02",
-                     "#69413D")
-
-      point_col <- c("#c40275",
-                     "#ed5e2f",
-                     "#fabe02",
-                     "#F0F921")
-
-      point_col <- c("#37565c",
-                     "#7a741f",
-                     "#cf7e15",
-                     "#f09caa")
-
-      point_col <- c("#912905",
-                     "#e06302",
-                     "#fabe02",
-                     "#F0F921")
-
-      point_col <- c("#01635f",
-                     "#219e2e",
-                     "#b3de02",
-                     "#69413D")
 
       point_col <- c("#77203B",
                      "#d44102",
                      "#fabe02",
                      "#F0F921")
 
-      country_border_col <- "#3a494a" #"#5b7273" #"#2b4445"
+      country_border_col <- "#3a494a"
 
 
     }
@@ -223,6 +200,8 @@ map_icpf <- function(layers,
 
   # Legend: create a character vector with the colours and the corresponding
   # class as name
+
+  if (!is.null(legend_classes)) {
 
   if (count_plots_legend == TRUE) {
 
@@ -247,7 +226,9 @@ map_icpf <- function(layers,
 
   for (i in seq_along(layers)) {
     names(legend_values)[i] <- legend_classes[i]
-    }
+  }
+
+  }
 
   # Define the background fill colour for countries outside of Europe
   background_col <- "#7D9191"
@@ -275,13 +256,41 @@ map_icpf <- function(layers,
   }
 
 
+
+  # Continuous map: assert that the column is specified
+
+  if (is.null(legend_classes)) {
+    assertthat::assert_that(!is.null(variable_continuous),
+                            msg = paste0("Please specify the column with ",
+                                         "the continuous variable to be ",
+                                         "shown with a continuous colour ",
+                                         "scale."))
+    assertthat::assert_that(
+      variable_continuous %in% names(get(layers[1], envir = .GlobalEnv)),
+      msg = paste0("Column '", variable_continuous, "' does not exist ",
+                   "in object '", layers[1], "'."))
+  }
+
+
+  # X offset for inset maps
+  # inset_maps_offset_x refers to the rectangles behind the maps
+  # inset_maps_offset_x2 refers to the inset maps and is calculated based on
+  # inset_maps_offset_x
+
+  inset_maps_offset_x2 <- 0.057 * inset_maps_offset_x
+
+
+
+
+
   # Make a map for the first layer ----
 
   # Retrieve the first spatial layer of the 'layers' argument
   spat_layer_1 <- get(layers[1], envir = .GlobalEnv)
 
 
-  # Make a base map
+  ## Base map ----
+
   base_map <-
     ggplot() +
     # Map the fill colour of the countries (outside of Europe)
@@ -341,11 +350,7 @@ map_icpf <- function(layers,
                            l = 0.5,  # Set left margin of the plot to 0.5 cm
                            # Set the unit of measurement for margins
                            # to centimeters
-                           unit = "cm"),
-      legend.text =
-        element_markdown(vjust = -1,
-                         lineheight = 1.2,
-                         margin = margin(b = 5))) +
+                           unit = "cm")) +
     # Map the borders of the countries (without fill)
     geom_sf(data = world_spat, color = country_border_col,
             fill = NA, linewidth = 0.5) +
@@ -355,24 +360,55 @@ map_icpf <- function(layers,
                   xmax = 4005151,
                   ymin = 5861986,
                   ymax = 5294329),
-              fill = sea_col) +
-    # Map the points of the first sf layer
-    geom_sf(data = spat_layer_1,
-            aes(color = legend_classes[1]), # Colour should refer to the legend
-                                            # class
-            size = point_size) + # Input argument
-    # Add a manual colour scale for each of the layers and legend classes
-    # in the input arguments
-    scale_color_manual(name = legend_title,
-                       breaks = legend_classes,
-                       values = legend_values) +
-    guides(color = guide_legend(title = legend_title, # Input argument
-                                # Size of legend symbols (points)
-                                override.aes = list(size = 2),
-                                # Order of this legend relative to other legends
-                                # in the plot, i.e. first (from top)
-                                order = 1)) +
-                                #label.vjust = -1)) +
+              fill = sea_col)
+
+  if (!is.null(legend_classes)) {
+
+    base_map <- base_map +
+      theme(legend.text =
+              element_markdown(vjust = -1,
+                               lineheight = 1.2,
+                               margin = margin(b = 5))) +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = legend_classes[1]),
+              # Colour should refer to the legend class
+              size = point_size) + # Input argument
+      # Add a manual colour scale for each of the layers and legend classes
+      # in the input arguments
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values) +
+      guides(color = guide_legend(title = legend_title, # Input argument
+                                  # Size of legend symbols (points)
+                                  override.aes = list(size = 2),
+                                  # Order of this legend relative to other
+                                  # legends in the plot, i.e. first (from top)
+                                  order = 1))
+  } else {
+
+    # Continuous variable
+
+    base_map <- base_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = spat_layer_1[[variable_continuous]]),
+              size = point_size) +
+      scale_color_viridis_c(name = legend_title,
+                            breaks =
+                              seq(round(min(
+                                spat_layer_1[[variable_continuous]])),
+                                  100 * ceiling(max(0.01 *
+                                      spat_layer_1[[variable_continuous]])),
+                                         by = 100),
+                            option = "plasma",
+                            direction = 1,
+                            guide = guide_colorbar(title = legend_title,
+                                                   order = 1))
+
+  }
+
+  base_map <- base_map +
     # Add a scale bar to the plot
     ggspatial::annotation_scale(
       # Specify the width of the scale bar relative to the plot width
@@ -403,7 +439,8 @@ map_icpf <- function(layers,
     # area, but can only be done after any other layers have been added.
 
 
-  # Create the Azores inset map
+  ## Azores inset map ----
+
   azores_map <-
     ggplot() +
     geom_sf(data = world_spat, color = NA, fill = background_col)
@@ -440,18 +477,53 @@ map_icpf <- function(layers,
           # variable
           panel.background = element_rect(fill = sea_col)) +
     geom_sf(data = world_spat, color = country_border_col,
-            fill = NA, linewidth = 0.5) +
-    geom_sf(data = spat_layer_1,
-            aes(color = legend_classes[1]),
-            size = point_size) +
-    scale_color_manual(name = legend_title,
-                       breaks = legend_classes,
-                       values = legend_values) +
+            fill = NA, linewidth = 0.5)
+
+  if (!is.null(legend_classes)) {
+
+    azores_map <- azores_map +
+      geom_sf(data = spat_layer_1,
+              aes(color = legend_classes[1]),
+              size = point_size) +
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values)
+
+  } else {
+
+    # Continuous variable
+
+    azores_map <- azores_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = spat_layer_1[[variable_continuous]]),
+              size = point_size) +
+      scale_color_viridis_c(name = legend_title,
+                            breaks =
+                              seq(round(min(
+                                spat_layer_1[[variable_continuous]])),
+                                100 * ceiling(max(0.01 *
+                                        spat_layer_1[[variable_continuous]])),
+                                by = 100),
+                            option = "plasma",
+                            direction = 1,
+                            guide = guide_colorbar(title = legend_title,
+                                                   order = 1))
+
+  }
+
+
+  azores_map <- azores_map +
     ggtitle("Azores (Portugal)") +
     # Update the size of the plot title and justify horizontally to the left
     theme(plot.title = element_text(hjust = 0.02, size = 7.5))
 
-  # Create the Canary Islands inset map
+
+
+
+
+  ## Canary Islands inset map ----
+
   canary_map <-
     ggplot() +
     geom_sf(data = world_spat, color = NA, fill = background_col)
@@ -482,19 +554,51 @@ map_icpf <- function(layers,
           plot.background = element_blank(),
           panel.background = element_rect(fill = sea_col)) +
     geom_sf(data = world_spat, color = country_border_col,
-            fill = NA, linewidth = 0.5) +
-    geom_sf(data = spat_layer_1,
-            aes(color = legend_classes[1]),
-            size = point_size) +
-    scale_color_manual(name = legend_title,
-                       breaks = legend_classes,
-                       values = legend_values) +
+            fill = NA, linewidth = 0.5)
+
+  if (!is.null(legend_classes)) {
+
+    canary_map <- canary_map +
+      geom_sf(data = spat_layer_1,
+              aes(color = legend_classes[1]),
+              size = point_size) +
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values)
+
+  } else {
+
+    # Continuous variable
+
+    canary_map <- canary_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = spat_layer_1[[variable_continuous]]),
+              size = point_size) +
+      scale_color_viridis_c(name = legend_title,
+                            breaks =
+                              seq(round(min(
+                                spat_layer_1[[variable_continuous]])),
+                                100 * ceiling(max(0.01 *
+                                        spat_layer_1[[variable_continuous]])),
+                                by = 100),
+                            option = "plasma",
+                            direction = 1,
+                            guide = guide_colorbar(title = legend_title,
+                                                   order = 1))
+
+  }
+
+  canary_map <- canary_map +
     ggtitle("Canary Islands (Spain)") +
     theme(plot.title = element_text(hjust = 0.02, size = 7.5))
 
-  # coord_sf(xlim = c(1550000,2050000), ylim = c(1200000,920000)) +
 
-  # Create the Cyprus inset map
+
+
+
+  ## Cyprus inset map ----
+
   cyprus_map <-
     ggplot() +
     geom_sf(data = world_spat, color = NA, fill = background_col)
@@ -529,15 +633,46 @@ map_icpf <- function(layers,
           plot.background = element_blank(),
           panel.background = element_rect(fill = sea_col)) +
     geom_sf(data = world_spat, color = country_border_col,
-            fill = NA, linewidth = 0.5) +
-    geom_sf(data = spat_layer_1,
-            aes(color = legend_classes[1]),
-            size = point_size) +
-    scale_color_manual(name = legend_title,
-                       breaks = legend_classes,
-                       values = legend_values) +
+            fill = NA, linewidth = 0.5)
+
+  if (!is.null(legend_classes)) {
+
+    cyprus_map <- cyprus_map +
+      geom_sf(data = spat_layer_1,
+              aes(color = legend_classes[1]),
+              size = point_size) +
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values)
+  } else {
+
+    # Continuous variable
+
+    cyprus_map <- cyprus_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = spat_layer_1[[variable_continuous]]),
+              size = point_size) +
+      scale_color_viridis_c(name = legend_title,
+                            breaks =
+                              seq(round(min(
+                                spat_layer_1[[variable_continuous]])),
+                                100 * ceiling(max(0.01 *
+                                        spat_layer_1[[variable_continuous]])),
+                                by = 100),
+                            option = "plasma",
+                            direction = 1,
+                            guide = guide_colorbar(title = legend_title,
+                                                   order = 1))
+
+  }
+
+  cyprus_map <- cyprus_map +
     ggtitle("Cyprus") +
     theme(plot.title = element_text(hjust = 0.02, size = 7.5))
+
+
+
 
 
   # Add coordinate system (limits of x and y) in case of one layer ----
@@ -727,7 +862,7 @@ map_icpf <- function(layers,
       # Create a rectangular grob object
       rectGrob(
         # Set the x and y coordinates of the rectangles's location
-        x = unit(2.21, "cm"),
+        x = unit(2.21 + inset_maps_offset_x, "cm"),
         y = unit(1.1, "cm"),
         # Set the width and height of the rectangle
         width = unit(3.2, "cm"),
@@ -739,7 +874,7 @@ map_icpf <- function(layers,
         # Set the graphical parameters, i.e. the fill and border colour
         gp = gpar(fill = sea_col, col = "white"))) +
     # Draw the middle rectangle on which the Azores inset map will be plotted
-    draw_grob(rectGrob(x = unit(5.59, "cm"),
+    draw_grob(rectGrob(x = unit(5.59 + inset_maps_offset_x, "cm"),
                        y = unit(1.1, "cm"),
                        width = unit(2.6, "cm"),
                        height = unit(1.55, "cm"),
@@ -747,7 +882,7 @@ map_icpf <- function(layers,
                        vjust = 0,
                        gp = gpar(fill = sea_col, col = "white"))) +
     # Draw the right rectangle on which the Cyprus inset map will be plotted
-    draw_grob(rectGrob(x = unit(8.37, "cm"),
+    draw_grob(rectGrob(x = unit(8.37 + inset_maps_offset_x, "cm"),
                        y = unit(1.1, "cm"),
                        width = unit(1.3, "cm"), #2.6
                        height = unit(1.55, "cm"),
@@ -759,17 +894,17 @@ map_icpf <- function(layers,
               # Set height of map
               height = 0.14,
               # Set the x and y coordinates of the map location
-              x = -0.307,
+              x = -0.307 + inset_maps_offset_x2,
               y = 0.06) +
     # Add Azores inset map
     draw_plot(azores_map,
               height = 0.14,
-              x = -0.145,
+              x = -0.145 + inset_maps_offset_x2,
               y = 0.06) +
     # Add Cyprus inset map
     draw_plot(cyprus_map,
               height = 0.14,
-              x = 0.021,
+              x = 0.021 + inset_maps_offset_x2,
               y = 0.06)
 
 
