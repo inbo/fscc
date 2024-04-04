@@ -5,30 +5,12 @@ Please add any observed data issues to this file
 ## TO DO - Transformation layer 0 –-> layer 1
 
 * R script: `./src/transformation_to_layer1/solid_soil_data_transformation_to_layer1.R`
-* Gap-filling from external data sources and internal gap-filling using assumptions:
-  + Folder AFSCDB.LII.2.2: also check whether there are any plot surveys that do not appear in so_som at all. Use the original data forms (with different repetitions etc), not the aggregated version.
-  + Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?
-  + FSCDB.LI: add profiles to pfh and prf that are lacking (check if this is actually the case: there may be an issue with different former German code plots with the same plot_id that now look like the same plot (same partner_code))
-  + Add column with data source for different variables (Note: partly completed)
-* profiles with data until 20 cm or 40 cm: ~~(i) assume carbon density in subsoil does not change with time; (ii) take a fixed carbon density of 0.1 ton C cm-1 ha-1 between 80 and 100 cm; or~~ (iii) monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)
-* considerable uncertainty in code_horizon_coarse_vol (in “pfh”) → first priority: coarse fragment fractions from other survey year?
 * Harmonise “horizon_coarse_weight” if volumetric instead of wt% (e.g. Slovak Republic), as indicated by partners in PIRs.
 * Harmonise soil textures where needed (e.g. Wallonia) to 63 µm limit using R soil texture wizard
 * Check “other_obs” columns properly
 * survey_year in "som" and "pfh" does not always correspond with the actual sampling year (i.e. sometimes lab analysis year). Correct by means of survey_year in "prf" and "pls"
-* Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.
-* Make a separate script for LI versus LII, in which you can choose the survey form (so_som, so_pfh, s1_som, s1_pfh) and the variable to calculate stocks from. Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.
-* Check if layer_type matches total organic carbon contents
-* Improve internal gap-filling for bulk densities and organic layer weights outside of plausible ranges
-* Pedotransfer functions/machine learning for bulk densities
-* Re-evaluate coarse fragments
-* Check for undetected unit problems (BioSoil), e.g. TOC in 54_212 should be ten times higher
-* Internal gap-filling: also gap-fill across repetitions of certain layer 0 data (e.g. coarse fragments Slovakia)
-* Add columns with: original data; data source; upper boundary + lower boundary confidence interval
-* Internal gap-filling: update values for parameters that are considered constant
-* Organic layer weight: if unknown while layer limits are known: gap-fill by multiplying a median bulk density with the layer thickness
-* Harmonise scripts so that additional derived parameters are added in get_derived_variable_inconsistencies function
-  
+
+ 
 
 
 
@@ -44,6 +26,11 @@ Please add any observed data issues to this file
     - ~~coarse_fragment_vol: assumption constant over time; from "pfh" ("horizon_coarse_weight", "code_horizon_coarse_vol");~~ machine learning?
     - ~~effective_soil_depth: assumption constant over time; from maximum "layer_limit_inferior" + machine learning? Or assumption: always deeper than 100 cm if we know it is deeper than 80 cm? This was manually harmonised by Nathalie (data form "./data/additional_data/SO_PRF_ADDS.csv")~~
     - ~~"pfh" survey forms gap filling for C stocks: add bulk densities forest floor from "som" after linking forest floor layers across "pfh" and "som" (same survey, i.e. maximum difference in survey years of 3 years)~~
+* ~~Gap-filling from external data sources and internal gap-filling using assumptions:~~
+  + ~~Folder AFSCDB.LII.2.2: also check whether there are any plot surveys that do not appear in so_som at all. Use the original data forms (with different repetitions etc), not the aggregated version.~~
+  + ~~Anything to gap-fill for LI? (e.g. folders BIOSOIL.LI, FSCDB.LI.1?) FSCDB.LI.1: check whether any “OPT” data are currently missing. Oldest survey from Italy seems to be missing, Latvia and Austria probably incomplete too?~~
+  + ~~FSCDB.LI: add profiles to pfh and prf that are lacking (check if this is actually the case: there may be an issue with different former German code plots with the same plot_id that now look like the same plot (same partner_code))~~
+  + ~~Add column with data source for different variables~~
 * ~~Check whether vertical shifting of layer limits is needed, e.g. negative for forest floor layers (e.g. Estonia, where top of forest floor was designated as the 0-cm line). Rule for organic H layers:~~
   + ~~if code_layer is H and no layer limits, the layer should be in the forest floor. Change layer_type to forest_floor.~~
   + ~~if organic H layers are < 40 cm thick in total (and below any forest floor or above any mineral soil), this layer(s) should be considered as the forest floor. Change layer_type to forest_floor.~~
@@ -72,6 +59,20 @@ Please add any observed data issues to this file
 * ~~Solve issue with non-unique German plot codes in LI~~
 * ~~Improve internal gap-filling based on sw_swc (link between records)~~
 * ~~Remove German LII records pfh~~
+* ~~considerable uncertainty in code_horizon_coarse_vol (in “pfh”) → first priority: coarse fragment fractions from other survey year?~~
+* ~~Add potential sources of uncertainty, for example ring test standard deviations. In theory, this lab analytical uncertainty as well as sample pretreatment uncertainty should be somehow included along with spatial variation in the variation between plot repetitions. At this stage, we will just compare the order of magnitude of the ring test standard deviation with the standard deviation between plot repetitions. At this stage, no need to exclude any data on the basis of bad ring tests.~~
+* ~~Make a separate script for LI versus LII, in which you can choose the survey form (so_som, so_pfh, s1_som, s1_pfh) and the variable to calculate stocks from. Different methodological decisions (e.g. about internal gap-filling opportunities) should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be exported as metadata in the output.~~
+* ~~Check if layer_type matches total organic carbon contents~~
+* ~~Improve internal gap-filling for bulk densities and organic layer weights outside of plausible ranges~~
+* ~~Pedotransfer functions/machine learning for bulk densities~~
+* ~~Re-evaluate coarse fragments~~
+* ~~Check for undetected unit problems (BioSoil), e.g. TOC in 54_212 should be ten times higher~~
+* ~~Internal gap-filling: also gap-fill across repetitions of certain layer 0 data (e.g. coarse fragments Slovakia)~~
+* ~~Add columns with: original data; data source; upper boundary + lower boundary confidence interval~~
+* ~~Internal gap-filling: update values for parameters that are considered constant~~
+* ~~Organic layer weight: if unknown while layer limits are known: gap-fill by multiplying a median bulk density with the layer thickness~~
+* ~~Harmonise scripts so that additional derived parameters are added in get_derived_variable_inconsistencies function~~
+
 
 
 ~~## TO DO - Checked PIRs~~
@@ -88,11 +89,9 @@ Please add any observed data issues to this file
 
 * "som" files: harmonisation of layers with custom depths (e.g. Mxx, Hxx, often in profiles with both peat and mineral) to theoretical fixed depths (e.g. to (“OL”, “OFH”,) “M01”, “M12”, “M24”…) using C content and bulk density where needed, e.g. Estonia. Note that some of the fixed-depth profiles do contain gaps, i.e. impossible to harmonise (except through mass-preserving splines?)
 * Summarise over different replicate profiles (“repetition” or “profile_pit_id”) per survey per plot (for each layer): average and standard deviation/confidence interval? (only possible for “som” survey forms)
-* Remove profiles without below-ground data? (i.e. only forest floor)
-* "prf" and "pfh" files: retain one observation over time (data in these survey forms are assumed to be constant)
-* "prf": retain one record per plot
-* Selection of "useful" plots to be retained for further processing?
-* Propagate any uncertainty correctly.
+* ~~"prf": retain one record per plot~~
+* ~~Selection of "useful" plots to be retained for further processing?~~
+* ~~Propagate any uncertainty correctly.~~
 
 ## TO DO - Stocks, indicators
 
@@ -103,11 +102,11 @@ Please add any observed data issues to this file
 * Carbon stocks for carbon contents < LOQ? → based on upper below-ground layer?
 * Update subsoil carbon densities in line with assumption that subsoil carbon densities are constant.
 * ~~Machine-learning prediction of lowest point splines (depth of 100 cm)~~ + Monte Carlo uncertainty assessment?
-* ~~Convert scripts into a function.~~ Different methodological decisions should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be included as metadata in the output. Also include total uncertainty (including uncertainty from the spline fitting + spline extrapolation + propagated uncertainty from other sources) in the output.
+* ~~Convert scripts into a function. Different methodological decisions should be changeable via function input variables. List these important methodological variables and their options. A file with this methodological information should be included as metadata in the output. Also include total uncertainty (including uncertainty from the spline fitting + spline extrapolation + propagated uncertainty from other sources) in the output.~~
 * ~~Calculate stocks based on "pfh" survey forms too. Compare stocks based on fixed-depth layers with those based on pedogenetic horizons.~~
 * ~~Also include stocks until 30 cm as output in plot-aggregated stock files.~~
 * ~~Check within-plot variability~~
-
+* ~~profiles with data until 20 cm or 40 cm: (i) assume carbon density in subsoil does not change with time; (ii) take a fixed carbon density of 0.1 ton C cm-1 ha-1 between 80 and 100 cm; or (iii) monte carlo machine learning prediction of carbon density at a depth of 100 cm (assessing confidence interval)~~
 
 ## TO DO - How to assess uncertainty?
 
