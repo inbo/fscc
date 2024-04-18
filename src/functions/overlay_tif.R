@@ -20,7 +20,15 @@ overlay_tif <- function(sf1,
 
   tif <- terra::rast(path_tif)
 
-  if (terra::crs(tif) != terra::crs("EPSG:3035")) {
+  if (terra::crs(tif) == terra::crs("EPSG:4326")) {
+
+    # This is usually less work than converting the tif
+
+    sf1 <- sf1 %>%
+      st_transform(crs = 4326)
+
+
+  } else if (terra::crs(tif) != terra::crs("EPSG:3035")) {
 
     # Project the raster to the target CRS (EPSG 3035)
     tif <- terra::project(tif, terra::crs("EPSG:3035"))
@@ -62,6 +70,19 @@ overlay_tif <- function(sf1,
   }
 
 
+
+  if (st_crs(sf1)$epsg != 3035) {
+
+    sf1 <- sf1 %>%
+      st_transform(crs = 3035)
+  }
+
+  return(sf1)
+
+
+
+
+
   if (map == TRUE) {
 
   # Make a map
@@ -78,6 +99,7 @@ overlay_tif <- function(sf1,
   terra::text(terra::vect(sf1),
               labels = sf1$plot_id, pos = 1, col = "red", cex = 0.8)
   }
+
 
 
 
