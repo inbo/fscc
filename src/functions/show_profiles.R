@@ -104,10 +104,17 @@ show_profiles <- function(code_survey,
 
   pfh <- get_env(paste0(code_survey, "_pfh")) %>%
     filter(plot_id %in% plot_ids) %>%
-    mutate(survey_form = paste0(code_survey, "_pfh")) %>%
+    mutate(survey_form = paste0(code_survey, "_pfh"))
+
+  if ("horizon_bulk_dens_measure" %in% names(pfh)) {
+
+    pfh <- pfh %>%
     mutate(bulk_density = ifelse(!is.na(.data$horizon_bulk_dens_measure),
                                  .data$horizon_bulk_dens_measure,
-                                 .data$horizon_bulk_dens_est)) %>%
+                                 .data$horizon_bulk_dens_est))
+  }
+
+  pfh <- pfh %>%
     mutate(bulk_density = round(bulk_density)) %>%
     filter(!is.na(.data$layer_number)) %>%
     rename(profile_id = unique_survey_profile) %>%
