@@ -60,21 +60,9 @@ harmonise_per_plot_layer <- function(survey_form_input,
                  range_max = 100,
                  incl_ff = FALSE))
 
-    # Upper limit plausibility function ULPF = 1991 - (81,1*sqrt(TOC))
-    bd_upper <- function(toc) {
-      ifelse(is.na(toc), 1991, 1991 - (81.1 * sqrt(toc)))
-    }
 
-    # Lower limit plausibility function LLPF = 1031 - (81,1*sqrt(TOC))
-    # Use an ultimate minimum of 6
-    # (i.e. the lower 0.05 % quantile of all organic bulk density data)
-    # Else, some organic layers contain bulk densities of 1 or so,
-    # which is highly unrealistic
-    bd_lower <- function(toc) {
-      ifelse(is.na(toc) | (1031 - (81.1 * sqrt(toc)) < 6),
-             6,
-             1031 - (81.1 * sqrt(toc)))
-    }
+
+    source("./src/functions/bulk_density_ptf.R")
 
 
 
@@ -432,15 +420,27 @@ harmonise_per_plot_layer <- function(survey_form_input,
       # By taking the profile of the most recent survey year covering the
       # biggest depth range
 
+      survey_years_target_i <- df_i %>%
+        distinct(survey_year) %>%
+        filter(survey_year >= 2000)
+
+      if (nrow(survey_years_target_i) == 0) {
+        survey_years_target_i <- df_i %>%
+          distinct(survey_year)
+      }
+
+      survey_years_target_i <- survey_years_target_i$survey_year
+
       selected_prof_i <- df_i %>%
-        filter(survey_year == max(.data$survey_year)) %>%
-        group_by(unique_survey_repetition) %>%
+        filter(survey_year %in% survey_years_target_i) %>%
+        group_by(unique_survey_repetition, survey_year) %>%
         reframe(top = min(layer_limit_superior, na.rm = TRUE),
                 bottom = max(layer_limit_inferior, na.rm = TRUE)) %>%
         ungroup() %>%
         # Truncate to decimeters to avoid little differences in
         # forest floor
         mutate(depth_range = 10 * trunc(0.1 * (.data$bottom - .data$top))) %>%
+        arrange(-survey_year) %>%
         filter(depth_range == max(.data$depth_range)) %>%
         # select any if multiple options
         slice_head() %>%
@@ -802,7 +802,8 @@ harmonise_per_plot_layer <- function(survey_form_input,
                 link_forest_floors %>%
                 filter(profile_id == selected_prof_i) %>%
                 filter(code_layer == df_target_i$code_layer[k]) %>%
-                pull(code_layers_link)
+                pull(code_layers_link) %>%
+                unique
 
               matching_survey_som <-
                 link_forest_floors %>%
@@ -815,7 +816,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
                   !identical(matching_survey_som, character(0))) {
 
                 rep_k <- som %>%
-                  filter(unique_survey == matching_survey_som) %>%
+                  filter(unique_survey %in% matching_survey_som) %>%
                   filter(code_layer %in%
                            unlist(strsplit(matching_layers_som, "_")))
 
