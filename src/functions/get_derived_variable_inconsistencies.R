@@ -115,17 +115,6 @@ get_derived_variable_inconsistencies <- function(survey_form,
   }
 
 
-  # Retrieve a median value of bulk densities in an organic matrix across
-  # all data sources, in order to gap-fill organic_layer_weights for which
-  # layer limits are known.
-
-  source("./src/functions/get_bulk_density_stats.R")
-  bd_org_median <- get_bulk_density_stats()
-
-  cat(paste0(" \nMedian bulk density of organic layers used for ",
-             "the estimation of organic_layer_weight: ",
-             bd_org_median, " kg m-3\n"))
-
 
 
   # "som" survey forms ----
