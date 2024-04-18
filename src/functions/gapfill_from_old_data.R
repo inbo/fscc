@@ -1152,7 +1152,7 @@ gapfill_from_old_data <- function(survey_form,
     unique_surveys_s1_som <- s1_som_fscdb %>%
       filter(is.na(unique_survey_s1_som)) %>%
       filter(code_country != 58) %>%
-      left_join(data_availability %>%
+      left_join(data_availability_s1 %>%
                   select(plot_id, survey_years), by = "plot_id") %>%
       relocate(survey_years, .after = survey_year) %>%
       pull(unique_survey)
