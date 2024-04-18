@@ -6,11 +6,18 @@ get_stratifiers <- function(level) {
 
   assertthat::assert_that(level %in% c("LI", "LII"))
 
+  if (level == "LI") {
+    code_survey <- "s1"
+  }
+
+  if (level == "LII") {
+    code_survey <- "so"
+  }
+
   stopifnot(require("tidyverse"),
             require("assertthat"),
-            require("aqp"),
             require("sf"),
-            require("elevatr"))
+            require("geodata"))
 
   source("./src/functions/as_sf.R")
   source("./src/functions/get_env.R")
@@ -46,6 +53,7 @@ get_stratifiers <- function(level) {
     select(code, description)
 
   # Import the shapefile with biogeographical regions
+
   biogeo_sf <-
     read_sf(paste0("./data/additional_data/shapefiles/",
                    "BiogeoRegions2016.shp")) %>%
@@ -57,6 +65,93 @@ get_stratifiers <- function(level) {
     mutate(code = if_else(.data$short_name == "blackSea",
                           "Black Sea", .data$code)) %>%
     select(code, geometry)
+
+
+
+
+
+  # Get climate data(WorldClim version 2.1; 1970-2000)
+
+  path_worldclim <- "./data/additional_data/shapefiles/worldclim/wc2.1_30s_"
+
+  clim_sf <-
+    get_env(paste0("coordinates_", code_survey)) %>%
+    as_sf
+
+  # Add average temperatures (for twelve months of the year)
+  # in °C
+
+  for (i in seq(1, 12)) {
+
+    path_worldclim_i <- paste0(path_worldclim,
+                               "tavg/wc2.1_30s_tavg_",
+                               sprintf("%02d", i),
+                               ".tif")
+
+    clim_sf <- overlay_tif(sf1 = clim_sf,
+                           path_tif = path_worldclim_i,
+                           name_col = paste0("wc2.1_30s_tavg_",
+                                             sprintf("%02d", i)))
+
+  }
+
+  # Select the columns that start with "wc2.1_30s_tavg_"
+  tavg_cols <- grep("^wc2.1_30s_tavg_", names(clim_sf), value = TRUE)
+
+  clim_sf <- clim_sf %>%
+    st_drop_geometry() %>%
+    # Calculate row-wise average over the twelve months using dplyr
+    mutate(tavg = round(rowMeans(select(., all_of(tavg_cols)),
+                                 na.rm = TRUE), 1)) %>%
+    # Remove the original columns
+    select(-all_of(tavg_cols)) %>%
+    as_sf
+
+
+  # Add cumulative precipitation (for twelve months of the year)
+  # in mm
+
+  for (i in seq(1, 12)) {
+
+    path_worldclim_i <- paste0(path_worldclim,
+                               "prec/wc2.1_30s_prec_",
+                               sprintf("%02d", i),
+                               ".tif")
+
+    clim_sf <- overlay_tif(sf1 = clim_sf,
+                           path_tif = path_worldclim_i,
+                           name_col = paste0("wc2.1_30s_prec_",
+                                             sprintf("%02d", i)))
+
+  }
+
+  # Select the columns that start with "wc2.1_30s_prec_"
+  prec_cols <- grep("^wc2.1_30s_prec_", names(clim_sf), value = TRUE)
+
+  clim_sf <- clim_sf %>%
+    st_drop_geometry() %>%
+    # Calculate row-wise average over the twelve months using dplyr
+    mutate(prec = round(rowSums(select(., all_of(prec_cols)),
+                                na.rm = TRUE), 0)) %>%
+    # Remove the original columns
+    select(-all_of(prec_cols)) %>%
+    as_sf
+
+
+  # Elevation data from worlclim
+  # in meter
+
+  clim_sf <- overlay_tif(sf1 = clim_sf,
+                         path_tif = paste0(path_worldclim,
+                                           "elev/wc2.1_30s_elev.tif"),
+                         name_col = "wc2.1_30s_elev") %>%
+    st_drop_geometry() %>%
+    rename(elev = "wc2.1_30s_elev")
+
+
+
+
+
 
 
   # 1. "so" ----
@@ -88,6 +183,14 @@ get_stratifiers <- function(level) {
                                        "SO_PRF_ADDS.xlsx' ",
                                        "does not exist."))
 
+  df_humus <-
+    openxlsx::read.xlsx(paste0("./data/additional_data/",
+                               "SO_PRF_ADDS 20231213.xlsx"),
+                        sheet = 1) %>%
+    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+    mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
+    select(key, unified_humus)
+
   so_prf_adds_agg <-
     openxlsx::read.xlsx(paste0("./data/additional_data/",
                                "SO_PRF_ADDS.xlsx"),
@@ -95,6 +198,10 @@ get_stratifiers <- function(level) {
     rename(bs_class = "BS.(high/low)") %>%
     mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
     filter(!is.na(plot_id)) %>%
+    mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
+    left_join(df_humus,
+              by = "key") %>%
+    select(-key) %>%
     mutate(soil_wrb = paste0(RSGu, "_",
                              QUALu, "_",
                              SPECu, "_",
@@ -139,7 +246,8 @@ get_stratifiers <- function(level) {
 
   df_strat_sf <- get_env("data_availability_so") %>%
     select(country, partner_short, plot_id, code_plot) %>%
-    left_join(get_env("coordinates_so"), by = "plot_id") %>%
+    # This includes the coordinates
+    left_join(clim_sf, by = "plot_id") %>%
     as_sf
 
 
@@ -313,6 +421,21 @@ get_stratifiers <- function(level) {
                 ungroup() %>%
                 select(plot_id, slope),
               by = "plot_id") %>%
+    # Add altitude
+    left_join(get_env("si_plt") %>%
+                select(plot_id, altitude_m) %>%
+                filter(!is.na(altitude_m)) %>%
+                group_by(plot_id, altitude_m) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, altitude_m),
+              by = "plot_id") %>%
+    mutate(altitude = coalesce(altitude_m,
+                               elev)) %>%
     # Add soil depth
     left_join(get_env("so_prf") %>%
                 mutate(eff_soil_depth_orig =
@@ -416,7 +539,10 @@ get_stratifiers <- function(level) {
            plot_id,
            longitude_dec,
            latitude_dec,
+           tavg,
+           prec,
            slope,
+           altitude,
            eff_soil_depth,
            rooting_depth,
            wrb_soil_group,
@@ -526,7 +652,7 @@ get_stratifiers <- function(level) {
 
   df_strat_sf <- get_env("data_availability_s1") %>%
     select(country, partner_short, plot_id, code_plot) %>%
-    left_join(get_env("coordinates_s1"), by = "plot_id") %>%
+    left_join(clim_sf, by = "plot_id") %>%
     as_sf
 
   df_strat <-
@@ -706,6 +832,21 @@ get_stratifiers <- function(level) {
                 ungroup() %>%
                 select(plot_id, slope),
               by = "plot_id") %>%
+    # Add altitude
+    left_join(get_env("y1_pl1") %>%
+                select(plot_id, altitude_m) %>%
+                filter(!is.na(altitude_m)) %>%
+                group_by(plot_id, altitude_m) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                arrange(-count) %>%
+                slice_head() %>%
+                ungroup() %>%
+                select(plot_id, altitude_m),
+              by = "plot_id") %>%
+    mutate(altitude = coalesce(altitude_m,
+                               elev)) %>%
     # Add soil depth
     left_join(get_env("s1_prf") %>%
                 rowwise() %>%
@@ -778,7 +919,10 @@ get_stratifiers <- function(level) {
            plot_id,
            longitude_dec,
            latitude_dec,
+           tavg,
+           prec,
            slope,
+           altitude,
            eff_soil_depth,
            wrb_soil_group,
            forest_type,
