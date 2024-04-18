@@ -121,11 +121,6 @@ so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
 
 
 ## Automated data corrections: soil layers ----
-# "solve" indicates whether the obvious mistakes can be solved
-
-# Attention: make sure that "pfh" survey forms are processed first
-# to facilitate gap-filling of "som" based on "pfh"
-# (e.g. layer limits forest floor)
 
 source("./src/functions/get_layer_inconsistencies.R")
 
