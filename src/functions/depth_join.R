@@ -18,6 +18,13 @@
 #' @param prefix_parameters_in_df1 A character string representing the prefix
 #' to be added to the parameter names in `df1` (e.g. the source of the data
 #' in `df2`). Default is `NULL`.
+#' @param mode A character string representing the mode in which the dataframes
+#' should be joined. There are two options: "constant_physical_parameters"
+#' (default; this joins physical parameters regardless of the survey year in
+#'  any relevant layers); or "time_specific_ff_concentrations" (this joins
+#'  analytical parameters which are specific for a certain survey year, only
+#'  in the forest floor); or "most_recent" (which selects the most recent
+#'  data to join)
 #'
 #' @return A dataframe representing the joined data.
 #'
@@ -29,7 +36,8 @@
 depth_join <- function(df1,
                        df2,
                        parameters = NULL,
-                       prefix_parameters_in_df1 = NULL) {
+                       prefix_parameters_in_df1 = NULL,
+                       mode = "constant_physical_parameters") {
 
 
   source("./src/functions/harmonise_layer_to_depths.R")
@@ -42,6 +50,11 @@ depth_join <- function(df1,
     all(c("code_layer", "layer_limit_superior", "layer_limit_inferior",
           "plot_id", "layer_type") %in% names(df1)))
 
+  if (mode == "time_specific_ff_concentrations") {
+    assertthat::assert_that("survey_year" %in% names(df1) &&
+                              "survey_year" %in% names(df2))
+  }
+
   # There should be one profile per plot_id in df2
 
   # assertthat::assert_that(
@@ -51,10 +64,24 @@ depth_join <- function(df1,
   #     integer(0)))
 
 
+  if (all(c("horizon_master",
+            "horizon_limit_up",
+            "horizon_limit_low") %in% names(df2))) {
+
+    df2 <- df2 %>%
+      rename(code_layer = horizon_master) %>%
+      rename(layer_limit_superior = horizon_limit_up) %>%
+      rename(layer_limit_inferior = horizon_limit_low)
+
+  }
+
+
 
   # Define parameters to join ----
 
   if (is.null(parameters)) {
+
+    if (mode == "constant_physical_parameters") {
 
     possible_parameters <- c(
         "bulk_density",
@@ -101,6 +128,12 @@ depth_join <- function(df1,
         "horizon_sand_max",
         "texture_survey_year")
 
+    }
+
+    if (mode == "time_specific_ff_concentrations") {
+      possible_parameters <- "organic_carbon_total"
+    }
+
     parameters <- unique(
       possible_parameters[which(possible_parameters %in% names(df2))])
 
@@ -122,7 +155,8 @@ depth_join <- function(df1,
     # Harmonise coarse fragments
 
     if ("coarse_fragment_vol_converted" %in% names(df2) &&
-        "coarse_fragment_vol_avg" %in% names(df2)) {
+        "coarse_fragment_vol_avg" %in% names(df2) &&
+        !"coarse_fragment_vol" %in% names(df2)) {
 
       df2 <- df2 %>%
         mutate(cf = coalesce(coarse_fragment_vol_converted,
@@ -131,15 +165,10 @@ depth_join <- function(df1,
                            0,
                            cf))
     } else
-    if (any(grepl("coarse_fragment_vol", names(df2)))) {
+    if ("coarse_fragment_vol" %in% names(df2)) {
 
       col <- names(df2)[which(
-        grepl("coarse_fragment_vol", names(df2)) &
-          !grepl("min", names(df2)) &
-          !grepl("max", names(df2)) &
-          !grepl("survey_year", names(df2)))]
-
-      assertthat::assert_that(length(col) == 1)
+        names(df2) == "coarse_fragment_vol")]
 
       df2 <- df2 %>%
         mutate(cf = .data[[col]],
@@ -156,22 +185,18 @@ depth_join <- function(df1,
     # Harmonise bulk density
 
     if ("horizon_bulk_dens_measure" %in% names(df2) &&
-        "horizon_bulk_dens_est" %in% names(df2)) {
+        "horizon_bulk_dens_est" %in% names(df2) &&
+        !"bulk_density" %in% names(df2)) {
 
       df2 <- df2 %>%
         mutate(bd = coalesce(horizon_bulk_dens_measure,
                              horizon_bulk_dens_est))
 
     } else
-      if (any(grepl("bulk_dens", names(df2)))) {
+      if ("bulk_density" %in% names(df2)) {
 
         col <- names(df2)[which(
-          grepl("bulk_dens", names(df2)) &
-            !grepl("min", names(df2)) &
-            !grepl("max", names(df2)) &
-            !grepl("survey_year", names(df2)))]
-
-        assertthat::assert_that(length(col) == 1)
+          names(df2) == "bulk_density")]
 
         df2 <- df2 %>%
           mutate(bd = .data[[col]])
@@ -207,13 +232,20 @@ depth_join <- function(df1,
     assertthat::assert_that(!col_name %in% names(df1))
 
     df1[[col_name]] <- NA
+
+    if (mode == "most_recent") {
+
+      col_name_year <- paste0(col_name, "_year")
+      df1[[col_name_year]] <- NA
+    }
+
   }
 
   is_pfh <- FALSE
 
   if (all(c("horizon_master",
-            "layer_limit_up",
-            "layer_limit_low") %in% names(df1))) {
+            "horizon_limit_up",
+            "horizon_limit_low") %in% names(df1))) {
 
     is_pfh <- TRUE
 
@@ -245,14 +277,24 @@ depth_join <- function(df1,
       next
     }
 
+    is_ff_i <- (df1$layer_type[i] == "forest_floor" ||
+                  (is.na(df1$layer_limit_superior[i]) ||
+                     df1$layer_limit_superior[i] < 0))
+
+    # If below-ground layer in time_specific_ff_concentrations mode: go to next
+
+    if (mode == "time_specific_ff_concentrations" &&
+        !is_ff_i) {
+      next
+    }
+
+
     plot_id_i <- df1$plot_id[i]
     code_layer_i <- df1$code_layer[i]
     limit_sup_i <- df1$layer_limit_superior[i]
     limit_inf_i <- df1$layer_limit_inferior[i]
 
-    is_ff_i <- (df1$layer_type[i] == "forest_floor" ||
-               (is.na(df1$layer_limit_superior[i]) ||
-                  df1$layer_limit_superior[i] < 0))
+
 
     if (!is_ff_i &&
         is.na(limit_inf_i)) {
@@ -288,6 +330,22 @@ depth_join <- function(df1,
       if (nrow(df2_sub) == 0) {
         next # Go to next layer
       }
+
+
+
+      if (mode == "time_specific_ff_concentrations") {
+
+        survey_year_i <- df1$survey_year[i]
+
+        df2_sub <- df2_sub %>%
+          filter(.data$survey_year >= survey_year_i - 3 &
+                   .data$survey_year <= survey_year_i + 3)
+
+        if (nrow(df2_sub) == 0) {
+          next # Go to next layer
+        }
+      }
+
 
       # Remove any numbers at the end of code_layer
 
@@ -357,11 +415,20 @@ depth_join <- function(df1,
           paste0(prefix_parameters_in_df1, parameter_j)
         }
 
+        if (mode == "most_recent") {
+
+          col_name_year_j <- paste0(col_name, "_year")
+          most_recent_j <- NA
+        }
+
+
+
         value_j <- NA
 
-        # Only add bulk density!
+        # constant_physical_parameters: Only add bulk density!
 
-        if (!grepl("bulk", parameter_j)) {
+        if (mode == "constant_physical_parameters" &&
+            !grepl("bulk", parameter_j)) {
           next # Go to next parameter
         }
 
@@ -372,10 +439,21 @@ depth_join <- function(df1,
           next # Go to next parameter
         }
 
+        # Most recent: select the most recent survey year
+
+        if (mode == "most_recent") {
+
+          most_recent_j <- max(df2_j$survey_year)
+
+          df2_j <- df2_j %>%
+            filter(survey_year == most_recent_j)
+        }
+
+
 
         # If categorical variable (i.e. "year")
 
-        if (grepl("year", parameter_j)) {
+        if (grepl("year|code", parameter_j)) {
 
           value_j <- if (length(na.omit(df2_j[[parameter_j]])) == 1) {
 
@@ -408,6 +486,12 @@ depth_join <- function(df1,
         } else {
 
           # If numeric variable
+
+
+          # If constant_physical_parameters mode
+
+          if (mode %in% c("constant_physical_parameters")) {
+
           # Bulk density, so no need to weight it
 
           value_j <- if (any(is.na(df2_j$layer_thickness))) {
@@ -416,10 +500,76 @@ depth_join <- function(df1,
             round(weighted.mean(df2_j[[parameter_j]],
                                 w = df2_j$layer_thickness), 1)
           }
+          }
 
-        }
+
+          # If time_specific_ff_concentrations/most_recent mode
+
+          if (mode %in% c("time_specific_ff_concentrations", "most_recent")) {
+
+            if (nrow(df2_j) == 1) {
+
+              value_j <- round(df2_j[[parameter_j]], 1)
+            }
+
+            if (nrow(df2_j) > 1) {
+
+              # Add weights
+              # Only for gravimetric parameters
+
+              assertthat::assert_that("organic_layer_weight_bd" %in%
+                                        names(df2_j))
+
+              if ("organic_layer_weight" %in% names(df2_j)) {
+
+                df2_j <- df2_j %>%
+                  mutate(weights = coalesce(organic_layer_weight,
+                                            organic_layer_weight_bd),
+                         weights_mean = mean(weights, na.rm = TRUE),
+                         weights = case_when(
+                           any(!is.na(weights)) & any(is.na(weights)) ~
+                             coalesce(weights, weights_mean),
+                           TRUE ~ weights),
+                         weights_mean = mean(layer_thickness, na.rm = TRUE),
+                         weights = case_when(
+                           all(is.na(weights)) ~
+                             coalesce(layer_thickness, weights_mean),
+                           TRUE ~ weights),
+                         weights = case_when(
+                           all(is.na(weights)) ~ 1,
+                           TRUE ~ weights))
+              } else {
+
+                df2_j <- df2_j %>%
+                  mutate(weights = organic_layer_weight_bd,
+                         weights_mean = mean(weights, na.rm = TRUE),
+                         weights = case_when(
+                           any(!is.na(weights)) & any(is.na(weights)) ~
+                             coalesce(weights, weights_mean),
+                           TRUE ~ weights),
+                         weights_mean = mean(layer_thickness, na.rm = TRUE),
+                         weights = case_when(
+                           all(is.na(weights)) ~
+                             coalesce(layer_thickness, weights_mean),
+                           TRUE ~ weights),
+                         weights = case_when(
+                           all(is.na(weights)) ~ 1,
+                           TRUE ~ weights))
+              }
+
+              value_j <- round(weighted.mean(df2_j[[parameter_j]],
+                                             w = df2_j$weights), 1)
+
+            }
+          } # End of "if time_specific_ff_concentrations"/"most_recent"
+
+        } # End of "if numeric"
 
         df1[[col_name_j]][i] <- value_j
+
+        if (mode == "most_recent") {
+          df1[[col_name_year_j]][i] <- most_recent_j
+        }
 
 
       } # End of evaluation parameters
@@ -437,7 +587,8 @@ depth_join <- function(df1,
     # Below-ground ----
     # Depth-based approach in the assumption that bulk density remains unchanged
 
-    if (!is_ff_i) {
+    if (!is_ff_i &&
+        mode %in% c("constant_physical_parameters", "most_recent")) {
 
       df2_sub <- df2 %>%
         filter(plot_id == plot_id_i) %>%
@@ -483,6 +634,14 @@ depth_join <- function(df1,
           paste0(prefix_parameters_in_df1, parameter_j)
         }
 
+        if (mode == "most_recent") {
+
+          col_name_year_j <- paste0(col_name, "_year")
+          most_recent_j <- NA
+        }
+
+
+
         value_j <- NA
 
 
@@ -493,9 +652,26 @@ depth_join <- function(df1,
           next # Go to next parameter
         }
 
+        # Most recent: select the most recent survey year
+
+        if (mode == "most_recent") {
+
+          most_recent_j <- max(df2_j$survey_year)
+
+          df2_j <- df2_j %>%
+            filter(survey_year == most_recent_j)
+        }
+
+
         if (nrow(df2_j) == 1) {
 
-          value_j <- df2_j[[parameter_j]]
+          if (grepl("year|code", parameter_j)) {
+            # Categorical
+            value_j <- df2_j[[parameter_j]]
+          } else {
+            value_j <- round(df2_j[[parameter_j]], 1)
+          }
+
         }
 
         if (nrow(df2_j) > 1) {
@@ -513,7 +689,7 @@ depth_join <- function(df1,
 
         # If categorical variable (i.e. "year")
 
-        if (grepl("year", parameter_j)) {
+        if (grepl("year|code", parameter_j)) {
 
           value_j <-
             harmonise_layer_to_depths(limit_sup = limit_sup_i,
@@ -551,20 +727,17 @@ depth_join <- function(df1,
             round(1)
         }
 
-        if (grepl("bulk_dens", parameter_j) &&
-            !grepl("survey_year", parameter_j)) {
-
-          mean_k <- round(mean_k)
-          rep_k <- round(rep_k)
-        }
-
         } # End of "if >1 rows"
 
         df1[[col_name_j]][i] <- value_j
 
+        if (mode == "most_recent") {
+          df1[[col_name_year_j]][i] <- most_recent_j
+        }
+
         } # End of evaluation parameters
 
-    } # End of "if below-ground"
+    } # End of "if below-ground" (constant_physical_parameters)
 
     # Update progress bar
 
