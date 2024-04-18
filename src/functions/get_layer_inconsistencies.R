@@ -252,6 +252,13 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
   pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
 
+  if (!"unique_survey_profile" %in% names(pfh)) {
+    pfh <- pfh %>%
+      mutate(unique_survey_profile = paste0(code_country, "_",
+                                            survey_year, "_",
+                                            code_plot, "_",
+                                            profile_pit_id))
+  }
 
 
   # Retrieve prf for information about the eff_soil_depth
@@ -278,18 +285,11 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
   if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
-    prf <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_prf")) %>%
-      rowwise() %>%
-      mutate(eff_soil_depth = ifelse(is.na(.data$eff_soil_depth) &
-                                       any(!is.na(c(.data$rooting_depth,
-                                                    .data$rock_depth,
-                                                    .data$obstacle_depth))),
-                                     # Maximum of these three depths
-                                     max(c(.data$rooting_depth,
-                                           .data$rock_depth,
-                                           .data$obstacle_depth),
-                                         na.rm = TRUE),
-                                     .data$eff_soil_depth))
+    prf <- read.csv("./data/additional_data/S1_PRF_ADDS.csv",
+                    sep = ";") %>%
+      rename(plot_id = PLOTID) %>%
+      mutate(eff_soil_depth = as.numeric(STOCKDEPTH))
+
   }
 
   prf_agg <- prf %>%
@@ -454,10 +454,12 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
                         unique_survey_layer,
                         unique_layer,
                         unique_layer_repetition),
-                      ~ ifelse(code_line %in% layers_to_check,
+                      ~ ifelse((!is.na(.data$code_line)) &
+                                 code_line %in% layers_to_check,
                                str_replace_all(., "M", "H"),
                                .))) %>%
-       mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+       mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                    .data$code_line %in% layers_to_check,
                                   "peat",
                                   .data$layer_type))
 
@@ -484,10 +486,12 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
                         unique_survey_layer,
                         unique_layer,
                         unique_layer_repetition),
-                      ~ ifelse(code_line %in% layers_to_check,
+                      ~ ifelse((!is.na(.data$code_line)) &
+                                 code_line %in% layers_to_check,
                                str_replace_all(., "H", "M"),
                                .))) %>%
-        mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+        mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                     .data$code_line %in% layers_to_check,
                                    "mineral",
                                    .data$layer_type))
 
@@ -533,7 +537,8 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
   if (!identical(layers_to_check, character(0))) {
 
     df <- df %>%
-      mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+      mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                   .data$code_line %in% layers_to_check,
                                  "forest_floor",
                                  .data$layer_type))
 
@@ -562,7 +567,8 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
     if (!identical(layers_to_check, character(0))) {
 
       df <- df %>%
-        mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+        mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                     .data$code_line %in% layers_to_check,
                                    "forest_floor",
                                    .data$layer_type))
 
@@ -593,15 +599,19 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
       df <- df %>%
         mutate(layer_limit_superior =
-                 ifelse(code_line == pull(layer_ol, code_line),
+                 ifelse((!is.na(.data$code_line)) &
+                          code_line == pull(layer_ol, code_line),
                         -28,
-                        ifelse(code_line == pull(layer_of, code_line),
+                        ifelse((!is.na(.data$code_line)) &
+                                 code_line == pull(layer_of, code_line),
                                -23,
                                layer_limit_superior))) %>%
         mutate(layer_limit_inferior =
-                 ifelse(code_line == pull(layer_ol, code_line),
+                 ifelse((!is.na(.data$code_line)) &
+                          code_line == pull(layer_ol, code_line),
                         -23,
-                        ifelse(code_line == pull(layer_of, code_line),
+                        ifelse((!is.na(.data$code_line)) &
+                                 code_line == pull(layer_of, code_line),
                                -5,
                                layer_limit_inferior)))
     }
@@ -614,26 +624,9 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
         layer_limit_superior = ifelse(
           unique_layer_repetition == "2_1993_57_O_1",
           -0.5,
-          layer_limit_superior),
-        layer_number = ifelse(
-          unique_survey_repetition == "2_1993_57_1",
-          ifelse(is.na(layer_number),
-                 1,
-                 layer_number + 1),
-          layer_number))
+          layer_limit_superior))
     }
 
-    if (df$layer_limit_inferior[which(df$unique_layer_repetition ==
-                                      "59_1993_117_H_1")] == -40) {
-
-    df <- df %>%
-      # Estonia
-      mutate(
-        layer_limit_inferior = ifelse(
-          unique_layer_repetition == "59_1993_117_H_1",
-          40,
-          layer_limit_inferior))
-    }
 
     if (all(df$layer_limit_inferior_orig[which(df$unique_survey_repetition ==
                                                "62_2009_5112_5" &
@@ -646,11 +639,15 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
       # Russia
       mutate(layer_limit_superior = ifelse(
         unique_survey_repetition == "62_2009_5112_5",
-        layer_limit_inferior_orig,
+        ifelse(code_layer == "M01",
+               46,
+               layer_limit_inferior_orig),
         layer_limit_superior),
         layer_limit_inferior = ifelse(
           unique_survey_repetition == "62_2009_5112_5",
-          layer_limit_superior_orig,
+          ifelse(code_layer == "M01",
+                 46 + 15,
+                 layer_limit_superior_orig),
           layer_limit_inferior))
     }
 
@@ -811,74 +808,6 @@ vec_bg <- vec[which(df$layer_type[vec] == "mineral" |
 # Determine index of forest floor layers in df
 vec_ff <- vec[which(df$layer_type[vec] == "forest_floor")]
 
-# Special case: Latvian records without code_layer
-# if (unique(df$unique_survey_repetition[vec]) == "64_2004_5_1") {
-#   if (any(is.na(df$code_layer[vec]))) {
-#     vec_ff <- vec[which(is.na(df$code_layer[vec]))]
-#   }
-# }
-
-
-
-
-# Special case: Latvian records without code_layer
-# There are two Latvian records without code_layer, layer_limits,
-# and with only one organic_carbon_total value
-# Assumption: since the other records of the same
-# unique_survey_repetition are M01, M12, M24, M48, and
-# organic_layer_weight is reported, we will assume that these are
-# forest floor layers.
-# Because of the organic_layer_weight information, these records
-# are still valuable for C stock calculations.
-# Deriving which of the records is on top
-# and which is below can only happen based on
-# analysis of the organic_layer_weight in so_som profiles
-# with at least two forest floor layers. This teaches us that
-# it is the most likely that the inferior layer usually has a
-# higher organic_layer_weight than the superior layer.
-# As such, we will name the code_layer of these records so that
-# they will be sorted accordingly.
-# This also matches with the values in the columns "code_line" and
-# "line_nr".
-#
-# if (!identical(vec_ff, integer(0))) {
-# if (unique(df$unique_survey_repetition[vec_ff]) == "64_2004_5_1") {
-#   if (all(is.na(df$code_layer[vec_ff]))) {
-#
-#     ind_superior <-
-#       vec_ff[which(df$organic_layer_weight[vec_ff] ==
-#                      min(df$organic_layer_weight[vec_ff]))]
-#
-#     ind_inferior <-
-#       vec_ff[which(df$organic_layer_weight[vec_ff] ==
-#                      max(df$organic_layer_weight[vec_ff]))]
-#
-#     df$code_layer[ind_superior] <- "OL"
-#     df$code_layer[ind_inferior] <- "OFH"
-#
-#     df$unique_survey_layer[vec_ff] <-
-#       paste0(df$code_country[vec_ff], "_",
-#              df$survey_year[vec_ff], "_",
-#              df$code_plot[vec_ff], "_",
-#              df$code_layer[vec_ff])
-#
-#     df$unique_layer_repetition[vec_ff] <-
-#       paste0(df$code_country[vec_ff], "_",
-#              df$survey_year[vec_ff], "_",
-#              df$code_plot[vec_ff], "_",
-#              df$code_layer[vec_ff], "_",
-#              df$repetition[vec_ff])
-#
-#     df$unique_layer[vec_ff] <-
-#       paste0(df$code_country[vec_ff], "_",
-#              df$code_plot[vec_ff], "_",
-#              df$code_layer[vec_ff])
-#
-#     df$layer_type[vec_ff] <- "forest_floor"
-#   }
-# }
-# }
-
 
 
 
@@ -910,28 +839,21 @@ if (which(survey_repetitions_som == unique_survey_repetition_i) == 1) {
 
 vec_som <- which(df$plot_id == plot_id_i)
 vec_pfh <- which(pfh$plot_id == plot_id_i)
-# vec_som_other <- which(som_other$plot_id == plot_id_i)
-# vec_pfh_other <- which(pfh_other$plot_id == plot_id_i)
+
 
 # Determine which unique_survey_repetitions exist for the given plot_id
 # in the three other survey_forms
 
 survey_repetitions_pfh <-
   unique(pfh$unique_survey_profile[which(pfh$plot_id == plot_id_i)])
-# survey_repetitions_som_other <-
-#   unique(som_other$unique_survey_repetition[
-#     which(som_other$plot_id == plot_id_i)])
-# survey_repetitions_pfh_other <-
-#   unique(pfh_other$unique_survey_profile[
-#     which(pfh_other$plot_id == plot_id_i)])
+
 
 # Create a list with layer names of the forest floor layers
 # This step is not required to find out the inconsistencies
 
 forest_floor_layers_som <- NULL
 forest_floor_layers_pfh <- NULL
-# forest_floor_layers_som_other <- NULL
-# forest_floor_layers_pfh_other <- NULL
+
 
 # Create a data frame with metadata of the repetitions that exist for the
 # given plot_id
@@ -975,40 +897,6 @@ pfh_ff_i$repetition_profile_pit_id <-
   as.character(pfh_ff_i$repetition_profile_pit_id)
 
 
-
-# som_other_ff_i <- som_other[vec_som_other[
-#   which(!duplicated(som_other$unique_survey_repetition[vec_som_other]))],
-#         which(names(som_other) %in% c("partner_code", "survey_year",
-#                                       "code_plot", "plot_id",
-#                                       "repetition",
-#                                       "unique_survey_repetition"))]
-#
-# names(som_other_ff_i)[
-#   which(names(som_other_ff_i) == "repetition")] <-
-#   "repetition_profile_pit_id"
-#
-# som_other_ff_i$repetition_profile_pit_id <-
-#   as.integer(som_other_ff_i$repetition_profile_pit_id)
-#
-#
-#
-# pfh_other_ff_i <- pfh_other[vec_pfh_other[
-#   which(!duplicated(pfh_other$unique_survey_profile[vec_pfh_other]))],
-#           which(names(pfh_other) %in% c("partner_code", "survey_year",
-#                                         "code_plot", "plot_id",
-#                                         "profile_pit_id",
-#                                         "unique_survey_profile"))]
-#
-# names(pfh_other_ff_i)[
-#   which(names(pfh_other_ff_i) == "profile_pit_id")] <-
-#   "repetition_profile_pit_id"
-#
-# names(pfh_other_ff_i)[
-#   which(names(pfh_other_ff_i) == "unique_survey_profile")] <-
-#   "unique_survey_repetition"
-#
-# pfh_other_ff_i$repetition_profile_pit_id <-
-#   as.integer(pfh_other_ff_i$repetition_profile_pit_id)
 
 
 # Merge these four dataframes to one data_frame "list_ff_meta_i"
@@ -1082,62 +970,7 @@ for (j in 1:(length(survey_repetitions_som) +
     names(forest_floor_layers_pfh)[j_pfh] <-
       as.character(survey_repetitions_pfh[j_pfh])
 
-    } # else
-
-    # # som_other
-    #
-    # if ((length(survey_repetitions_som_other) > 0) &&
-    #     (j > (length(survey_repetitions_som) +
-    #           length(survey_repetitions_pfh))) &&
-    #     (j <= length(c(survey_repetitions_som, survey_repetitions_pfh,
-    #                    survey_repetitions_som_other)))) {
-    #
-    #   j_som_other <- (j - (length(survey_repetitions_som) +
-    #                          length(survey_repetitions_pfh)))
-    #
-    #   vec_som_other_j <- which(som_other$unique_survey_repetition ==
-    #                              survey_repetitions_som_other[j_som_other])
-    #
-    #   forest_floor_j <- as.character(som_other$code_layer[vec_som_other_j[
-    #               which(som_other$layer_type[vec_som_other_j] ==
-    #                       "forest_floor")]])
-    #
-    #   list_ff_meta_i$number_ff_layers[j] <- length(forest_floor_j)
-    #
-    #   forest_floor_layers_som_other <- append(forest_floor_layers_som_other,
-    #                                     list(forest_floor_j))
-    #
-    #   names(forest_floor_layers_som_other)[j_som_other] <-
-    #             as.character(survey_repetitions_som_other[j_som_other])
-    #
-    # } else
-    #
-    # # pfh_other
-    #
-    # if ((length(survey_repetitions_pfh_other) > 0) &&
-    #     (j > (length(survey_repetitions_som) + length(survey_repetitions_pfh) +
-    #           length(survey_repetitions_som_other)))) {
-    #
-    #   j_pfh_other <- (j - (length(survey_repetitions_som) +
-    #                          length(survey_repetitions_pfh) +
-    #                          length(survey_repetitions_som_other)))
-    #
-    #   vec_pfh_other_j <- which(pfh_other$unique_survey_profile ==
-    #                              survey_repetitions_pfh_other[j_pfh_other])
-    #
-    #   forest_floor_j <- as.character(pfh_other$horizon_master[vec_pfh_other_j[
-    #               which(pfh_other$layer_type[vec_pfh_other_j] ==
-    #                       "forest_floor")]])
-    #
-    #   list_ff_meta_i$number_ff_layers[j] <- length(forest_floor_j)
-    #
-    #   forest_floor_layers_pfh_other <- append(forest_floor_layers_pfh_other,
-    #                                     list(forest_floor_j))
-    #
-    #   names(forest_floor_layers_pfh_other)[j_pfh_other] <-
-    #             as.character(survey_repetitions_pfh_other[j_pfh_other])
-    #
-    # }
+    }
   }
 
 
@@ -1347,10 +1180,7 @@ for (j in 1:(length(survey_repetitions_som) +
 
    vec_ff_som <- vec_som[which(df$layer_type[vec_som] == "forest_floor")]
    vec_ff_pfh <- vec_pfh[which(pfh$layer_type[vec_pfh] == "forest_floor")]
-   # vec_ff_som_other <-
-   #   vec_som_other[which(som_other$layer_type[vec_som_other] == "forest_floor")]
-   # vec_ff_pfh_other <-
-   #   vec_pfh_other[which(pfh_other$layer_type[vec_pfh_other] == "forest_floor")]
+
 
    # Store information about the inconsistency in "list_layer_inconsistencies"
 
@@ -1359,12 +1189,6 @@ for (j in 1:(length(survey_repetitions_som) +
    # Report original code_layer if code_layer may have been changed
    # (possibly in "s1_som" due to FSCC_47)
 
-   # if ("code_layer_orig" %in% names(som_other)) {
-   #     vec_code_layer <-
-   #       as.character(som_other$code_layer_orig[vec_ff_som_other])
-   #   } else {
-   #     vec_code_layer <- as.character(som_other$code_layer[vec_ff_som_other])
-   #   }
 
    # "so_som"
 
@@ -1423,69 +1247,6 @@ for (j in 1:(length(survey_repetitions_som) +
                 change_date = pfh$change_date[vec_ff_pfh],
                 download_date = rep(download_date_pir, length(vec_ff_pfh))))
    }
-
-   # "s1_som"
-
-   # if (!identical(vec_ff_som_other, integer(0))) {
-   # list_layer_inconsistencies <- rbind(
-   #   list_layer_inconsistencies,
-   #   data.frame(survey_form = (rep(survey_3, length(vec_ff_som_other))),
-   #              partner = som_other$partner[vec_ff_som_other],
-   #              partner_code = som_other$partner_code[vec_ff_som_other],
-   #              country = som_other$country[vec_ff_som_other],
-   #              code_country = som_other$code_country[vec_ff_som_other],
-   #              survey_year = som_other$survey_year[vec_ff_som_other],
-   #              code_plot = som_other$code_plot[vec_ff_som_other],
-   #              plot_id = som_other$plot_id[vec_ff_som_other],
-   #              code_layer_horizon_master = vec_code_layer,
-   #              repetition_profile_pit_id =
-   #                som_other$repetition[vec_ff_som_other],
-   #              code_line = som_other$code_line[vec_ff_som_other],
-   #              parameter = (rep("code_layer", length(vec_ff_som_other))),
-   #              parameter_unit = (rep(NA, length(vec_ff_som_other))),
-   #              parameter_value =  vec_code_layer,
-   #              inconsistency_reason = inconsistency_reason,
-   #              inconsistency_type = inconsistency_type,
-   #              rule_id = rule_id,
-   #              non_duplicated_error_type_per_record =
-   #                rep(FALSE, length(vec_ff_som_other)),
-   #              change_date = som_other$change_date[vec_ff_som_other],
-   #              download_date = rep(download_date_pir,
-   #                                  length(vec_ff_som_other))))
-   # }
-   #
-   # # "s1_pfh"
-   #
-   # if (!identical(vec_ff_pfh_other, integer(0))) {
-   #
-   # list_layer_inconsistencies <- rbind(
-   #   list_layer_inconsistencies,
-   #   data.frame(survey_form = (rep(survey_4, length(vec_ff_pfh_other))),
-   #              partner = pfh_other$partner[vec_ff_pfh_other],
-   #              partner_code = pfh_other$partner_code[vec_ff_pfh_other],
-   #              country = pfh_other$country[vec_ff_pfh_other],
-   #              code_country = pfh_other$code_country[vec_ff_pfh_other],
-   #              survey_year = pfh_other$survey_year[vec_ff_pfh_other],
-   #              code_plot = pfh_other$code_plot[vec_ff_pfh_other],
-   #              plot_id = pfh_other$plot_id[vec_ff_pfh_other],
-   #              code_layer_horizon_master =
-   #                pfh_other$horizon_master[vec_ff_pfh_other],
-   #              repetition_profile_pit_id =
-   #                pfh_other$profile_pit_id[vec_ff_pfh_other],
-   #              code_line = pfh_other$code_line[vec_ff_pfh_other],
-   #              parameter = (rep("horizon_master", length(vec_ff_pfh_other))),
-   #              parameter_unit = (rep(NA, length(vec_ff_pfh_other))),
-   #              parameter_value =
-   #                as.character(pfh_other$horizon_master[vec_ff_pfh_other]),
-   #              inconsistency_reason = inconsistency_reason,
-   #              inconsistency_type = inconsistency_type,
-   #              rule_id = rule_id,
-   #              non_duplicated_error_type_per_record =
-   #                rep(FALSE, length(vec_ff_pfh_other)),
-   #              change_date = pfh_other$change_date[vec_ff_pfh_other],
-   #              download_date = rep(download_date_pir,
-   #                                  length(vec_ff_pfh_other))))
-   # }
 
    # Change "non_duplicated_error_type_per_record" so that there is only one
    # unique inconsistency per plot_id
@@ -2511,154 +2272,8 @@ vec_empty_layer_limit_inferior <-
 # TO DO Option 2.1: Can we fill these layers based on pfh? ----
 # (only for forest floor layers)
 
-# vec_ff_empty_superior <- vec[which(
-#   is.na(df$layer_limit_superior[vec]) &
-#     df$layer_type[vec] == "forest_floor")]
-#
-# vec_ff_empty_inferior <- vec[which(
-#   is.na(df$layer_limit_inferior[vec]) &
-#     df$layer_type[vec] == "forest_floor")]
-
-# If there are any forest floor layers with unknown layer limits
-
-# if (!identical(vec_ff_empty_superior, integer(0)) ||
-#     !identical(vec_ff_empty_inferior, integer(0))) {
-#
-#   # The survey_year may differ a bit. Determine the unique_surveys in which
-#   # a match in "pfh" may be possible
-#
-# source("./src/functions/expand_unique_survey_vec_adjacent_years.R")
-#
-# unique_survey_i <- unique(df$unique_survey[vec])
-# unique_survey_expanded_i <-
-#   expand_unique_survey_vec_adjacent_years(unique_survey_vec = unique_survey_i,
-#                                           number_of_years = 4)
-#
-#   # Get the index of the plot survey in pfh
-#
-# vec_pfh <- which(pfh$unique_survey %in% unique_survey_expanded_i) # In pfh
-#
-#   # Fill empty cells in layer_limit_superior
-#
-# if (!identical(vec_pfh, integer(0))) { # If this plot survey is in pfh
-#
-#   # If any
-#
-#   # match_key_forest_floors  <- rbind(
-#   #   match_key_forest_floors ,
-#   #   data.frame(unique_survey_repetition = NULL,
-#   #              code_layer = NULL,
-#   #              code_layers_pfh = NULL,
-#   #              layer_limit_superior = NULL,
-#   #              layer_limit_inferior = NULL))
-#
-#
-#
-#   # Check if there are empty cells in layer_limit_superior
-#
-# if (!identical(vec_empty_layer_limit_superior, integer(0))) {
-#
-# for (j in vec_empty_layer_limit_superior) {
-#
-#   if ("code_layer_orig" %in% names(df)) {
-#     vec_code_layer <- as.character(df$code_layer_orig[j])
-#   } else {
-#     vec_code_layer <- as.character(df$code_layer[j])
-#   }
-#
-#   # Check if code_layer is in pfh
-#
-#   vec_pfh_match <- which(vec_code_layer == pfh$horizon_master[vec_pfh])
-#
-#   if (!identical(vec_pfh_match, integer(0)) &&
-#       length(vec_pfh_match) == 1) {
-#
-#     df$layer_limit_superior[j] <-
-#       pfh$horizon_limit_up[vec_pfh[
-#         match(vec_code_layer, pfh$horizon_master[vec_pfh])]]
-#
-#   } else
-#
-#           # For OLF and OFH layers,
-#           # match the code_layer with OL-OF and OF-OH in pfh respectively
-#
-#           if (vec_code_layer == "OLF" &&
-#               !is.na(match("OL", pfh$horizon_master[vec_pfh])) &&
-#               !is.na(match("OF", pfh$horizon_master[vec_pfh]))) {
-#
-#               df$layer_limit_superior[j] <-
-#                 pfh$horizon_limit_up[vec_pfh[
-#                   match("OL", pfh$horizon_master[vec_pfh])]]
-#
-#               } else
-#
-#           if (vec_code_layer == "OFH" &&
-#               !is.na(match("OF", pfh$horizon_master[vec_pfh])) &&
-#               !is.na(match("OH", pfh$horizon_master[vec_pfh]))) {
-#
-#               df$layer_limit_superior[j] <-
-#                 pfh$horizon_limit_up[vec_pfh[
-#                   match("OF", pfh$horizon_master[vec_pfh])]]
-#
-#               }
-#     }
-#   }
-#
-#
-#   # Fill empty cells in layer_limit_inferior
-#
-#   # Check if there are empty cells in layer_limit_inferior
-#
-#  if (!identical(vec_empty_layer_limit_inferior, integer(0))) {
-#
-#  for (j in vec_empty_layer_limit_inferior) {
-#
-#   # If code_layer is in pfh
-#
-#    if ("code_layer_orig" %in% names(df)) {
-#      vec_code_layer <- as.character(df$code_layer_orig[j])
-#    } else {
-#        vec_code_layer <- as.character(df$code_layer[j])
-#    }
-#
-#    # Check if code_layer is in pfh
-#
-#    vec_pfh_match <- which(vec_code_layer == pfh$horizon_master[vec_pfh])
-#
-#    if (!identical(vec_pfh_match, integer(0)) &&
-#        length(vec_pfh_match) == 1) {
-#
-#      df$layer_limit_inferior[j] <-
-#        pfh$horizon_limit_low[vec_pfh[
-#          match(vec_code_layer, pfh$horizon_master[vec_pfh])]]
-#
-#     } else
-#
-#           # For OLF and OFH layers,
-#           # match the code_layer with OL-OF and OF-OH in pfh respectively
-#
-#           if (vec_code_layer == "OLF" &&
-#               !is.na(match("OL", pfh$horizon_master[vec_pfh])) &&
-#               !is.na(match("OF", pfh$horizon_master[vec_pfh]))) {
-#
-#               df$layer_limit_inferior[j] <-
-#                pfh$horizon_limit_low[vec_pfh[
-#                  match("OF", pfh$horizon_master[vec_pfh])]]
-#
-#               } else
-#           if (vec_code_layer == "OFH" &&
-#               !is.na(match("OF", pfh$horizon_master[vec_pfh])) &&
-#               !is.na(match("OH", pfh$horizon_master[vec_pfh]))) {
-#
-#               df$layer_limit_inferior[j] <-
-#                 pfh$horizon_limit_low[vec_pfh[
-#                   match("OH", pfh$horizon_master[vec_pfh])]]
-#
-#               }
-#     }
-#    }
-# } # End of "if this plot survey is in 'pfh'"
-# }
+# Forest floor layers with known layer limits in "pfh" always have
+# known layer limits in "som" too
 
 
 # Option 2.2: Can we fill these layers based on d_depth_level_soil? ----
@@ -3080,11 +2695,13 @@ if (any(df$layer_type[vec] == "mineral")) {
                         unique_survey_layer,
                         unique_layer,
                         unique_layer_repetition),
-                      ~ ifelse(code_line %in% pull(lines_to_be_consistent,
+                      ~ ifelse((!is.na(.data$code_line)) &
+                                 code_line %in% pull(lines_to_be_consistent,
                                                    code_line),
                                str_replace_all(., "M", "H"),
                                .))) %>%
-        mutate(layer_type = ifelse(.data$code_line %in%
+        mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                     .data$code_line %in%
                                      pull(lines_to_be_consistent,
                                           code_line),
                                    "peat",
@@ -3208,23 +2825,7 @@ if (length(vec) >= 2) {
   }
 
 
-  # Assure that no forest floors are thicker than 40 cm
 
-  # if (any(df$layer_type[vec] == "forest_floor")) {
-  #
-  #   source("./src/functions/summarise_profile_per_depth_layer_type.R")
-  #
-  #   df_sub <- summarise_profile_per_depth_layer_type(df_profile = df[vec, ])
-  #
-  #   # Take the first forest floor layer only,
-  #   # because there may be buried forest floor layers
-  #
-  #   if ("forest_floor" %in% df_sub$layer_type) {
-  #   assertthat::assert_that(
-  #     df_sub$total_thickness[which(df_sub$layer_type ==
-  #      "forest_floor")][1] <= 40)
-  #   }
-  # }
 
   # Forest floors thicker than 40 cm ----
 
@@ -3246,10 +2847,6 @@ if (length(vec) >= 2) {
 
       # Take the first forest floor layer only,
       # because there may be buried forest floor layers
-
-      # assertthat::assert_that(
-      #   df_sub$total_thickness[which(
-      #     df_sub$layer_type == "forest_floor")][1] <= 40)
 
       if (df_sub$total_thickness[which(
         df_sub$layer_type == "forest_floor")][1] > 40) {
@@ -3614,6 +3211,8 @@ if (any(!is.na(df$layer_number[vec])) &&
              (round(prev_layer_limit_inferior, 1) ==
                 round(next_layer_limit_superior, 1)))
 
+  if (nrow(layers_redundant) > 0) {
+
   assertthat::assert_that(all(pull(layers_redundant, layer_type) != "mineral"))
 
   assertthat::assert_that(
@@ -3628,9 +3227,11 @@ if (any(!is.na(df$layer_number[vec])) &&
   for (j in seq_along(pull(layers_redundant, code_line))) {
 
     layers_redundant_j <- layers_redundant %>%
-      filter(code_line == pull(layers_redundant, code_line)[j])
+      filter((!is.na(.data$code_line)) &
+               code_line == pull(layers_redundant, code_line)[j])
 
-    ind_j <- which(df$code_line == pull(layers_redundant, code_line)[j])
+    ind_j <- which((!is.na(df$code_line)) &
+                     df$code_line == pull(layers_redundant, code_line)[j])
 
     # If the organic_layer_weight or the organic_carbon_content
     # are known:
@@ -3660,344 +3261,9 @@ if (any(!is.na(df$layer_number[vec])) &&
          na.last = "keep")
 
 } # End of "if any additional redundant layers"
+}
 
 
-
-
-
-
-
-
-  # # Check if at least one of the layers has layer limit information
-  #
-  # if (any(!is.na(df$layer_limit_inferior[vec]) &
-  #         !is.na(df$layer_limit_superior[vec]))) {
-  #
-  # # Which layers have layer limit information?
-  #
-  # # Rank forest floors without layer limit information
-  #
-  #   if (!identical(vec_ff, integer(0)) &&
-  #       (all(is.na(df$layer_limit_inferior[vec_ff])) ||
-  #       all(is.na(df$layer_limit_superior[vec_ff])))) {
-  #
-  #   # If there is one forest floor layer
-  #
-  #     if (length(vec_ff) == 1) {
-  #       df$layer_number[vec_ff] <- 1
-  #       } else
-  #
-  #    # If there are two forest floor layers
-  #    # use the data frame "layer_number_two_forest_floor_layers"
-  #
-  #       if (length(vec_ff) == 2) {
-  #
-  #
-  #         layers <- df$code_layer[vec_ff]
-  #
-  #       # Assert that the forest floor combination exists in
-  #       # layer_number_two_forest_floor_layers
-  #
-  #         # Generate all combinations of two unique values
-  #         all_combinations <-
-  #           apply(
-  #             layer_number_two_forest_floor_layers[,
-  #                       3:ncol(layer_number_two_forest_floor_layers)], 2,
-  #                 FUN = function(x) paste(x, collapse = "_"))
-  #
-  #         # Combine the original combinations with their opposites
-  #         all_combinations <-
-  #           unique(c(all_combinations,
-  #                    unlist(map(all_combinations,
-  #                        .f = function(x) paste(rev(strsplit(x, "_")[[1]]),
-  #                                               collapse = "_")))))
-  #
-  #         assertthat::assert_that(
-  #           paste(df$code_layer[vec_ff], collapse = "_") %in% all_combinations,
-  #           msg = paste0("Unknown combination of two forest floor layers ('",
-  #                        df$code_layer[vec_ff[1]], "' and '",
-  #                        df$code_layer[vec_ff[2]],
-  #                        "')."))
-  #
-  #
-  #       # If the forest floor layers are called "O" and "O2",
-  #       # the forest floor layer sequence depends on the partner code
-  #       # (based on exploration of the % OC data)
-  #
-  #       if (!is.na(match(layers[1],
-  #                        layer_number_two_forest_floor_layers[, 3])) &&
-  #           !is.na(match(layers[2],
-  #                        layer_number_two_forest_floor_layers[, 3]))) {
-  #
-  #       # If the profile has partner_code 3204
-  #       if (df$partner_code[vec[1]] == 3204) {
-  #
-  #       if (df$code_layer[vec_ff[1]] ==
-  #           layer_number_two_forest_floor_layers[1, 4]) {
-  #
-  #               df$layer_number[vec_ff[1]] <- 1
-  #               df$layer_number[vec_ff[2]] <- 2
-  #
-  #               } else {
-  #
-  #               df$layer_number[vec_ff[1]] <- 2
-  #               df$layer_number[vec_ff[2]] <- 1
-  #
-  #               }
-  #         } else {
-  #
-  #       # If the profile does not have partner_code 3204
-  #       if (df$code_layer[vec_ff[1]] ==
-  #            layer_number_two_forest_floor_layers[1, 3]) {
-  #
-  #               df$layer_number[vec_ff[1]] <- 1
-  #               df$layer_number[vec_ff[2]] <- 2
-  #
-  #               } else {
-  #               df$layer_number[vec_ff[1]] <- 2
-  #               df$layer_number[vec_ff[2]] <- 1
-  #
-  #               }
-  #         }
-  #         } else {
-  #
-  #       # If the forest floor layers are not called "O" and "O2"
-  #
-  #        for (j in c(5:ncol(layer_number_two_forest_floor_layers))) {
-  #
-  #               if (!is.na(match(layers[1],
-  #                                layer_number_two_forest_floor_layers[, j])) &&
-  #                    !is.na(match(layers[2],
-  #                                 layer_number_two_forest_floor_layers[, j]))) {
-  #
-  #               if (df$code_layer[vec_ff[1]] ==
-  #                   layer_number_two_forest_floor_layers[1, j]) {
-  #
-  #                   df$layer_number[vec_ff[1]] <- 1
-  #                   df$layer_number[vec_ff[2]] <- 2
-  #
-  #                   } else {
-  #                   df$layer_number[vec_ff[1]] <- 2
-  #                   df$layer_number[vec_ff[2]] <- 1
-  #
-  #                   }
-  #                 }
-  #          }
-  #       }
-  #       } else
-  #
-  #
-  #   # If there are three forest floor layers
-  #   # use the data frame "layer_number_three_forest_floor_layers"
-  #
-  #       if (length(vec_ff) == 3) {
-  #
-  #       layers <- df$code_layer[vec_ff]
-  #
-  #       # Assert that the combination of three forest floor layers is known
-  #
-  #       # Test if all elements of layers are in either the
-  #       # second or third column
-  #
-  #       assertthat::assert_that(
-  #         all(layers %in% layer_number_three_forest_floor_layers[, 2]) ||
-  #         all(layers %in% layer_number_three_forest_floor_layers[, 3]),
-  #         msg = paste0("Unknown combination of three forest floor layers ('",
-  #                      df$code_layer[vec_ff[1]], "', '",
-  #                      df$code_layer[vec_ff[2]], "' and '",
-  #                      df$code_layer[vec_ff[3]],
-  #                      "')."))
-  #
-  #       col_table <- ifelse(
-  #         all(layers %in% layer_number_three_forest_floor_layers[, 2]),
-  #         2,
-  #         ifelse(
-  #           all(layers %in% layer_number_three_forest_floor_layers[, 3]),
-  #           3,
-  #           NA)) # In theory NA won't appear
-  #
-  #
-  #       df$layer_number[vec_ff[
-  #         match(layer_number_three_forest_floor_layers[1, col_table],
-  #               layers)]] <- 1
-  #       df$layer_number[vec_ff[
-  #         match(layer_number_three_forest_floor_layers[2, col_table],
-  #               layers)]] <- 2
-  #       df$layer_number[vec_ff[
-  #         match(layer_number_three_forest_floor_layers[3, col_table],
-  #               layers)]] <- 3
-  #
-  #       }
-  #     }
-  #
-  #
-  #
-  #
-  #
-  #
-  #
-  #
-  #   # Rank forest floor layers with layer limit information
-  #
-  #   vec_ff_to_rank <- vec[which(df$layer_type[vec] == "forest_floor" &
-  #                                 is.na(df$layer_number[vec]) &
-  #                                 !is.na(df$layer_limit_superior[vec]) &
-  #                                 !is.na(df$layer_limit_inferior[vec]) &
-  #                                 df$layer_limit_superior[vec] <= 0 &
-  #                                 df$layer_limit_inferior[vec] <= 0)]
-  #
-  #   if (!identical(vec_ff_to_rank,
-  #                  integer(0))) {
-  #
-  #     if (all(is.na(df$layer_number[vec]))) {
-  #       layer_number_max <- 0
-  #     } else {
-  #       layer_number_max <- as.numeric(max(df$layer_number[vec],
-  #                                          na.rm = TRUE))
-  #     }
-  #
-  #     # Rank the forest floor layers based on layer_limit_superior
-  #
-  #     df$layer_number[vec_ff_to_rank] <-
-  #       rank(as.numeric(df$layer_limit_superior[
-  #         vec_ff_to_rank]),
-  #         na.last = "keep") +
-  #       layer_number_max
-  #
-  #   }
-  #
-  #   # Rank the remaining layers that have layer limit information
-  #
-  #  # Check which layers have layer limit information but no layer number yet
-  #
-  #       # Check if there are any layers which do not have a layer number
-  #       # but which do have known layer limits
-  #
-  #     if (!identical(which(is.na(df$layer_number[vec]) &
-  #                          !is.na(df$layer_limit_superior[vec]) &
-  #                          !is.na(df$layer_limit_inferior[vec])),
-  #                    integer(0))) {
-  #
-  #     vec_nonempty <- vec[which(is.na(df$layer_number[vec]) &
-  #                                !is.na(df$layer_limit_superior[vec]) &
-  #                                !is.na(df$layer_limit_inferior[vec]))]
-  #
-  #   # Check if any layer_number(s) have already been assigned for forest
-  #   # floor layers in the given profile by means of 'layer_number_max',
-  #   # which equals the maximum existing layer number or 0
-  #
-  #         if (all(is.na(df$layer_number[vec]))) {
-  #           layer_number_max <- 0
-  #           } else {
-  #
-  #            # Maximum layer number that has already been assigned
-  #
-  #         layer_number_max <- as.numeric(max(df$layer_number[vec],
-  #                                            na.rm = TRUE))
-  #         }
-  #
-  #         vec_nonempty_remaining <- vec_nonempty
-  #
-  #
-  #         # "M01" overlaps with "M05" and "M51"
-  #         # If these three layers co-exist:
-  #         # - In "df$layer_number", "M01" is hence considered "redundant",
-  #         #   Because of which it doesn't get a layer number in
-  #         #   "df$layer_number"
-  #
-  #         if (!identical(which(df$code_layer[vec_nonempty] == "M01"),
-  #                        integer(0)) &&
-  #             !identical(which(df$code_layer[vec_nonempty] == "M05"),
-  #                        integer(0)) &&
-  #             !identical(which(df$code_layer[vec_nonempty] == "M51"),
-  #                        integer(0))) {
-  #
-  #         df$layer_number[vec_nonempty[
-  #           which(df$code_layer[vec_nonempty] == "M05")]] <-
-  #            1 + layer_number_max
-  #
-  #          df$layer_number[vec_nonempty[
-  #            which(df$code_layer[vec_nonempty] == "M51")]] <-
-  #            2 + layer_number_max
-  #
-  #
-  #          # Update 'vec_nonempty_remaining' so that it no longer contains
-  #          # the row indices of these layers
-  #
-  #          vec_nonempty_remaining <- vec_nonempty[
-  #            which(df$code_layer[vec_nonempty] != "M05" &
-  #                  df$code_layer[vec_nonempty] != "M51" &
-  #                  df$code_layer[vec_nonempty] != "M01")]
-  #          }
-  #
-  #         if (!identical(vec_nonempty_remaining, integer(0))) {
-  #
-  #          # Check if the ranking based on layer_limit_superior is the same
-  #          # like the ranking based on layer_limit_inferior
-  #
-  #          if (identical(rank(as.numeric(df$layer_limit_superior[
-  #                                        vec_nonempty_remaining]),
-  #                             na.last = "keep"),
-  #                        rank(as.numeric(df$layer_limit_inferior[
-  #                                        vec_nonempty_remaining]),
-  #                             na.last = "keep"))) {
-  #
-  #              # Update 'layer_number_max'
-  #
-  #              if (all(is.na(df$layer_number[vec]))) {
-  #
-  #                layer_number_max <- 0
-  #
-  #              } else {
-  #
-  #                layer_number_max <- as.numeric(max(df$layer_number[vec],
-  #                                                   na.rm = TRUE))
-  #                  }
-  #
-  #              # Rank the remaining layers based on layer_limit_superior
-  #
-  #               df$layer_number[vec_nonempty_remaining] <-
-  #                 rank(as.numeric(df$layer_limit_superior[
-  #                                       vec_nonempty_remaining]),
-  #                      na.last = "keep") +
-  #                 layer_number_max
-  #
-  #               } else {
-  #
-  #       # If there is a difference between ranking layer_limit_superior
-  #       # vs ranking layer_limit_inferior:
-  #
-  #          source("./src/functions/get_redundant_layers.R")
-  #
-  #          redundant_layers <- get_redundant_layers(
-  #                     layers =
-  #                       df$code_layer[vec_nonempty_remaining],
-  #                     superior_layer_limits =
-  #                       df$layer_limit_superior[vec_nonempty_remaining],
-  #                     inferior_layer_limits =
-  #                       df$layer_limit_inferior[vec_nonempty_remaining],
-  #                     df_sub =
-  #                       as.data.frame(df[vec_nonempty_remaining, ])) %>%
-  #            filter(redundancy_type == 0)
-  #
-  #          vec_non_redundant <-
-  #            vec_nonempty_remaining[which(
-  #              !df$code_layer[vec_nonempty_remaining] %in%
-  #                c(redundant_layers$layer,
-  #                  redundant_layers$combined_layer))]
-  #
-  #          # Rank the remaining non-redundant layers
-  #          # based on layer_limit_superior
-  #
-  #          df$layer_number[vec_non_redundant] <-
-  #            rank(as.numeric(df$layer_limit_superior[
-  #                                   vec_non_redundant]),
-  #                 na.last = "keep") +
-  #            layer_number_max
-  #               }
-  #     }
-  #     }
-  #     }
 
 
 
@@ -4253,6 +3519,23 @@ setTxtProgressBar(progress_bar, i)
 
 if (!isTRUE(getOption("knitr.in.progress"))) {
 close(progress_bar)
+}
+
+# Solve issue with Estonian layer limits
+
+if (survey_form == "s1_som") {
+
+if (df$layer_limit_inferior[which(df$unique_layer_repetition ==
+                                  "59_1993_117_H_1")] == -40) {
+
+  df <- df %>%
+    # Estonia
+    mutate(
+      layer_limit_inferior = ifelse(
+        unique_layer_repetition == "59_1993_117_H_1",
+        40,
+        layer_limit_inferior))
+}
 }
 
 # Final dataset preparations ----
@@ -4779,7 +4062,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       if (!identical(layers_to_check, character(0))) {
 
         df <- df %>%
-          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+          mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                       .data$code_line %in% layers_to_check,
                                      "mineral",
                                      .data$layer_type))
 
@@ -4892,7 +4176,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       if (!identical(layers_to_check, character(0))) {
 
         df <- df %>%
-          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+          mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                       .data$code_line %in% layers_to_check,
                                      "mineral",
                                      .data$layer_type))
 
@@ -4966,7 +4251,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       if (!identical(layers_to_check, character(0))) {
 
         df <- df %>%
-          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+          mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                       .data$code_line %in% layers_to_check,
                                      "peat",
                                      .data$layer_type))
 
@@ -5014,7 +4300,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       if (!identical(layers_to_check, character(0))) {
 
         df <- df %>%
-          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+          mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                       .data$code_line %in% layers_to_check,
                                      "forest_floor",
                                      .data$layer_type))
 
@@ -5039,7 +4326,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       if (!identical(layers_to_check, character(0))) {
 
         df <- df %>%
-          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+          mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                       .data$code_line %in% layers_to_check,
                                      "forest_floor",
                                      .data$layer_type))
 
@@ -5061,7 +4349,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       if (!identical(layers_to_check, character(0))) {
 
         df <- df %>%
-          mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
+          mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                       .data$code_line %in% layers_to_check,
                                      "peat",
                                      .data$layer_type))
 
@@ -6186,7 +5475,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
             layer_to_check <- layer_to_check %>%
               filter(horizon_clay > 40)
 
-            df$layer_number[which(
+            df$layer_number[which((!is.na(df$code_line)) &
               df$code_line == pull(layer_to_check, code_line))] <- NA
 
             df$layer_number[vec] <- rank(as.numeric(df$layer_number[vec]),
@@ -6425,9 +5714,11 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       for (j in seq_along(pull(layers_redundant, code_line))) {
 
         layers_redundant_j <- layers_redundant %>%
-          filter(code_line == pull(layers_redundant, code_line)[j])
+          filter((!is.na(.data$code_line)) &
+                   code_line == pull(layers_redundant, code_line)[j])
 
-        ind_j <- which(df$code_line == pull(layers_redundant, code_line)[j])
+        ind_j <- which((!is.na(df$code_line)) &
+                         df$code_line == pull(layers_redundant, code_line)[j])
 
         # If the organic_layer_weight or the organic_carbon_content
         # are known:
@@ -7063,7 +6354,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
             #                                            code_line),
             #                        str_replace_all(., "M", "H"),
             #                        .))) %>%
-            mutate(layer_type = ifelse(.data$code_line %in%
+            mutate(layer_type = ifelse((!is.na(.data$code_line)) &
+                                         .data$code_line %in%
                                          pull(lines_to_be_consistent,
                                               code_line),
                                        "peat",
