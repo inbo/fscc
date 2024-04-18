@@ -250,7 +250,10 @@ harmonise_layer_to_depths <- function(limit_sup,
 
     if (mode == "numeric") {
 
-      result <- sum(df_sub_selected[[parameter_name]] * df_sub_selected$weight)
+      result <-
+        round(sum(df_sub_selected[[parameter_name]] * df_sub_selected$weight),
+              2)
+
 
     } else
 
@@ -264,6 +267,6 @@ harmonise_layer_to_depths <- function(limit_sup,
       }
   }
 
-  return(round(result, 2))
+  return(result)
 
 }
