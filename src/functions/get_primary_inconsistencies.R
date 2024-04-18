@@ -1399,10 +1399,6 @@ get_primary_inconsistencies <- function(code_survey,
 
       df <- df %>%
         mutate(
-          layer_number = ifelse(
-            (!is.na(.data$code_line) & code_line == line_to_correct),
-            5,
-            layer_number),
           survey_year = ifelse(
             (!is.na(.data$code_line) & code_line == line_to_correct),
             2006,
@@ -1422,12 +1418,7 @@ get_primary_inconsistencies <- function(code_survey,
           unique_layer_repetition = ifelse(
             (!is.na(.data$code_line) & code_line == line_to_correct),
             "13_2006_624_B_1",
-            unique_layer_repetition)) %>%
-        arrange(country,
-                code_plot,
-                survey_year,
-                profile_pit_id,
-                layer_number)
+            unique_layer_repetition))
 
     }
 
