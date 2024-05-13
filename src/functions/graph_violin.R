@@ -613,7 +613,12 @@ graph_violin <- function(data_frame,
         )
       }
     plot
-  }
+  } # End of nice_violin function
+
+
+
+
+
 
 
 
@@ -653,6 +658,8 @@ graph_violin <- function(data_frame,
 
   # Order the grouping column
 
+  if (any(data_frame[[group]] != "Unknown")) {
+
   data_frame <- data_frame %>%
     mutate(group_unknown = ifelse(.data[[group]] != "Unknown",
                                    1,
@@ -663,6 +670,12 @@ graph_violin <- function(data_frame,
 
   data_frame[[group]] <- fct_inorder(data_frame[[group]])
 
+  } else {
+
+    data_frame <- data_frame %>%
+      arrange(.data[[group]]) %>%
+      mutate(group = fct_inorder(.data[[group]]))
+    }
 
 
 
@@ -679,6 +692,8 @@ graph_violin <- function(data_frame,
 
     # Order the grouping column
 
+    if (any(data_frame_2[[group]] != "Unknown")) {
+
     data_frame_2 <- data_frame_2 %>%
       mutate(group_unknown = ifelse(.data[[group]] != "Unknown",
                                     1,
@@ -688,6 +703,13 @@ graph_violin <- function(data_frame,
       mutate(group = fct_inorder(.data[[group]]))
 
     data_frame_2[[group]] <- fct_inorder(data_frame_2[[group]])
+
+    } else {
+
+      data_frame_2 <- data_frame_2 %>%
+        arrange(.data[[group]]) %>%
+        mutate(group = fct_inorder(.data[[group]]))
+    }
 
 
     # Make sure the two datasets have the same levels
@@ -702,7 +724,7 @@ graph_violin <- function(data_frame,
                                   levels = all_levels)
     data_frame_2[[group]] <- factor(as.factor(data_frame_2[[group]]),
                                   levels = all_levels)
-  }
+  } # End of "if !is.null(data_frame2)"
 
 
   # Specify titles ----
@@ -713,7 +735,10 @@ graph_violin <- function(data_frame,
 
 
   title_text <- glue::glue(
-    paste0("**Carbon stocks** (topsoil) in ",
+    paste0("**Carbon stocks** ",
+           # "(topsoil) ",
+           # "(forest floor) ",
+           "in ",
            "**<span style='color:{violin_colour}'>Level I</span>** and **",
            "<span style='color:{violin_2_colour}'>Level II</span>** <br>",
            "as a function of **",
@@ -740,6 +765,11 @@ graph_violin <- function(data_frame,
   # Make plot ----
 
   aspect_ratio <- length(unique(data_frame[[group]])) / 13 * 2
+
+
+  if (group == "humus_type") {
+    aspect_ratio <- 2.5
+  }
 
 
   suppressWarnings({
