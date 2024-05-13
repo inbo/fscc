@@ -40,6 +40,7 @@ get_parameter_stats <- function(parameter = "bulk_density",
                                 mode = "median",
                                 layer_type = "organic",
                                 quantile = 95,
+                                print = FALSE,
                                 hist_plausible = FALSE) {
 
   source("./src/functions/get_env.R")
@@ -386,11 +387,13 @@ get_parameter_stats <- function(parameter = "bulk_density",
                probs = c(0.025, 0.05, 0.95, 0.975)),
       stdev = sd(data_plausible))
 
+    if (print == TRUE) {
+
     cat(paste0("\n", parameter,
                " · layer type: '", layer_type, "':\n"))
     print(result)
     cat("\n")
-
+    }
   }
 
 
