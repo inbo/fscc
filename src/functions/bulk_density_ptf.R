@@ -72,6 +72,8 @@ bd_ff <- get_parameter_stats(parameter = "bulk_density",
                              mode = "stat",
                              layer_type = "forest_floor_excl_ol")
 
+bd_ff_upper_95 <- bd_ff[which(names(bd_ff) == "95%")]
+bd_ff_lower_5 <- bd_ff[which(names(bd_ff) == "5%")]
 bd_ff <- bd_ff[which(names(bd_ff) == "Mean")]
 
 
@@ -83,8 +85,9 @@ bd_peat <- get_parameter_stats(parameter = "bulk_density",
                                mode = "stat",
                                layer_type = "peat")
 
+bd_peat_upper_95 <- bd_peat[which(names(bd_peat) == "95%")]
+bd_peat_lower_5 <- bd_peat[which(names(bd_peat) == "5%")]
 bd_peat <- bd_peat[which(names(bd_peat) == "Mean")]
-
 
 
 
