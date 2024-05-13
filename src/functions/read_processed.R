@@ -32,6 +32,7 @@ read_processed <- function(survey_forms = NULL,
                            save_to_env = FALSE) {
 
   source("./src/functions/assign_env.R")
+  source("./src/functions/gives_warning.R")
 
 # Define columns that should be numeric
 
@@ -95,7 +96,9 @@ read_processed <- function(survey_forms = NULL,
       "code_forest_owner", "cutting_year", "code_canopy_gaps",
       "stand_rotation", "code_plot_status", "code_nfi_status",
       "cc_tree_number", "azimuth", "distance",
-      "latitude_dec", "longitude_dec")
+      "latitude_dec", "longitude_dec",
+      "layer_thickness", "c_to_n_ratio", "sum_base_cations", "sum_acid_cations",
+      "bulk_density_layer_weight", "organic_layer_weight_bd")
 
 # Define vectors with survey forms and codes to read ----
 
@@ -363,11 +366,33 @@ cat(paste0("Most recent data were found in the '",
     df[df == ""] <- NA
 
     # Convert numeric columns to numeric
-    vec_df <- names(df)[which(names(df) %in% vec_numeric)]
+    vec_df <- names(df)[which(names(df) %in% vec_numeric |
+                                grepl(paste0("_min|_max|_fscdb|",
+                                             "clay_orig|silt_orig|sand_orig|",
+                                             "density_orig|",
+                                             "fragment_vol_orig|",
+                                             "weight_orig|total_orig|",
+                                             "_rt|_loq|som_|pfh_|swc_|",
+                                             "_pre_gapfill"),
+                                      names(df)))]
+
+    if ("pfh_id" %in% vec_df) {
+      vec_df <- vec_df[which(vec_df != "pfh_id")]
+    }
+
     vec_df <- vec_df[which(!vec_df %in%
                              names(df)[sapply(df, is.numeric)])]
 
     if (!identical(vec_df, character(0))) {
+
+      for (k in vec_df) {
+
+        if (gives_warning(as.numeric(df[[k]]))) {
+          print(k)
+          stop
+        }
+      }
+
     df <- df %>%
       mutate(across(all_of(vec_df), as.numeric))
     }
