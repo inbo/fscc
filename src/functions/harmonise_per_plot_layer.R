@@ -552,8 +552,19 @@ harmonise_per_plot_layer <- function(survey_form_input,
         if (grepl("bulk_dens", parameter_j)) {
 
           df_summ_i <- df_summ_i %>%
-            mutate(bd_up = bd_upper(organic_carbon_total),
-                   bd_low = bd_lower(organic_carbon_total)) %>%
+            mutate(
+              bd_up = case_when(
+                layer_type == "mineral" ~ bd_upper(.data$organic_carbon_total),
+                layer_type == "peat" ~ bd_peat_upper_95,
+                layer_type == "forest_floor" & !grepl("L", code_layer) ~
+                  bd_ff_upper_95,
+                TRUE ~ quant_bd[2]),
+              bd_low = case_when(
+                layer_type == "mineral" ~ bd_lower(.data$organic_carbon_total),
+                layer_type == "peat" ~ bd_peat_lower_5,
+                layer_type == "forest_floor" & !grepl("L", code_layer) ~
+                  bd_ff_lower_5,
+                TRUE ~ quant_bd[1])) %>%
             filter(.data[[parameter_j]] > bd_low &
                         .data[[parameter_j]] < bd_up) %>%
             select(-bd_low, -bd_up)
@@ -897,6 +908,17 @@ harmonise_per_plot_layer <- function(survey_form_input,
 
                 mean_k <- NA
 
+              } else if (nrow(mean_k) == 1) {
+
+                mean_k <- mean_k %>%
+                  pull(.data[[parameter_j]]) %>%
+                  mean %>%
+                  round(1) %>%
+                  # Because sometimes values are clearly just copy-pasted
+                  unique
+
+                best_year_k <- best_year
+
               } else {
 
               mean_k <- mean_k %>%
@@ -908,7 +930,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
                               round(df_target_i$layer_limit_superior[k], 1),
                             limit_inf =
                               round(df_target_i$layer_limit_inferior[k], 1),
-                            bulk_density = weights,
+                            bulk_density = .data$weights,
                             upper_depths =
                               .data$layer_limit_superior,
                             lower_depths =
@@ -982,6 +1004,12 @@ harmonise_per_plot_layer <- function(survey_form_input,
               if (nrow(rep_k) == 0) {
 
                 rep_k <- NA
+
+              } else if (nrow(rep_k) == 1) {
+
+                rep_k <- rep_k %>%
+                  pull(.data[[parameter_j]]) %>%
+                  round(1)
 
               } else {
 
