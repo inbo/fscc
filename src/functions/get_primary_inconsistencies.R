@@ -260,11 +260,17 @@ get_primary_inconsistencies <- function(code_survey,
               abs(df$layer_limit_inferior[j_dupl]))
           } else {
 
+          if (!is.na(initial_letters) &
+              !identical(initial_letters, "NA")) {
+
           # If the layer limits are not known or if it concerns forest floor:
+          # (Exclude the two Latvian forest floor records of 64_5 in so_som
+          # since this is solved below)
 
           df$code_layer[j_dupl] <-
             paste0(initial_letters,
               seq_along(j_dupl))
+          }
           }
 
           # Update the columns "unique_survey_layer" and
@@ -1397,6 +1403,8 @@ get_primary_inconsistencies <- function(code_survey,
         filter(unique_survey == "13_2005_624") %>%
         pull(code_line)
 
+      if (!identical(line_to_correct, character(0))) {
+
       df <- df %>%
         mutate(
           survey_year = ifelse(
@@ -1419,7 +1427,7 @@ get_primary_inconsistencies <- function(code_survey,
             (!is.na(.data$code_line) & code_line == line_to_correct),
             "13_2006_624_B_1",
             unique_layer_repetition))
-
+      }
     }
 
 
