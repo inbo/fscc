@@ -60,6 +60,9 @@ sync_local_data(list_subfolders_data = "raw_data",
 
 # Input level ----
 
+# Only run the line of the ICP Forests level for which you would like
+# to run the script
+
 level <- "LI"
 level <- "LII"
 
@@ -320,9 +323,6 @@ if (level == "LII") {
   so_som2 <- so_som
 }
 
-# source("./src/functions/bind_objects_starting_with.R")
-# bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
-
 
 
 
@@ -386,9 +386,6 @@ so_pfh3 <- so_pfh
 so_som3 <- so_som
 }
 
-
-# source("./src/functions/bind_objects_starting_with.R")
-# bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
 
 
 
@@ -465,83 +462,6 @@ if (level == "LII") {
 
 
 
-#
-# # The one Swedish record in 13_2005_624 clearly belongs to
-# # the records in survey_year 2006
-#
-# line_to_correct <- s1_pfh %>%
-#   filter(unique_survey == "13_2005_624") %>%
-#   pull(code_line)
-#
-# s1_pfh <- s1_pfh %>%
-#   mutate(
-#     layer_number = ifelse(
-#       (!is.na(.data$code_line) & code_line == line_to_correct),
-#       5,
-#       layer_number),
-#     survey_year = ifelse(
-#       (!is.na(.data$code_line) & code_line == line_to_correct),
-#       2006,
-#       survey_year),
-#     unique_survey = ifelse(
-#       (!is.na(.data$code_line) & code_line == line_to_correct),
-#       "13_2006_624",
-#       unique_survey),
-#     unique_survey_profile = ifelse(
-#       (!is.na(.data$code_line) & code_line == line_to_correct),
-#       "13_2006_624_1",
-#       unique_survey_profile),
-#     unique_survey_layer = ifelse(
-#       (!is.na(.data$code_line) & code_line == line_to_correct),
-#       "13_2006_624_B",
-#       unique_survey_layer),
-#     unique_layer_repetition = ifelse(
-#       (!is.na(.data$code_line) & code_line == line_to_correct),
-#       "13_2006_624_B_1",
-#       unique_layer_repetition)) %>%
-#   arrange(country,
-#           code_plot,
-#           survey_year,
-#           profile_pit_id,
-#           layer_number)
-
-
-# s1_som <- s1_som %>%
-#   # Belgium
-#   mutate(
-#     layer_limit_superior = ifelse(
-#       unique_layer_repetition == "2_1993_57_O_1",
-#       -0.5,
-#       layer_limit_superior),
-#     layer_number = ifelse(
-#       unique_survey_repetition == "2_1993_57_1",
-#       ifelse(is.na(layer_number),
-#              1,
-#              layer_number + 1),
-#       layer_number)) %>%
-#   # Estonia
-#   mutate(
-#     layer_limit_inferior = ifelse(
-#       unique_layer_repetition == "59_1993_117_H_1",
-#       40,
-#       layer_limit_inferior)) %>%
-#   # Russia
-#   mutate(layer_limit_superior = ifelse(
-#     unique_survey_repetition == "62_2009_5112_5",
-#     layer_limit_inferior_orig,
-#     layer_limit_superior),
-#     layer_limit_inferior = ifelse(
-#       unique_survey_repetition == "62_2009_5112_5",
-#       layer_limit_superior_orig,
-#       layer_limit_inferior)) %>%
-#   arrange(country,
-#           code_plot,
-#           survey_year,
-#           profile_pit_id,
-#           layer_number)
-#
-
-
 
 
 
@@ -553,7 +473,6 @@ if (level == "LII") {
 # Note: At the moment, focus on parameters for C stock calculations only
 # To do: expand to other parameters
 
-cat("Gap-fill internally\n")
 
 source("./src/functions/gapfill_internally.R")
 
@@ -568,7 +487,8 @@ s1_pfh <- gapfill_internally(survey_form = "s1_pfh",
                              data_frame = s1_pfh,
                              save_to_env = FALSE)
 
-
+s1_pfh4 <- s1_pfh
+s1_som4 <- s1_som
 
 }
 
@@ -585,17 +505,51 @@ so_pfh <- gapfill_internally(survey_form = "so_pfh",
                              data_frame = so_pfh,
                              save_to_env = FALSE)
 
+so_pfh4 <- so_pfh
+so_som4 <- so_som
+
 }
 
 
 
-# TO DO: add uncertainty ranges for TOC etc
 
-# TOC:
-# layer_type organic and survey_year < 2000: +-11.8 g kg-1
-# layer_type organic and survey_year >= 2000: +- 5.2 g kg-1
-# layer_type mineral and survey_year < 2000: +- 3.5 g kg-1
-# layer_type mineral and survey_year >= 2000: +- 1.5 g kg-1
+
+
+
+
+
+# Add uncertainty ranges for chemical parameters
+# Function currently only includes TOC
+
+source("./src/functions/add_uncertainties_chem.R")
+
+if (level == "LI") {
+
+  s1_som <- add_uncertainties_chem(survey_form = "s1_som",
+                                   data_frame = s1_som,
+                                   save_to_env = FALSE)
+
+
+  s1_pfh <- add_uncertainties_chem(survey_form = "s1_pfh",
+                                   data_frame = s1_pfh,
+                                   save_to_env = FALSE)
+
+}
+
+
+
+if (level == "LII") {
+
+  so_som <- add_uncertainties_chem(survey_form = "so_som",
+                                   data_frame = so_som,
+                                   save_to_env = FALSE)
+
+
+  so_pfh <- add_uncertainties_chem(survey_form = "so_pfh",
+                                   data_frame = so_pfh,
+                                   save_to_env = FALSE)
+
+}
 
 
 
