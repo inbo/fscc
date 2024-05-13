@@ -51,8 +51,8 @@ soilspline <- function(id,
                  as.character(format(as.Date(
                    get_date_local(path = "./data/raw_data/")),
                    format = "%Y%m%d")),
-                 "_carbon_stocks/",
-                 "splines_per_profile/")
+                 "_carbon_stocks/", survey_form,
+                 "_splines_per_profile/")
 
   assertthat::assert_that(
     dir.exists(path))

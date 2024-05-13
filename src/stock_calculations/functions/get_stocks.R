@@ -198,12 +198,18 @@ get_stocks <- function(survey_form,
 
   if (graph == TRUE) {
 
-    if (!dir.exists(paste0(dir, "splines_per_profile/"))) {
-      dir.create(paste0(dir, "splines_per_profile/"), recursive = TRUE)
+    for (survey_form_i in survey_forms) {
+
+      if (!dir.exists(paste0(dir, survey_form_i,
+                             "_splines_per_profile/"))) {
+        dir.create(paste0(dir, survey_form_i,
+                          "_splines_per_profile/"), recursive = TRUE)
+      }
     }
 
-    if (!dir.exists(paste0(dir, "splines_per_plot/"))) {
-      dir.create(paste0(dir, "splines_per_plot/"), recursive = TRUE)
+    if (!dir.exists(paste0(dir, code_survey, "_splines_per_plot/"))) {
+      dir.create(paste0(dir, code_survey, "_splines_per_plot/"),
+                 recursive = TRUE)
     }
   }
 
@@ -2422,7 +2428,7 @@ if (length(survey_forms) == 2) {
 
 
     ggsave(filename = paste0(plot_id_i, ".png"),
-           path = paste0(dir, "splines_per_plot/"),
+           path = paste0(dir, code_survey, "_splines_per_plot/"),
            plot = p,
            dpi = 500,
            height = height_i,
