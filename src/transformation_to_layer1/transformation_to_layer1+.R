@@ -48,6 +48,9 @@ read_processed(path_name = "./data/layer1_data/",
 
 # Input level ----
 
+# Only run the line of the ICP Forests level for which you would like
+# to run the script
+
 level <- "LI"
 level <- "LII"
 
@@ -145,9 +148,9 @@ if (level == "LII") {
 
 
 
-# 5. Export the processed survey forms ----
+# 6. Export the processed survey forms ----
 
-## 5.1. Save processed survey forms to Google Drive (layer 1) ----
+## 6.1. Save processed survey forms to Google Drive (layer 1) ----
 
 source("./src/functions/save_to_google_drive.R")
 save_to_google_drive(objects_to_save = c("si", "so", "sw"),
@@ -162,7 +165,7 @@ save_to_google_drive(path_name = "layer1_data")
 
 
 
-## 5.2. Sync local data with Google Drive ----
+## 6.2. Sync local data with Google Drive ----
 
 source("./src/functions/sync_local_data.R")
 sync_local_data(list_subfolders_data = "layer1_data",
