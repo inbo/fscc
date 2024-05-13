@@ -57,12 +57,6 @@ depth_join <- function(df1,
 
   # There should be one profile per plot_id in df2
 
-  # assertthat::assert_that(
-  #   identical(
-  #     which(duplicated(paste0(df2$plot_id, "_", df2$layer_limit_superior, "_",
-  #                             df2$layer_limit_inferior))),
-  #     integer(0)))
-
 
   if (all(c("horizon_master",
             "horizon_limit_up",
@@ -425,7 +419,7 @@ depth_join <- function(df1,
 
         value_j <- NA
 
-        # constant_physical_parameters: Only add bulk density!
+        # constant_physical_parameters: Only add bulk density in forest floor!
 
         if (mode == "constant_physical_parameters" &&
             !grepl("bulk", parameter_j)) {
@@ -465,20 +459,21 @@ depth_join <- function(df1,
 
               # Most abundant value
 
-              as.numeric( names(table(df2_j[[parameter_j]]))[
+              as.numeric(names(table(df2_j[[parameter_j]]))[
                 which.max(table(df2_j[[parameter_j]]))])
 
             } else {
 
               # Value representing biggest depth range
 
-            df2_j %>%
-              filter(!is.na(.data[[parameter_j]])) %>%
-              group_by(.data[[parameter_j]]) %>%
-              reframe(layer_thickness = sum(layer_thickness, na.rm = TRUE)) %>%
-              arrange(-layer_thickness) %>%
-              slice_head(n = 1) %>%
-              pull(.data[[parameter_j]])
+              df2_j %>%
+                filter(!is.na(.data[[parameter_j]])) %>%
+                group_by(.data[[parameter_j]]) %>%
+                reframe(layer_thickness = sum(layer_thickness,
+                                              na.rm = TRUE)) %>%
+                arrange(-layer_thickness) %>%
+                slice_head(n = 1) %>%
+                pull(.data[[parameter_j]])
             }
           }
 
@@ -666,9 +661,12 @@ depth_join <- function(df1,
         if (nrow(df2_j) == 1) {
 
           if (grepl("year|code", parameter_j)) {
+
             # Categorical
             value_j <- df2_j[[parameter_j]]
+
           } else {
+
             value_j <- round(df2_j[[parameter_j]], 1)
           }
 
