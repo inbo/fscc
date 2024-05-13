@@ -195,7 +195,10 @@ gapfill_from_old_data <- function(survey_form,
                         .data$coarse_fragment_vol_from_mass)) %>%
       select(-coarse_fragment_aid,
              -coarse_fragment_vol_from_mass,
-             -coarse_fragment_mass)
+             -coarse_fragment_mass) %>%
+      mutate(date_labor_analyses =
+               # 1900 date system in Excel
+               as.Date(date_labor_analyses, origin = "1899-12-30"))
 
 
 
@@ -364,78 +367,20 @@ gapfill_from_old_data <- function(survey_form,
 
     ## Adding missing records ----
 
-    #  From the repetition-specific data (so_som_afscdb)
-    file_path <-
-      paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
-                        "AFSCDB_LII_2_2_080515_som.csv")
 
-    assertthat::assert_that(file.exists(file_path),
-                            msg = paste0("'", file_path, "' ",
-                                         "does not exist."))
+    # Filter for records which are currently missing in so_som
 
-
-    so_som_afscdb_avg <- read.csv(file_path,
-                              sep = ";", na.strings = "") %>%
-      # unique_survey
-      mutate(unique_survey = paste0(code_country, "_",
-                                    survey_year, "_",
-                                    code_plot)) %>%
-      # plot_id
-      mutate(plot_id = paste0(code_country, "_",
-                              code_plot)) %>%
-      # Convert coarse_fragment_mass to "coarse_fragment_vol_from_mass"
-      mutate(coarse_fragment_aid =
-               ifelse(!is.na(bulk_density) & !is.na(coarse_fragment_mass),
-                      (.data$bulk_density *
-                         (.data$coarse_fragment_mass /
-                            (100 - .data$coarse_fragment_mass))) / 2650,
-                      NA)) %>%
-      mutate(coarse_fragment_vol_from_mass =
-               ifelse(!is.na(.data$coarse_fragment_aid),
-                      round(
-                        as.numeric((.data$coarse_fragment_aid /
-                                      (1 + .data$coarse_fragment_aid)) * 100),
-                        2),
-                      NA)) %>%
-      # Combine coarse_fragments columns
-      mutate(coarse_fragment_vol =
-               coalesce(.data$coarse_fragment_vol,
-                        .data$coarse_fragment_vol_from_mass)) %>%
-      select(-coarse_fragment_aid,
-             -coarse_fragment_vol_from_mass,
-             -coarse_fragment_mass)
-
-
-
-
-    # Identify which unique surveys are missing in so_som
-
-    unique_surveys_so_som <- unique(df$unique_survey)
-
-    source("./src/functions/expand_unique_survey_vec_adjacent_years.R")
-
-    unique_surveys <-
-      expand_unique_survey_vec_adjacent_years(unique_survey_vec =
-                                                unique_surveys_so_som,
-                                              number_of_years = 3)
-
-
-    unique_surveys_missing <- so_som_afscdb_avg %>%
-      # Manually verified: no need to add Swiss data anymore
-      filter((code_country != 50) |
-               (plot_id %in% c("50_6", "50_11", "50_16"))) %>%
-      filter(!(unique_survey %in% unique_surveys)) %>%
-      pull(unique_survey)
-
-
+    so_som_missing_records <- so_som_afscdb %>%
+      filter(is.na(.data$unique_survey_so_som)) %>%
+      select(-unique_survey_so_som, -unique_layer_repetition)
 
     # If there are any unique surveys in afscdb which are missing in so_som
 
-    if (!identical(unique_surveys_missing, character(0))) {
+    if (nrow(so_som_missing_records) > 0) {
 
       cat(paste0(" \nAdd missing records from '", survey_form,
                  "' using a previously harmonised data source ",
-                 "(AFSCDB.LII.2.2).\n"))
+                 "(FSCDB.LII.2).\n"))
 
 
       # Create a list of tables with the partner codes for each plot_id
@@ -457,22 +402,16 @@ gapfill_from_old_data <- function(survey_form,
 
       # Harmonise the data
 
-      so_som_afscdb_to_add <- so_som_afscdb_avg %>%
-        # Filter for the missing unique surveys
-        filter(.data$unique_survey %in% unique_surveys_missing) %>%
+      so_som_afscdb_to_add <- so_som_missing_records %>%
         mutate(date_labor_analyses =
                  as.character(as.Date(.data$date_labor_analyses)),
                download_date = NA,
-               layer_type = ifelse(.data$laytype == "Min",
-                                   "mineral",
-                                   ifelse(.data$laytype == "FF",
-                                          "forest_floor",
-                                          ifelse(.data$laytype == "Pea",
-                                                 "peat",
-                                                 NA))),
-               repetition = 1,
-               plot_id = paste0(code_country, "_",
-                                code_plot),
+               layer_type = case_when(
+                 startsWith(code_layer, "O") | layer_limit_superior < 0 ~
+                   "forest_floor",
+                 startsWith(code_layer, "H") & layer_limit_superior >= 0 ~
+                   "peat",
+                 TRUE ~ "mineral"),
                unique_survey = paste0(code_country, "_",
                                       survey_year, "_",
                                       code_plot),
@@ -492,7 +431,7 @@ gapfill_from_old_data <- function(survey_form,
                unique_layer = paste0(code_country, "_",
                                      code_plot, "_",
                                      code_layer),
-               change_date = as.character(as.Date("2008-05-15")),
+               change_date = as.character(as.Date("2012-01-01")),
                code_line = NA,
                code_plot_orig = code_plot,
                bulk_density_orig = bulk_density,
@@ -516,9 +455,9 @@ gapfill_from_old_data <- function(survey_form,
                qif_key = NA,
                subsamples = NA,
                other_obs = ifelse(!is.na(.data$other_obs),
-                                  paste0("Record inserted from AFSCDB.LII. ",
+                                  paste0("Record inserted from FSCDB.LII. ",
                                          .data$other_obs),
-                                  "Record inserted from AFSCDB.LII."),
+                                  "Record inserted from FSCDB.LII."),
                bulk_density_afscdb = bulk_density,
                organic_carbon_total_afscdb = organic_carbon_total,
                organic_layer_weight_afscdb = organic_layer_weight,
@@ -527,32 +466,32 @@ gapfill_from_old_data <- function(survey_form,
                part_size_silt_afscdb = part_size_silt,
                part_size_sand_afscdb = part_size_sand,
                bulk_density_source = ifelse(!is.na(.data$bulk_density),
-                                            "AFSCDB.LII.2.2 (2015)",
+                                            "FSCDB.LII.2. (2012)",
                                             NA_character_),
                organic_carbon_total_source =
                  ifelse(!is.na(.data$organic_carbon_total),
-                        "AFSCDB.LII.2.2 (2015)",
+                        "FSCDB.LII.2. (2012)",
                         NA_character_),
                organic_layer_weight_source =
                  ifelse(!is.na(.data$organic_layer_weight),
-                        "AFSCDB.LII.2.2 (2015)",
+                        "FSCDB.LII.2. (2012)",
                         NA_character_),
                coarse_fragment_vol_source =
                  ifelse(!is.na(.data$coarse_fragment_vol),
-                        "AFSCDB.LII.2.2 (2015)",
+                        "FSCDB.LII.2. (2012)",
                         NA_character_),
                n_total_source =
                  ifelse(!is.na(.data$n_total),
-                        "AFSCDB.LII.2.2 (2015)",
+                        "FSCDB.LII.2. (2012)",
                         NA_character_),
                part_size_clay_source = ifelse(!is.na(.data$part_size_clay),
-                                              "AFSCDB.LII.2.2 (2015)",
+                                              "FSCDB.LII.2. (2012)",
                                               NA_character_),
                part_size_silt_source = ifelse(!is.na(.data$part_size_silt),
-                                              "AFSCDB.LII.2.2 (2015)",
+                                              "FSCDB.LII.2. (2012)",
                                               NA_character_),
                part_size_sand_source = ifelse(!is.na(.data$part_size_sand),
-                                              "AFSCDB.LII.2.2 (2015)",
+                                              "FSCDB.LII.2. (2012)",
                                               NA_character_)) %>%
         left_join(partner_codes,
                   by = "plot_id") %>%
@@ -566,10 +505,10 @@ gapfill_from_old_data <- function(survey_form,
                   by = join_by(partner_code == code)) %>%
         rename(partner_short = desc_short) %>%
         rename(partner = description) %>%
-        # mutate(country = as.factor(country)) %>%
-        # mutate(partner_short = as.factor(partner_short)) %>%
-        # mutate(partner = as.factor(partner)) %>%
-        rename(base_saturation = bs) %>%
+        mutate(base_saturation = NA_real_,
+               exch_bce = NA_real_,
+               exch_ace = NA_real_,
+               exch_cec = NA_real_) %>%
         # Replace empty strings with NA
         mutate_all(~ replace(., . == "", NA)) %>%
         select(
@@ -814,7 +753,7 @@ gapfill_from_old_data <- function(survey_form,
         relocate(any_of(c("COUNTRYID", "PLOTNR", "date_sampling",
                           "oldest_date")),
                  .after = PLOTID) %>%
-        mutate_all(~ifelse((.) == "", NA, .))
+        mutate_at(vars(-contains("date")), ~ifelse(. == "", NA, .))
 
       # Update the column names
 
@@ -846,13 +785,13 @@ gapfill_from_old_data <- function(survey_form,
         read.csv("./data/additional_data/d_depth_level_soil.csv",
                  sep = ";")
 
-      diff_partner_codes <- df %>%
+      diff_partner_codes <- get_env("data_availability_s1") %>%
         distinct(partner_code, .keep_all = TRUE) %>%
         filter(.data$partner_code != .data$code_country) %>%
         distinct(code_country) %>%
         pull(code_country)
 
-      partner_codes <- df %>%
+      partner_codes <- get_env("data_availability_s1") %>%
         filter(!partner_code %in% diff_partner_codes) %>%
         filter(code_country %in% diff_partner_codes) %>%
         distinct(plot_id, .keep_all = TRUE) %>%
@@ -915,7 +854,7 @@ gapfill_from_old_data <- function(survey_form,
                                   code_plot)) %>%
         mutate(repetition = ifelse(code_country == 58 & code_plot == 2188,
                                    2,
-                                   plot_id),
+                                   repetition),
                plot_id = ifelse(code_country == 58 & code_plot == 2188,
                                 "58_188",
                                 plot_id),
@@ -944,6 +883,14 @@ gapfill_from_old_data <- function(survey_form,
                                 code_layer)) %>%
         arrange(country, code_plot, layer_limit_superior)
 
+      write.table(s1_som_fscdb,
+                  file = paste0("./data/additional_data/fscdb_LI/",
+                                "original_access_versions/",
+                                "s1_fscdb_access_harmonised_r.csv"),
+                  row.names = FALSE,
+                  na = "",
+                  sep = ";",
+                  dec = ".")
 
 
     }
