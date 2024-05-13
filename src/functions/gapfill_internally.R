@@ -2,7 +2,8 @@
 
 gapfill_internally <- function(survey_form,
                                data_frame = NULL,
-                               save_to_env = FALSE) {
+                               save_to_env = FALSE,
+                               gapfill_ff_concentrations = TRUE) {
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
@@ -20,17 +21,7 @@ gapfill_internally <- function(survey_form,
 
   # Parameter ranges ----
 
-  # Upper limit plausibility function ULPF = 1991 - (81,1*sqrt(TOC))
-  bd_upper <- function(toc) {
-    ifelse(is.na(toc), 1991, 1991 - (81.1 * sqrt(toc)))
-  }
-
-  # Lower limit plausibility function LLPF = 1031 - (81,1*sqrt(TOC))
-  bd_lower <- function(toc) {
-    ifelse(is.na(toc) | (1031 - (81.1 * sqrt(toc)) < 6),
-           6,
-           1031 - (81.1 * sqrt(toc)))
-  }
+  source("./src/functions/bulk_density_ptf.R")
 
 
 
@@ -53,6 +44,7 @@ gapfill_internally <- function(survey_form,
       rename(layer_limit_inferior = horizon_limit_low) %>%
       rename(code_layer = horizon_master) %>%
       rename(organic_carbon_total = horizon_c_organic_total) %>%
+      rename(organic_carbon_total_source = horizon_c_organic_total_source) %>%
       rename(unique_survey_repetition = unique_survey_profile)
 
   }
@@ -213,8 +205,11 @@ gapfill_internally <- function(survey_form,
   # plot_id (non-redundant layers), physical variables that are gap-filled
   # in this script are removed if a certain layer is redundant (e.g. R-horizon)
 
+  source("./src/functions/depth_join.R")
 
   # Add data of "som"
+
+  cat(paste0(" \nAdd 'som' data to '", survey_form, "'.\n"))
 
   df <- depth_join(df1 = df,
                    df2 = som_plot,
@@ -222,6 +217,8 @@ gapfill_internally <- function(survey_form,
                    prefix_parameters_in_df1 = "som_")
 
   # Add data of "pfh"
+
+  cat(paste0(" \nAdd 'pfh' data to '", survey_form, "'.\n"))
 
   df <- depth_join(df1 = df,
                    df2 = pfh_plot,
@@ -232,10 +229,16 @@ gapfill_internally <- function(survey_form,
 
   if (code_survey == "so") {
 
+  cat(paste0(" \nAdd 'swc' data to '", survey_form, "'.\n"))
+
   df <- depth_join(df1 = df,
                    df2 = swc_plot,
                    prefix_parameters_in_df1 = "swc_")
   }
+
+
+
+  # Save
 
   write.table(df,
               file = paste0("./output/gap_filling_details/",
@@ -269,14 +272,27 @@ gapfill_internally <- function(survey_form,
                -contains("orig"), -contains("fscdb")) %>%
         names
 
+    quant_bd <- c(6, 1991) # Based on minimum and maximum in
+    # bd_upper and bd_lower functions
 
     df <- df %>%
       # Make a copy of the current bulk density column,
       # since the bulk density column will be changed,
       # while the current values are relevant for the uncertainty range
       mutate(bulk_density_pre_gapfill = bulk_density) %>%
-      mutate(bd_up = bd_upper(organic_carbon_total),
-             bd_low = bd_lower(organic_carbon_total)) %>%
+      mutate(
+        bd_up = case_when(
+          layer_type == "mineral" ~ bd_upper(.data$organic_carbon_total),
+          layer_type == "peat" ~ bd_peat_upper_95,
+          layer_type == "forest_floor" & !grepl("L", code_layer) ~
+            bd_ff_upper_95,
+          TRUE ~ quant_bd[2]),
+        bd_low = case_when(
+          layer_type == "mineral" ~ bd_lower(.data$organic_carbon_total),
+          layer_type == "peat" ~ bd_peat_lower_5,
+          layer_type == "forest_floor" & !grepl("L", code_layer) ~
+            bd_ff_lower_5,
+          TRUE ~ quant_bd[1])) %>%
       # Remove values outside of the bulk density range
       # This needs to be repeated for bulk density (next to the
       # harmonise_per_plot_layer function). The latter is less strict,
@@ -435,7 +451,6 @@ gapfill_internally <- function(survey_form,
                .after = "bulk_density") # %>%
       # select(-any_of(c(
       #   "bulk_density_afscdb",
-      #   "bulk_density_layer_weight",
       #   "som_bulk_density", "som_bulk_density_survey_year",
       #   "som_bulk_density_min", "som_bulk_density_max",
       #   "pfh_horizon_bulk_dens_measure",
@@ -768,6 +783,11 @@ gapfill_internally <- function(survey_form,
 
     ### 3.1.6. Organic layer weight ----
 
+    assertthat::assert_that(
+      "bulk_density_layer_weight" %in% names(df),
+      msg = paste0("Please do not remove 'bulk_density_layer_weight' ",
+                   "before the end of this script (e.g. step 3.1.1)."))
+
     cat("\n\nCombine organic layer weight columns\n")
 
     organic_layer_weight_columns <- c(
@@ -800,6 +820,32 @@ gapfill_internally <- function(survey_form,
             layer_type %in% c("peat", "forest_floor"),
           # kg m-2
           round(.data$bulk_density_min * (.data$layer_thickness * 1e-2), 2),
+          NA_real_),
+        # Remove implausible organic_layer_weight data
+        # Note that implausible data should be removed in the column
+        # bulk_density_layer_weight in step 3.1.1. (only for records for
+        # which the layer thickness is known)
+        organic_layer_weight_source = ifelse(
+          layer_type %in% c("peat", "forest_floor"),
+          ifelse((is.na(.data$layer_thickness) &
+                    !is.na(.data$organic_layer_weight)) |
+                   (!is.na(.data$layer_thickness) &
+                      !is.na(.data$organic_layer_weight) &
+                      !is.na(.data$bulk_density_layer_weight)),
+                 organic_layer_weight_source,
+                 NA_character_),
+          NA_character_),
+        organic_layer_weight = ifelse(
+          layer_type %in% c("peat", "forest_floor"),
+          ifelse((is.na(.data$layer_thickness) &
+                    !is.na(.data$organic_layer_weight)) |
+                   (!is.na(.data$layer_thickness) &
+                      !is.na(.data$organic_layer_weight) &
+                      # So if the parameter below is not NA, the reported
+                      # organic_layer_weight is plausible
+                      !is.na(.data$bulk_density_layer_weight)),
+                 organic_layer_weight,
+                 NA_real_),
           NA_real_),
         # Gap-fill
         organic_layer_weight_source = ifelse(
@@ -839,7 +885,8 @@ gapfill_internally <- function(survey_form,
       # select(-c(
       #   "organic_layer_weight_afscdb", "organic_layer_weight_bd",
       #   "organic_layer_weight_bd_min", "organic_layer_weight_bd_max",
-      #   "organic_layer_weight_bd_median"))
+      #   "organic_layer_weight_bd_median",
+      #   "bulk_density_layer_weight"))
 
 
   }  # End of "if som"
@@ -875,13 +922,27 @@ gapfill_internally <- function(survey_form,
              -contains("orig"), -contains("fscdb")) %>%
       names
 
+    quant_bd <- c(6, 1991) # Based on minimum and maximum in
+    # bd_upper and bd_lower functions
+
     df <- df %>%
       # Make a copy of the current bulk density column,
       # since the bulk density column will be changed,
       # while the current values are relevant for the uncertainty range
       mutate(bulk_density_pre_gapfill = bulk_density) %>%
-      mutate(bd_up = bd_upper(organic_carbon_total),
-             bd_low = bd_lower(organic_carbon_total)) %>%
+      mutate(
+        bd_up = case_when(
+          layer_type == "mineral" ~ bd_upper(.data$organic_carbon_total),
+          layer_type == "peat" ~ bd_peat_upper_95,
+          layer_type == "forest_floor" & !grepl("L", code_layer) ~
+            bd_ff_upper_95,
+          TRUE ~ quant_bd[2]),
+        bd_low = case_when(
+          layer_type == "mineral" ~ bd_lower(.data$organic_carbon_total),
+          layer_type == "peat" ~ bd_peat_lower_5,
+          layer_type == "forest_floor" & !grepl("L", code_layer) ~
+            bd_ff_lower_5,
+          TRUE ~ quant_bd[1])) %>%
       # Remove values outside of the bulk density range
       # This needs to be repeated for bulk density (next to the
       # harmonise_per_plot_layer function). The latter is less strict,
@@ -1441,6 +1502,183 @@ gapfill_internally <- function(survey_form,
 
 
 
+
+  # . ----
+  # Gap-fill concentrations in forest floor ----
+
+  if (gapfill_ff_concentrations == TRUE) {
+
+    # Some profiles have a forest floor with known organic_layer_weight
+    # but no analytical data, e.g. organic_carbon_total
+    # It makes sense to gap-fill this across survey forms as long as the
+    # survey years are roughly the same (+- three years), since
+    # concentrations of organic layers are typically more similar.
+
+
+    # 1. Add data to df ----
+
+    source("./src/functions/depth_join.R")
+
+    # som
+
+    df2 <- get_env(paste0(code_survey, "_som"))
+
+    cat(paste0(" \nAdd 'som' forest floor analytical data to '",
+               survey_form, "'.\n"))
+
+    df <- depth_join(df1 = df,
+                     df2 = df2,
+                     parameters = NULL,
+                     prefix_parameters_in_df1 = "som_",
+                     mode = "time_specific_ff_concentrations")
+
+    # pfh
+
+    df2 <- get_env(paste0(code_survey, "_pfh")) %>%
+      rename(layer_limit_superior = horizon_limit_up) %>%
+      rename(layer_limit_inferior = horizon_limit_low) %>%
+      rename(code_layer = horizon_master) %>%
+      rename(unique_survey_repetition = unique_survey_profile) %>%
+      # Rename analytical parameters to join
+      rename(organic_carbon_total = horizon_c_organic_total)
+
+    cat(paste0(" \nAdd 'pfh' forest floor analytical data to '",
+               survey_form, "'.\n"))
+
+    df <- depth_join(df1 = df,
+                     df2 = df2,
+                     parameters = NULL,
+                     prefix_parameters_in_df1 = "pfh_",
+                     mode = "time_specific_ff_concentrations")
+
+
+    # 2. Combine columns ----
+
+    # Criteria for columns to actually be gap-filled:
+    # (needs to be limited to a minimum - only if other data of the profile
+    # are known and unique, i.e. no copy paste from other repetitions,
+    # so that the profile would otherwise be incomplete for stock calculations
+    # etc. The general rule is not to gap-fill chemical concentrations,
+    # since physical parameters are gap-filled, and otherwise some profiles
+    # would have no or hardly any distinct information at all if everything
+    # is gap-filled.)
+
+    # Gap-fill profiles with NA in forest floor if:
+    # · There are any non-NA below-ground data:
+    #   count_bg_layers_nona > 0
+    # · The plot_id x survey_year contains less profiles with all forest floor
+    #   layers known, than there are unique below-ground repetitions (profiles):
+    #   count_all_ff_nona < count_distinct_bg_up
+
+    profs_potential <- df %>%
+      # Filter out redundant layers
+      filter(!is.na(layer_number)) %>%
+      # Filter out forest floor layers without olw
+      filter(layer_type != "forest_floor" |
+               (layer_type == "forest_floor" &
+                  !is.na(organic_layer_weight))) %>%
+      # Group per profile
+      group_by(unique_survey_repetition,
+               unique_survey, code_country, code_plot) %>%
+      reframe(any_ff_na = (any(.data$layer_type == "forest_floor" &
+                                 is.na(.data$organic_carbon_total))),
+              all_ff_nona =
+                all(!is.na(organic_carbon_total[
+                  which(layer_type == "forest_floor")])),
+              count_bg_layers =
+                length(which(.data$layer_type != "forest_floor")),
+              count_bg_layers_nona =
+                length(which(.data$layer_type != "forest_floor" &
+                         !is.na(.data$organic_carbon_total))),
+              organic_carbon_total_bg_up =
+                ifelse(any(layer_number_bg == 1),
+                       organic_carbon_total[which(layer_number_bg == 1)],
+                       NA_real_)) %>%
+      filter(count_bg_layers_nona > 0)
+
+    plots_gapfill <- profs_potential %>%
+      # Group per unique_survey
+      group_by(unique_survey, code_country, code_plot) %>%
+      reframe(all_any_ff_na = all(any_ff_na == TRUE),
+              any_ff_na_nona =
+                any(any_ff_na == TRUE) & any(all_ff_nona == TRUE),
+              count_all_ff_nona = length(which(.data$all_ff_nona == TRUE)),
+              count_distinct_bg_up = n_distinct(organic_carbon_total_bg_up,
+                                                na.rm = TRUE)) %>%
+      filter(all_any_ff_na == TRUE |
+               any_ff_na_nona == TRUE) %>%
+      filter(count_all_ff_nona < count_distinct_bg_up)
+
+    profs_gapfill <- profs_potential %>%
+      filter(unique_survey %in% plots_gapfill$unique_survey) %>%
+      filter(any_ff_na == TRUE)
+
+    # Combine
+
+    # som
+
+    if (survey_form_type == "som") {
+
+      df <- df %>%
+        mutate(
+          organic_carbon_total_source = ifelse(
+            is.na(organic_carbon_total) &
+              layer_type == "forest_floor" &
+              unique_survey %in% profs_gapfill$unique_survey,
+            # Sources for gap-filling
+            case_when(
+              !is.na(som_organic_carbon_total) ~
+                "som (other repetitions in same period)",
+              !is.na(pfh_organic_carbon_total) ~ "pfh (same period)"),
+            # Original data are kept
+            organic_carbon_total_source),
+          organic_carbon_total = ifelse(
+            is.na(organic_carbon_total) &
+              layer_type == "forest_floor" &
+              unique_survey %in% profs_gapfill$unique_survey,
+            # Gap-fill
+            coalesce(
+              som_organic_carbon_total,
+              pfh_organic_carbon_total),
+            # Else, don't change
+            organic_carbon_total))
+
+    }
+
+
+    if (survey_form_type == "pfh") {
+
+      df <- df %>%
+        mutate(
+          organic_carbon_total_source = ifelse(
+            is.na(organic_carbon_total) &
+              layer_type == "forest_floor" &
+              unique_survey %in% profs_gapfill$unique_survey,
+            # Sources for gap-filling
+            case_when(
+              !is.na(pfh_organic_carbon_total) ~
+                "pfh (other repetitions in same period)",
+              !is.na(som_organic_carbon_total) ~ "som (same period)"),
+            # Original data are kept
+            organic_carbon_total_source),
+          organic_carbon_total = ifelse(
+            is.na(organic_carbon_total) &
+              layer_type == "forest_floor" &
+              unique_survey %in% profs_gapfill$unique_survey,
+            # Gap-fill
+            coalesce(
+              pfh_organic_carbon_total,
+              som_organic_carbon_total),
+            # Else, don't change
+            organic_carbon_total))
+    }
+
+  } # End of "if gapfill_ff_concentrations is true"
+
+
+
+
+
   if (survey_form_type == "pfh") {
 
     # Change the variable names back to the original names
@@ -1450,6 +1688,7 @@ gapfill_internally <- function(survey_form,
       rename(horizon_limit_low = layer_limit_inferior) %>%
       rename(horizon_master = code_layer) %>%
       rename(horizon_c_organic_total = organic_carbon_total) %>%
+      rename(horizon_c_organic_total_source = organic_carbon_total_source) %>%
       rename(unique_survey_profile = unique_survey_repetition)
 
   }
