@@ -454,6 +454,13 @@ df <- df %>%
 
 }
 
+
+
+# Spain ----
+
+# It may (?) be necessary to update some survey_years or
+# to remove (some) records for 1993, 1994, 1995
+
 } # End of "if so_som"
 
 
@@ -464,7 +471,7 @@ df <- df %>%
 
 if (survey_form == "so_pfh") {
 
-  # Germany ----
+  ## Germany ----
 
   # German records to be removed, as requested by German soil expert
 
@@ -479,7 +486,7 @@ if (survey_form == "so_pfh") {
              survey_form, "'.\n\n"))
 
 
-  # Norway ----
+  ## Norway ----
 
   # Norwegian records without any horizon_master, layer_limits,
   # horizon_c_organic_total, bulk_density, texture data, are redundant
@@ -496,6 +503,67 @@ if (survey_form == "so_pfh") {
 
   cat(paste0("Action: redundant Norwegian layers to be removed from '",
              survey_form, "'.\n\n"))
+
+
+  ## Hungary ----
+  # Hungarian plots 15, 16, 17, 18, 20 contain data for both 2009 and
+  # 2010, where the 2010 data are clearly an improved (more complete)
+  # version of the 2009 data. Remove the latter.
+
+  unique_surveys_to_remove <-
+    df %>%
+    filter(.data$partner_code == 51) %>%
+    distinct(.data$unique_survey_profile, .keep_all = TRUE) %>%
+    group_by(plot_id, code_country, code_plot, profile_pit_id) %>%
+    mutate(survey_year_oldest_update =
+             survey_year[which(change_date ==
+                                 min(as.Date(.data$change_date)))]) %>%
+    ungroup() %>%
+    group_by(plot_id, code_country, code_plot, profile_pit_id,
+             survey_year_oldest_update) %>%
+    summarise(count = n(),
+              .groups = "drop") %>%
+    filter(count > 1) %>%
+    mutate(unique_survey = paste0(.data$code_country, "_",
+                                  .data$survey_year_oldest_update, "_",
+                                  .data$code_plot))
+
+  if (nrow(unique_surveys_to_remove) > 0) {
+
+    for (i in seq_len(nrow(unique_surveys_to_remove))) {
+
+      df_sub <- df %>%
+        filter(plot_id == unique_surveys_to_remove$plot_id[i]) %>%
+        arrange(horizon_master)
+
+      if (nrow(df_sub) > 1) {
+
+        result_columns <- sapply(df_sub[, numeric_column_names],
+                                 function(col) length(unique(na.omit(col))) >
+                                   ceiling(nrow(df_sub)/2))
+
+        columns_with_different_content <- names(result_columns[result_columns])
+
+        assertthat::assert_that(identical(columns_with_different_content,
+                                          character(0)) ||
+                                  # Sometimes single values may have been
+                                  # updated upon resubmission
+                                  length(columns_with_different_content) < 4)
+
+        ind_to_remove <-
+          which(df$unique_survey %in%
+                  unique_surveys_to_remove$unique_survey[i])
+
+        df$to_remove[ind_to_remove] <- TRUE
+
+      }
+    }
+
+    cat(paste0("Action: redundant Hungarian profiles to be removed from '",
+               survey_form, "'.\n\n"))
+  }
+
+
 
 }
 
@@ -821,6 +889,71 @@ if (survey_form == "s1_som") {
 
   }
 
+
+
+  ## Germany ----
+
+  # Some profiles (plots) appear partly in one year and
+  # partly in another. It is more likely that the survey took place in
+  # the first year than in the second.
+
+  unique_surveys_to_check <- df %>%
+    distinct(plot_id, survey_year, .keep_all = TRUE) %>%
+    group_by(plot_id, code_plot, code_country) %>%
+    reframe(
+      count = n(),
+      min_difference =
+        if (count > 1) min(diff(sort(survey_year))) else NA_real_,
+      years_min_diff = if (count > 1) {
+        years <- sort(survey_year)
+        min_diff <- min(diff(years))
+        paste(years[c(which(diff(years) == min_diff),
+                      which(diff(years) == min_diff) + 1)],
+              collapse = "_")
+      } else NA_character_) %>%
+    filter(!is.na(min_difference) &
+             min_difference == 1) %>%
+    select(plot_id, code_country, code_plot, years_min_diff)
+
+
+  if (nrow(unique_surveys_to_check) > 0) {
+
+    assertthat::assert_that(all(unique_surveys_to_check$code_country == 4))
+
+    for (i in seq_along(unique_surveys_to_check)) {
+
+      years_i <- unlist(strsplit(unique_surveys_to_check$years_min_diff[i],
+                                 "_"))
+
+      unique_surveys_i <- c(
+        paste0(unique_surveys_to_check$code_country[i], "_",
+               years_i[1], "_",
+               unique_surveys_to_check$code_plot[i]),
+        paste0(unique_surveys_to_check$code_country[i], "_",
+               years_i[2], "_",
+               unique_surveys_to_check$code_plot[i]))
+
+      df_sub <- df %>%
+        filter(unique_survey %in% unique_surveys_i)
+
+      assertthat::assert_that(
+        # No overlap between the layers of the different survey years
+        (length(unique(df_sub$code_layer[
+          which(df_sub$survey_year == years_i[1])])) +
+           length(unique(df_sub$code_layer[
+             which(df_sub$survey_year == years_i[2])]))) ==
+          length(unique(df_sub$code_layer)))
+
+      assertthat::assert_that(years_i[1] < years_i[2])
+
+      df$survey_year[which(df$unique_survey %in% unique_surveys_i)] <-
+        as.numeric(years_i[1])
+    }
+  }
+
+
+
+
 } # End of "if s1_som"
 
 
@@ -1028,6 +1161,74 @@ if (survey_form == "s1_pfh") {
 
 
 
+  ## Sweden and Poland ----
+
+  # Some profiles (plots) appear partly in one year and
+  # partly in another. It is more likely that the survey took place in
+  # the first year than in the second.
+
+  unique_surveys_to_check <- df %>%
+    filter(is.na(to_remove)) %>%
+    distinct(plot_id, survey_year, .keep_all = TRUE) %>%
+    group_by(plot_id, code_plot, code_country) %>%
+    reframe(
+      count = n(),
+      min_difference =
+        if (count > 1) min(diff(sort(survey_year))) else NA_real_,
+      years_min_diff = if (count > 1) {
+        years <- sort(survey_year)
+        min_diff <- min(diff(years))
+        paste(years[c(which(diff(years) == min_diff),
+                      which(diff(years) == min_diff) + 1)],
+              collapse = "_")
+      } else NA_character_) %>%
+    filter(!is.na(min_difference) &
+             min_difference == 1) %>%
+    select(plot_id, code_country, code_plot, years_min_diff)
+
+
+  if (nrow(unique_surveys_to_check) > 0) {
+
+    assertthat::assert_that(
+      all(unique_surveys_to_check$code_country %in% c(13, 53)))
+
+    for (i in seq_along(unique_surveys_to_check)) {
+
+      years_i <- unlist(strsplit(unique_surveys_to_check$years_min_diff[i],
+                                 "_"))
+
+      unique_surveys_i <- c(
+        paste0(unique_surveys_to_check$code_country[i], "_",
+               years_i[1], "_",
+               unique_surveys_to_check$code_plot[i]),
+        paste0(unique_surveys_to_check$code_country[i], "_",
+               years_i[2], "_",
+               unique_surveys_to_check$code_plot[i]))
+
+      df_sub <- df %>%
+        filter(unique_survey %in% unique_surveys_i)
+
+      assertthat::assert_that(
+        # No overlap between the layers of the different survey years
+        (length(unique(df_sub$horizon_limit_up[
+          which(df_sub$survey_year == years_i[1] &
+                  !is.na(df_sub$horizon_limit_up))])) +
+           length(unique(df_sub$horizon_limit_up[
+             which(df_sub$survey_year == years_i[2] &
+                     !is.na(df_sub$horizon_limit_up))]))) ==
+          length(unique(df_sub$horizon_limit_up[
+            which(!is.na(df_sub$horizon_limit_up))])))
+
+      assertthat::assert_that(years_i[1] < years_i[2])
+
+      df$survey_year[which(df$unique_survey %in% unique_surveys_i)] <-
+        as.numeric(years_i[1])
+    }
+  }
+
+
+
+
 
   ## Sweden/Spain ----
 
@@ -1085,6 +1286,60 @@ if (solve == TRUE) {
   cat(paste0("In total, ",
              nrow, " redundant records have been removed.\n\n"))
 }
+
+
+
+  # Update unique identifiers ----
+
+  if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+
+    df <- df %>%
+      mutate(plot_id = paste0(code_country, "_",
+                              code_plot),
+             unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot),
+             unique_survey_repetition = paste0(code_country, "_",
+                                               survey_year, "_",
+                                               code_plot, "_",
+                                               repetition),
+             unique_survey_layer = paste0(code_country, "_",
+                                          survey_year, "_",
+                                          code_plot, "_",
+                                          code_layer),
+             unique_layer_repetition = paste0(code_country, "_",
+                                              survey_year, "_",
+                                              code_plot, "_",
+                                              code_layer, "_",
+                                              repetition))
+  }
+
+  if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
+
+    df <- df %>%
+      mutate(plot_id = paste0(code_country, "_",
+                              code_plot),
+             unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot),
+             unique_survey_profile = paste0(code_country, "_",
+                                            survey_year, "_",
+                                            code_plot, "_",
+                                            profile_pit_id),
+             unique_survey_layer = paste0(code_country, "_",
+                                          survey_year, "_",
+                                          code_plot, "_",
+                                          horizon_master),
+             unique_layer_repetition = paste0(code_country, "_",
+                                              survey_year, "_",
+                                              code_plot, "_",
+                                              horizon_master, "_",
+                                              profile_pit_id))
+  }
+
+
+
+
 
 
 
