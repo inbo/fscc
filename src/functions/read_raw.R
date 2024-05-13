@@ -630,9 +630,6 @@ for (i in seq_along(survey_forms)) {
               by = join_by(partner_code == code)) %>%
     rename(partner_short = desc_short) %>%
     rename(partner = description) %>%
-    mutate(country = as.factor(country)) %>%
-    mutate(partner_short = as.factor(partner_short)) %>%
-    mutate(partner = as.factor(partner)) %>%
     relocate(partner) %>%
     relocate(partner_short) %>%
     relocate(country)
