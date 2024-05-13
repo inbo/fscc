@@ -114,6 +114,14 @@ harmonise_prf <- function(survey_form,
                                          "SO_PRF_ADDS.xlsx' ",
                                          "does not exist."))
 
+    df_humus <-
+      openxlsx::read.xlsx(paste0("./data/additional_data/",
+                                 "SO_PRF_ADDS 20231213.xlsx"),
+                          sheet = 1) %>%
+      mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+      mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
+      select(key, unified_humus)
+
     # This file was created by Nathalie on 17 Oct 2023
 
     so_prf_adds <-
@@ -135,7 +143,11 @@ harmonise_prf <- function(survey_form,
                       profile_pit_id)) %>%
       rename(bs_class = "BS.(high/low)",
              plot_id = PLOT_ID) %>%
-      filter(!is.na(plot_id))
+      filter(!is.na(plot_id)) %>%
+      mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
+      left_join(df_humus,
+                by = "key") %>%
+      select(-key)
 
 
     # Aggregate per plot_id
