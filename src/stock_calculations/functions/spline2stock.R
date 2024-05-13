@@ -40,7 +40,10 @@ spline2stock <- function(prof,
 
   # Assert that there are at least two horizons
 
-  assertthat::assert_that(nrow(prof) >= 2)
+  assertthat::assert_that(nrow(prof) >= 2 ||
+                            (nrow(prof) == 1 &&
+                               max(prof$depth_bottom) >= 0.8 *
+                               unique(prof$soil_depth)))
 
   # Assert that one horizon is the upper below-ground layer
 
@@ -50,11 +53,32 @@ spline2stock <- function(prof,
 
   max_soil_depth <- unique(prof$soil_depth)
 
+  if (any(paste0(variab_name, "_min") %in% names(prof))) {
+    variab_min_i <- prof[[paste0(variab_name, "_min")]]
+  } else {
+    variab_min_i <- NULL
+  }
+
+  if (any(paste0(variab_name, "_max") %in% names(prof))) {
+    variab_max_i <- prof[[paste0(variab_name, "_max")]]
+  } else {
+    variab_max_i <- NULL
+  }
+
+  if (any("gapfilled_post_layer1" %in% names(prof))) {
+    variab_source <- prof$gapfilled_post_layer1
+  } else {
+    variab_source <- NULL
+  }
+
   spline_output <-
     soilspline(id = unique(prof$profile_id),
                depth_top = prof$depth_top,
                depth_bottom = prof$depth_bottom,
                variab = prof[[variab_name]],
+               variab_min = variab_min_i,
+               variab_max = variab_max_i,
+               variab_source = variab_source,
                max_soil_depth = max_soil_depth,
                survey_form = survey_form,
                graph = graph)
@@ -71,9 +95,11 @@ spline2stock <- function(prof,
     nlay_below_ground <- prof %>%
       filter(is.na(gapfilled_post_layer1)) %>%
       nrow
+
   } else {
 
     nlay_below_ground <- length(prof[[variab_name]])
+
   }
 
   stocks <- data.frame(
@@ -82,47 +108,47 @@ spline2stock <- function(prof,
     stock_10 = ifelse(10 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(10)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_20 = ifelse(20 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(20)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_30 = ifelse(30 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(30)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_40 = ifelse(40 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(40)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_50 = ifelse(50 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(50)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_60 = ifelse(60 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(60)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_70 = ifelse(70 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(70)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_80 = ifelse(80 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(80)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_90 = ifelse(90 <= max_soil_depth,
                         round(sum(spline_output_per_cm[seq_len(90)]),
                               2),
-                        as.numeric(NA)),
+                        NA_real_),
     stock_100 = ifelse(100 <= max_soil_depth,
                          round(sum(spline_output_per_cm[seq_len(100)]),
                                2),
-                         as.numeric(NA)),
+                         NA_real_),
     stock_below_ground =
       ifelse(max_soil_depth > 1,
              round(sum(spline_output_per_cm[seq_len(max_soil_depth)]), 2),
-             as.numeric(NA)),
+             NA_real_),
     stock_below_ground_topsoil =
       ifelse(max_soil_depth > 1,
              ifelse(max_soil_depth < 30,
@@ -130,21 +156,60 @@ spline2stock <- function(prof,
                           2),
                     round(sum(spline_output_per_cm[seq_len(30)]),
                           2)),
-             as.numeric(NA)),
+             NA_real_),
     rmse_mpspline = round(as.numeric(spline_output$rmse_mpspline[1]),
                           3))
 
+  if ("spline_output_max" %in% names(spline_output) &&
+      "spline_output_min" %in% names(spline_output)) {
 
+    spline_output_per_cm_min <- spline_output$spline_output_min
+    spline_output_per_cm_max <- spline_output$spline_output_max
+
+    stocks <- cbind(
+      stocks,
+      data.frame(
+        stock_below_ground_min =
+          ifelse(max_soil_depth > 1,
+                 round(sum(spline_output_per_cm_min[seq_len(max_soil_depth)]),
+                       2),
+                 NA_real_),
+        stock_below_ground_max =
+          ifelse(max_soil_depth > 1,
+                 round(sum(spline_output_per_cm_max[seq_len(max_soil_depth)]),
+                       2),
+                 NA_real_),
+        stock_below_ground_topsoil_min =
+          ifelse(max_soil_depth > 1,
+                 ifelse(max_soil_depth < 30,
+                        round(sum(spline_output_per_cm_min[
+                          seq_len(max_soil_depth)]),
+                              2),
+                        round(sum(spline_output_per_cm_min[seq_len(30)]),
+                              2)),
+                 NA_real_),
+        stock_below_ground_topsoil_max =
+          ifelse(max_soil_depth > 1,
+                 ifelse(max_soil_depth < 30,
+                        round(sum(spline_output_per_cm_max[
+                          seq_len(max_soil_depth)]),
+                          2),
+                        round(sum(spline_output_per_cm_max[seq_len(30)]),
+                              2)),
+                 NA_real_)))
+
+  }
 
   if (density_per_three_cm == TRUE) {
 
     density_depths <- seq(1, 100, by = 3)
 
     for (i in density_depths) {
+
       stocks$new_col <- NA
 
       if (i <= round(max_soil_depth)) {
-      stocks$new_col <- round(spline_output_per_cm[i], 3)
+      stocks$new_col <- round(spline_output_per_cm[i], 2)
       }
 
       names(stocks)[which(names(stocks) == "new_col")] <-

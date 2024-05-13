@@ -29,6 +29,9 @@ soilspline <- function(id,
                        depth_top,
                        depth_bottom,
                        variab,
+                       variab_min = NULL,
+                       variab_max = NULL,
+                       variab_source = NULL,
                        max_soil_depth,
                        survey_form = NULL,
                        graph = TRUE) {
@@ -38,15 +41,21 @@ soilspline <- function(id,
   stopifnot(require("tidyverse"),
             require("assertthat"),
             require("aqp"),
+            require("ggtext"),
             require("mpspline2"))
 
   # Set directory where graphs should be saved
 
-  path <- c("./output/stocks/splines/")
+  path <- paste0("./output/stocks/",
+                 as.character(format(Sys.Date(), "%Y%m%d")), "_",
+                 as.character(format(as.Date(
+                   get_date_local(path = "./data/raw_data/")),
+                   format = "%Y%m%d")),
+                 "_carbon_stocks/",
+                 "splines_per_profile/")
 
-  if (!is.null(survey_form)) {
-    path <- paste0(path, survey_form, "/")
-  }
+  assertthat::assert_that(
+    dir.exists(path))
 
   # Create directory if it doesn't exist
 
@@ -63,7 +72,10 @@ soilspline <- function(id,
 
   assertthat::assert_that(length(depth_top) == length(depth_bottom) &&
                             length(depth_top) == length(variab) &&
-                            length(depth_top) >= 2)
+                            (length(depth_top) >= 2 ||
+                               (length(depth_top) == 1 &&
+                                  max(depth_bottom) >= 0.8 *
+                                  max_soil_depth)))
 
   assertthat::assert_that(min(depth_top) == 0)
 
@@ -105,6 +117,8 @@ soilspline <- function(id,
   #   the interquartile range of the root mean squared error (RMSE_IQR)
 
 
+  ## Mean ----
+
   # Prepare input for mpspline_one
 
   prof_input <-
@@ -113,13 +127,32 @@ soilspline <- function(id,
                depth_bottom,
                variab)
 
-  mpspline_output <- mpspline_one(site = prof_input,
-                                  var_name = "variab",
-                                  lam = 0.1,
-                                  # constrains the maximum predicted value
-                                  # to a realistic number. Defaults
-                                  # to 1000:
-                                  vhigh = 2600)
+  if (nrow(prof_input) == 1) {
+
+    # Spline with one layer (e.g. in very shallow profile)
+
+    suppressMessages({
+
+      mpspline_output <- mpspline_one(site = prof_input,
+                                      var_name = "variab",
+                                      lam = 0.1,
+                                      # constrains the maximum predicted value
+                                      # to a realistic number. Defaults
+                                      # to 1000:
+                                      vhigh = 2600)
+    })
+  } else {
+
+    mpspline_output <- mpspline_one(site = prof_input,
+                                    var_name = "variab",
+                                    lam = 0.1,
+                                    # constrains the maximum predicted value
+                                    # to a realistic number. Defaults
+                                    # to 1000:
+                                    vhigh = 2600)
+  }
+
+
 
   # Extrapolate the mass-preserving spline output to depth max_soil_depth ----
   # (i.e. effective soil depth; max 100 cm)
@@ -147,84 +180,257 @@ soilspline <- function(id,
                           0,
                           spline_output)
 
-  # Creating a list to store multiple results
-  result <- list(
-    spline_output = spline_output,
-    rmse_mpspline = mpspline_output$est_err[1])
+
+  if (!is.null(variab_min) &&
+      all(!is.na(variab_min)) &&
+      !is.null(variab_max) &&
+      all(!is.na(variab_max))) {
+
+    ## Min ----
+
+    if (nrow(prof_input) == 1) {
+
+      suppressMessages({
+
+        mpspline_output_min <- mpspline_one(site = data.frame(id,
+                                                              depth_top,
+                                                              depth_bottom,
+                                                              variab_min),
+                                            var_name = "variab_min",
+                                            lam = 0.1,
+                                            vhigh = 2600)
+      })
+    } else {
+
+      mpspline_output_min <- mpspline_one(site = data.frame(id,
+                                                            depth_top,
+                                                            depth_bottom,
+                                                            variab_min),
+                                          var_name = "variab_min",
+                                          lam = 0.1,
+                                          vhigh = 2600)
+    }
+
+
+    spline_output_min <-
+      spline(x = mpspline_output_min$est_1cm[seq_len(max(depth_bottom))],
+             y = NULL,
+             method = "natural",
+             xout = seq_len(max_soil_depth))$y
+
+    spline_output_min <- ifelse(spline_output_min < 0,
+                                0,
+                                spline_output_min)
+
+    ## Max ----
+
+    if (nrow(prof_input) == 1) {
+
+      suppressMessages({
+
+        mpspline_output_max <- mpspline_one(site = data.frame(id,
+                                                              depth_top,
+                                                              depth_bottom,
+                                                              variab_max),
+                                            var_name = "variab_max",
+                                            lam = 0.1,
+                                            vhigh = 2600)
+      })
+    } else {
+
+      mpspline_output_max <- mpspline_one(site = data.frame(id,
+                                                            depth_top,
+                                                            depth_bottom,
+                                                            variab_max),
+                                          var_name = "variab_max",
+                                          lam = 0.1,
+                                          vhigh = 2600)
+    }
+
+
+    spline_output_max <-
+      spline(x = mpspline_output_max$est_1cm[seq_len(max(depth_bottom))],
+             y = NULL,
+             method = "natural",
+             xout = seq_len(max_soil_depth))$y
+
+    spline_output_max <- ifelse(spline_output_max < 0,
+                                0,
+                                spline_output_max)
+
+    # Create a list to store multiple results
+    result <- list(
+      spline_output = spline_output,
+      spline_output_min = spline_output_min,
+      spline_output_max = spline_output_max,
+      rmse_mpspline = mpspline_output$est_err[1])
+
+
+  } else {
+
+    # No min and max
+
+    # Create a list to store multiple results ----
+    result <- list(
+      spline_output = spline_output,
+      rmse_mpspline = mpspline_output$est_err[1])
+  }
+
 
 
   # Make a graph ----
 
   if (graph == TRUE) {
 
-    par(mfrow = c(1, 1))
+    if (!is.null(variab_min) &&
+        all(!is.na(variab_min)) &&
+        !is.null(variab_max) &&
+        all(!is.na(variab_max))) {
 
-    # Save plot as a file
+      splines <- data.frame(depth = seq_len(max_soil_depth),
+                            spline_avg = spline_output,
+                            spline_min = spline_output_min,
+                            spline_max = spline_output_max)
+      } else {
 
-    fname <- paste0(path, id, ".png")
-    png(file = fname)
+        # No max and min
+        splines <- data.frame(depth = seq_len(max_soil_depth),
+                              spline_avg = spline_output)
+      }
 
-    # Plot mpspline
 
-    depth_average <- (-1) * (depth_top + depth_bottom) / 2
+      if (!is.null(variab_source)) {
 
-    plot(variab,
-         depth_average,
-         xlim = c(0, max(variab, na.rm = TRUE)),
-         ylim = c(-1 * max_soil_depth, 0),
-         ylab = c("Depth (cm)"),
-         col = "black",
-         cex = 1.2,
-         pch = 16,
-         main = id,
-         xlab = expression('Carbon density (t C ha'^-1*'cm'^-1*')'))
+        prof_data <-
+          data.frame(depth_top,
+                     depth_bottom,
+                     variab,
+                     variab_source)
 
-    # Plot bulk horizons
+      } else {
 
-    x_left <- rep(0, length(depth_top))
-    y_bottom <- (-1) * depth_bottom
-    x_right <- variab
-    y_top <- (-1) * depth_top
+        prof_data <-
+          data.frame(depth_top,
+                     depth_bottom,
+                     variab) %>%
+          mutate(variab_source = NA)
+      }
 
-    rect(x_left,
-         y_bottom,
-         x_right,
-         y_top,
-         col = 8,
-         border = "white",
-         lwd = 2)
+      prof_data <- prof_data %>%
+        mutate(variab_source = case_when(
+          variab_source == "rule: fixed value below 80 cm" ~
+            "Gap-filled\n(fixed value > 80 cm)",
+          variab_source == "rule: constant below 40 cm" ~
+            "Gap-filled\n(constant C > 40 cm)",
+          TRUE ~ "Layer 1+")) %>%
+        mutate(variab_source =
+                 factor(variab_source,
+                        levels = c("Layer 1+",
+                                   "Gap-filled\n(constant C > 40 cm)",
+                                   "Gap-filled\n(fixed value > 80 cm)")))
 
-    # Plot points and lines
+      # Create the plot
+      p <- ggplot() +
+        geom_rect(data = prof_data,
+                  aes(ymin = 0,
+                      ymax = variab,
+                      xmin = (-1) * depth_bottom,
+                      xmax = (-1) * depth_top,
+                      fill = variab_source),
+                  color = NA,
+                  linewidth = 1)
 
-    # Max depth of profile
-    abline(h = -1 * max_soil_depth,
-           col = 3,
-           lty = 2,
-           lwd = 2)
+      if (!is.null(variab_min) &&
+          all(!is.na(variab_min)) &&
+          !is.null(variab_max) &&
+          all(!is.na(variab_max))) {
 
-    # 1-cm mpspline till max depth
-    lines(spline_output[seq_len(max_soil_depth)],
-          -1 * seq_len(max_soil_depth),
-          col = "blue",
-          lwd = 3)
+      p <- p +
+        geom_ribbon(data = splines,
+                    aes(ymin = spline_min,
+                        ymax = spline_max,
+                        x = (-1) * depth),
+                    color = NA,
+                    fill = "#843860",
+                    alpha = 0.4)
 
-    points(spline_output,
-           seq_along(spline_output),
-           col = 3)
+      }
 
-    # Midpoints of horizons
-    points(variab,
-           depth_average,
-           col = "black",
-           cex = 1.2,
-           pch = 16,
-           main = id)
+      p <- p +
+        geom_line(data = splines,
+                  aes(y = spline_avg,
+                      x = (-1) * depth),
+                  color = "#843860",
+                  linewidth = 1) +
+        scale_fill_manual(
+          values = c("Layer 1+" = "#AAAAAA",
+                     "Gap-filled\n(constant C > 40 cm)" = "#BEBEBE",
+                     "Gap-filled\n(fixed value > 80 cm)" = "#D2D2D2")) +
+        labs(y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
+             x = "**Depth**<br>(cm)",
+             fill = NULL,
+             title = unique(prof$profile_id)) +
+        coord_flip() +
+        scale_y_continuous(expand = c(0, 0)) +
+        scale_x_continuous(breaks = unique(c(seq(0, (-1) * max(splines$depth),
+                                                 by = -20),
+                                             (-1) * max_soil_depth)),
+                           expand = c(0, 0)) +
+        theme(text = element_text(color = "black",
+                                  size = 10),
+              plot.title = element_text(color = "black",
+                                        size = 10,
+                                        face = "bold",
+                                        margin = margin(b = 10)),
+              panel.background = element_blank(),
+              axis.text = element_text(size = 10, colour = "black"),
+              axis.text.y = element_text(hjust = 1,
+                                         vjust = 0.5,
+                                         margin = margin(0,
+                                                         5,
+                                                         0,
+                                                         0)),
+              axis.text.x = element_text(margin = margin(8,
+                                                         0,
+                                                         0,
+                                                         0)),
+              axis.title.x = element_markdown(hjust = 1.01,
+                                              lineheight = 1.4,
+                                              colour = "black",
+                                              margin = margin(t = 8,
+                                                              r = 5)),
+              axis.title.y = element_markdown(angle = 0,
+                                              hjust = 0,
+                                              vjust = 1.02,
+                                              lineheight = 1.4,
+                                              colour = "black",
+                                              margin = margin(r = 5)),
+              legend.text = element_text(lineheight = 1.2),
+              axis.ticks.length = unit(-0.2, "cm"),
+              axis.ticks.x = element_line(linewidth = 0.7, colour = "black"),
+              axis.ticks.y = element_line(linewidth = 0.7, colour = "black"),
+              axis.line.y = element_line(linewidth = 0.7, colour = "black"),
+              axis.line.x = element_line(linewidth = 0.7, colour = "black"),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              plot.margin = margin(t = 0.5,  # Top margin
+                                   r = 0.5,  # Right margin
+                                   b = 0.5,  # Bottom margin
+                                   l = 0.5,  # Left margin
+                                   unit = "cm"),
+              aspect.ratio = 1)
 
-    # Save PNG graph output with id name
-    dev.off()
+    ggsave(filename = paste0(id, ".png"),
+           path = path,
+           plot = p,
+           dpi = 500,
+           height = 4,
+           width = 6.81)
 
-  }
+  } # End of "if graph"
 
   # Return splined variable for each cm until the maximum soil depth
   return(result)
 }
+
+
