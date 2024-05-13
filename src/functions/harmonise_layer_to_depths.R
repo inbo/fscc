@@ -67,6 +67,13 @@ harmonise_layer_to_depths <- function(limit_sup,
 
   if (!is.null(df_sub_selected)) {
 
+    assertthat::assert_that(
+      ("layer_limit_superior" %in% names(df_sub_selected) ||
+         "horizon_limit_up" %in% names(df_sub_selected)) &&
+      ("layer_limit_inferior" %in% names(df_sub_selected) ||
+         "horizon_limit_low" %in% names(df_sub_selected)) &&
+      (parameter_name %in% names(df_sub_selected)))
+
     is_som <- ("layer_limit_superior" %in% names(df_sub_selected) &&
                        "layer_limit_inferior" %in% names(df_sub_selected))
 
@@ -91,14 +98,18 @@ harmonise_layer_to_depths <- function(limit_sup,
                    horizon_limit_up = upper_depths,
                    horizon_limit_low = lower_depths,
                    variab = variab)
+
     } else
       if (is.null(coarse_fragment_vol_frac)) {
+
     df_sub_selected <-
       data.frame(bulk_density = bulk_density,
                  horizon_limit_up = upper_depths,
                  horizon_limit_low = lower_depths,
                  variab = variab)
+
     } else {
+
       df_sub_selected <-
         data.frame(bulk_density = bulk_density,
                    coarse_fragment_vol_frac = coarse_fragment_vol_frac,
@@ -165,10 +176,16 @@ harmonise_layer_to_depths <- function(limit_sup,
   bulk_density_orig <- df_sub_selected$bulk_density
 
   df_sub_selected <- df_sub_selected %>%
-    mutate(bd_gapfilled = ifelse(any(is.na(bulk_density_orig)) ||
-                                   parameter_name == "bulk_density",
-                                 1,
-                                 bulk_density))
+    mutate(
+      bd_gapfilled = ifelse(
+        (grepl("(bulk_dens|coarse_frag)", parameter_name)),
+        1,
+        case_when(
+          any(is.na(bulk_density_orig)) & any(!is.na(bulk_density_orig)) ~
+            coalesce(bulk_density,
+                     mean(bulk_density_orig, na.rm = TRUE)),
+          all(is.na(bulk_density_orig)) ~ 1,
+          .default = bulk_density)))
 
   df_sub_selected$weight <- NA
   df_sub_selected$weight_aid <- NA
@@ -180,7 +197,6 @@ harmonise_layer_to_depths <- function(limit_sup,
   }
 
   if (nrow(df_sub_selected) >= 2) {
-
 
     for (l in seq_len(nrow(df_sub_selected))) {
 
@@ -260,7 +276,6 @@ harmonise_layer_to_depths <- function(limit_sup,
       if (mode == "categorical") {
 
         result <- df_sub_selected %>%
-          # filter(!is.na(.data[[parameter_name]])) %>%
           arrange(desc(weight)) %>%
           head(1) %>%
           pull(.data[[parameter_name]])
