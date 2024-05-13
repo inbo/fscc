@@ -47,6 +47,10 @@ get_stratifiers <- function(level) {
 
   d_parent_material <-
     read.csv2("./data/raw_data/so/adds/dictionaries/d_parent_material.csv") %>%
+    # For now: filter for parent material codes from the same type like the
+    # European Soil Database. The types from before 2005 need to be harmonised
+    # to this new version.
+    filter(is.na(valid_to_survey_year)) %>%
     mutate(description = str_to_title(description)) %>%
     filter(code != 0) %>%
     arrange(code) %>%
@@ -146,9 +150,31 @@ get_stratifiers <- function(level) {
                                            "elev/wc2.1_30s_elev.tif"),
                          name_col = "wc2.1_30s_elev") %>%
     st_drop_geometry() %>%
-    rename(elev = "wc2.1_30s_elev")
+    rename(elev = "wc2.1_30s_elev") %>%
+    as_sf
 
 
+  # Add parent material data
+
+  par_mat_dom1_dictionary <-
+    read.csv(paste0("./data/additional_data/shapefiles/",
+                    "European Soil Database/SoilDB_rasters/",
+                    "par_mat_dom1_dictionary.csv"),
+             sep = ";") %>%
+    mutate(par_mat_dom1 = str_to_sentence(par_mat_dom1))
+
+  clim_sf <- overlay_tif(sf1 = clim_sf,
+                      path_tif = paste0("./data/additional_data/shapefiles/",
+                                        "European Soil Database/",
+                                        "SoilDB_rasters/parmado1.tif"),
+                      name_col = "parmado1") %>%
+    st_drop_geometry() %>%
+    left_join(par_mat_dom1_dictionary %>%
+                rename(parmado1 = PAR.MAT.DOM1) %>%
+                rename(parent_material_esd = par_mat_dom1) %>%
+                select(parmado1, parent_material_esd),
+              by = "parmado1") %>%
+    select(-parmado1)
 
 
 
@@ -254,7 +280,8 @@ get_stratifiers <- function(level) {
 
   df_strat <-
     # Add biogeographical region
-    st_join(df_strat_sf, biogeo_sf) %>%
+    st_join(df_strat_sf,
+            biogeo_sf) %>%
     rename(biogeo = code) %>%
     st_drop_geometry() %>%
     distinct(plot_id, .keep_all = TRUE) %>%
@@ -386,11 +413,18 @@ get_stratifiers <- function(level) {
                 arrange(-count) %>%
                 slice_head() %>%
                 ungroup() %>%
-                select(plot_id, code_parent_material_1),
+                # Take the first digit of the code (only major classes)
+                mutate(code_parent_material_dom1 =
+                         as.integer(substr(code_parent_material_1, 1, 1))) %>%
+                select(plot_id,
+                       code_parent_material_1,
+                       code_parent_material_dom1),
               by = "plot_id") %>%
     left_join(d_parent_material,
-              by = join_by(code_parent_material_1 == code)) %>%
+              by = join_by(code_parent_material_dom1 == code)) %>%
     rename(parent_material = description) %>%
+    mutate(parent_material = coalesce(parent_material,
+                                      parent_material_esd)) %>%
     # Add main tree species
     left_join(get_env("si_sta") %>%
                 select(plot_id, code_tree_species) %>%
@@ -553,21 +587,27 @@ get_stratifiers <- function(level) {
            main_tree_species,
            bs_class,
            wrb_qualifier_1,
-           code_wrb_soil_group,
-           uncertain_soil_group_options,
-           code_wrb_qualifier_1,
-           code_forest_type,
-           code_parent_material_1,
-           code_tree_species,
-           eff_soil_depth_0,
-           date_profile_desc)
+           # code_wrb_soil_group,
+           # uncertain_soil_group_options,
+           # code_wrb_qualifier_1,
+           # code_forest_type,
+           # code_parent_material_1,
+           # code_tree_species,
+           # eff_soil_depth_0,
+           # date_profile_desc
+           )
 
-  if (length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
+  if ("uncertain_soil_group_options" %in% names(df_strat) &&
+      length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
+
     df_strat <- df_strat %>%
       select(-uncertain_soil_group_options)
   }
 
 }
+
+
+
 
   # 2. "s1" ----
 
@@ -797,11 +837,18 @@ get_stratifiers <- function(level) {
                 arrange(-count) %>%
                 slice_head() %>%
                 ungroup() %>%
-                select(plot_id, code_parent_material_1),
+                # Take the first digit of the code (only major classes)
+                mutate(code_parent_material_dom1 =
+                         as.integer(substr(code_parent_material_1, 1, 1))) %>%
+                select(plot_id,
+                       code_parent_material_1,
+                       code_parent_material_dom1),
               by = "plot_id") %>%
     left_join(d_parent_material,
-              by = join_by(code_parent_material_1 == code)) %>%
+              by = join_by(code_parent_material_dom1 == code)) %>%
     rename(parent_material = description) %>%
+    mutate(parent_material = coalesce(parent_material,
+                                      parent_material_esd)) %>%
     # Add main tree species
     left_join(get_env("y1_st1") %>%
                 select(plot_id, code_tree_species) %>%
@@ -932,16 +979,19 @@ get_stratifiers <- function(level) {
            main_tree_species,
            bs_class,
            wrb_qualifier_1,
-           code_wrb_soil_group,
-           uncertain_soil_group_options,
-           code_wrb_qualifier_1,
-           code_forest_type,
-           code_parent_material_1,
-           code_tree_species,
-           eff_soil_depth_0,
-           date_profile_desc)
+           # code_wrb_soil_group,
+           # uncertain_soil_group_options,
+           # code_wrb_qualifier_1,
+           # code_forest_type,
+           # code_parent_material_1,
+           # code_tree_species,
+           # eff_soil_depth_0,
+           # date_profile_desc
+           )
 
-  if (length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
+  if ("uncertain_soil_group_options" %in% names(df_strat) &&
+      length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
+
     df_strat <- df_strat %>%
       select(-uncertain_soil_group_options)
   }
