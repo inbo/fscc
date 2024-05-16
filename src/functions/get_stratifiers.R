@@ -209,13 +209,6 @@ get_stratifiers <- function(level) {
                                        "SO_PRF_ADDS.xlsx' ",
                                        "does not exist."))
 
-  df_humus <-
-    openxlsx::read.xlsx(paste0("./data/additional_data/",
-                               "SO_PRF_ADDS 20231213.xlsx"),
-                        sheet = 1) %>%
-    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
-    mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
-    select(key, unified_humus)
 
   so_prf_adds_agg <-
     openxlsx::read.xlsx(paste0("./data/additional_data/",
@@ -224,17 +217,21 @@ get_stratifiers <- function(level) {
     rename(bs_class = "BS.(high/low)") %>%
     mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
     filter(!is.na(plot_id)) %>%
-    mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
-    left_join(df_humus,
-              by = "key") %>%
-    select(-key) %>%
+    # Some columns contain a "_" which is used as a separator below.
+    # Replace by a dot.
+    mutate_at(vars(c("RSGu", "QUALu", "SPECu", "METHOD_RSGu", "DEPTHSTOCK",
+                     "bs_class", "EFTC_harmonised", "Source_EFTC",
+                     "code_humus", "unified_humus", "remark")),
+              ~str_replace_all(., "_", ".")) %>%
     mutate(soil_wrb = paste0(RSGu, "_",
                              QUALu, "_",
                              SPECu, "_",
                              METHOD_RSGu, "_",
                              DEPTHSTOCK, "_",
                              bs_class, "_",
-                             EFTC, "_",
+                             EFTC_harmonised, "_",
+                             Source_EFTC, "_",
+                             code_humus, "_",
                              unified_humus, "_",
                              remark)) %>%
     # Filter for the most recent survey_year
@@ -256,6 +253,8 @@ get_stratifiers <- function(level) {
                       "eff_soil_depth",
                       "bs_class",
                       "code_forest_type",
+                      "eftc_source",
+                      "code_humus",
                       "humus_type",
                       "remark_harmonisation_fscc"),
              sep = "_") %>%
@@ -263,7 +262,9 @@ get_stratifiers <- function(level) {
     mutate_if(
       function(x) !is.Date(x),
       ~ifelse(. == "NA" | . == "", NA_character_, .)) %>%
-    select(-code_wrb_spezifier_1)
+    select(-code_wrb_spezifier_1,
+           # Since the harmonised humus form is already included
+           -code_humus)
 
 
   assertthat::assert_that(
@@ -413,9 +414,16 @@ get_stratifiers <- function(level) {
                 arrange(-count) %>%
                 slice_head() %>%
                 ungroup() %>%
+                # Manual correction for plot 5_16 (according to old system)
+                mutate(code_parent_material_1 =
+                         ifelse(plot_id == "5_16",
+                                3210,
+                                code_parent_material_1)) %>%
                 # Take the first digit of the code (only major classes)
                 mutate(code_parent_material_dom1 =
                          as.integer(substr(code_parent_material_1, 1, 1))) %>%
+                mutate(code_parent_material_dom1 =
+                         1000 * code_parent_material_dom1) %>%
                 select(plot_id,
                        code_parent_material_1,
                        code_parent_material_dom1),
@@ -586,7 +594,7 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
-           wrb_qualifier_1,
+           wrb_qualifier_1
            # code_wrb_soil_group,
            # uncertain_soil_group_options,
            # code_wrb_qualifier_1,
@@ -595,7 +603,13 @@ get_stratifiers <- function(level) {
            # code_tree_species,
            # eff_soil_depth_0,
            # date_profile_desc
-           )
+           ) %>%
+    rename(mat = tavg,
+           map = prec,
+           wrb_ref_soil_group = wrb_soil_group,
+           eftc = forest_type,
+           humus_form = humus_type,
+           biogeographical_region = biogeo)
 
   if ("uncertain_soil_group_options" %in% names(df_strat) &&
       length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
@@ -840,6 +854,8 @@ get_stratifiers <- function(level) {
                 # Take the first digit of the code (only major classes)
                 mutate(code_parent_material_dom1 =
                          as.integer(substr(code_parent_material_1, 1, 1))) %>%
+                mutate(code_parent_material_dom1 =
+                         1000 * code_parent_material_dom1) %>%
                 select(plot_id,
                        code_parent_material_1,
                        code_parent_material_dom1),
@@ -987,7 +1003,13 @@ get_stratifiers <- function(level) {
            # code_tree_species,
            # eff_soil_depth_0,
            # date_profile_desc
-           )
+           ) %>%
+    rename(mat = tavg,
+           map = prec,
+           wrb_ref_soil_group = wrb_soil_group,
+           eftc = forest_type,
+           humus_form = humus_type,
+           biogeographical_region = biogeo)
 
   if ("uncertain_soil_group_options" %in% names(df_strat) &&
       length(which(!is.na(df_strat$uncertain_soil_group_options))) == 0) {
