@@ -16,7 +16,12 @@
 #' as_character_summary("green")
 #' # Returns "green"
 
-as_character_summary <- function(vector_to_convert) {
+as_character_summary <- function(vector_to_convert,
+                                 quot_marks = FALSE) {
+
+  if (quot_marks == TRUE) {
+    vector_to_convert <- paste0("'", vector_to_convert, "'")
+  }
 
   vec_caution <- if (length(vector_to_convert) == 1) {
     as.character(vector_to_convert)
