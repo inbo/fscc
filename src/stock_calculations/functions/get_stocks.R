@@ -104,9 +104,9 @@ get_stocks <- function(survey_form,
     }
 
     df_strat <- df_strat %>%
-      select(plot_id, longitude_dec, latitude_dec, tavg, prec, slope, altitude,
-             wrb_soil_group, forest_type, humus_type,
-             parent_material, biogeo,
+      select(plot_id, longitude_dec, latitude_dec, mat, map, slope, altitude,
+             wrb_ref_soil_group, eftc, humus_form,
+             parent_material, biogeographical_region,
              main_tree_species, bs_class)
   }
 
@@ -1367,6 +1367,14 @@ get_stocks <- function(survey_form,
     upper = as.numeric(toc_ff[which(names(toc_ff) == "95%")]))
 
 
+  # TOC data below LOQ for the forest floor are highly implausible
+
+  toc_loq <- read.csv2("./data/additional_data/ranges_qaqc.csv") %>%
+    filter(parameter_som == "organic_carbon_total") %>%
+    pull(LOQ_org)
+
+
+
 
   cat(paste0(" \nCalculate forest floor stocks by depth-integrating ",
              "layer stocks.\n"))
@@ -1412,6 +1420,24 @@ get_stocks <- function(survey_form,
            parameter_for_stock,
            parameter_for_stock_min,
            parameter_for_stock_max) %>%
+    # Remove TOCs below LOQ (since highly implausible for forest floor),
+    # e.g. for the UK in LI
+    mutate(
+      parameter_for_stock_min = ifelse(
+        !is.na(parameter_for_stock) &
+          parameter_for_stock < toc_loq,
+        NA_real_,
+        parameter_for_stock_min),
+      parameter_for_stock_max = ifelse(
+        !is.na(parameter_for_stock) &
+          parameter_for_stock < toc_loq,
+        NA_real_,
+        parameter_for_stock_max),
+      parameter_for_stock = ifelse(
+        !is.na(parameter_for_stock) &
+          parameter_for_stock < toc_loq,
+        NA_real_,
+        parameter_for_stock)) %>%
     # Gap-fill TOCs
     mutate(
       parameter_for_stock_min = ifelse(
@@ -1988,7 +2014,8 @@ if (length(survey_forms) == 2) {
   if (add_stratifiers == TRUE) {
 
     plot_stocks <- plot_stocks %>%
-      left_join(df_strat,
+      left_join(df_strat %>%
+                  select(-eff_soil_depth),
                 by = "plot_id")
 
   }
@@ -2020,6 +2047,12 @@ if (length(survey_forms) == 2) {
               dec = ".")
 
 
+  source("./src/functions/create_attribute_catalogue.R")
+
+  create_attribute_catalogue(data_frame =
+                               format_stocks(plot_stocks),
+                             path_to_save = dir)
+
 
 
 
@@ -2047,6 +2080,7 @@ if (length(survey_forms) == 2) {
       # Upper layer limit forest floor
       df_layer %>%
         filter(layer_type == "forest_floor") %>%
+        filter(profile_id_form %in% profile_stocks$profile_id_form) %>%
         left_join(profile_stocks %>%
                     select(profile_id_form, stock, stock_below_ground,
                            stock_below_ground_topsoil),
@@ -2060,6 +2094,7 @@ if (length(survey_forms) == 2) {
       # Upper layer limit forest floor
       df_layer %>%
         filter(layer_type == "forest_floor") %>%
+        filter(profile_id_form %in% profile_stocks$profile_id_form) %>%
         left_join(profile_stocks %>%
                     select(profile_id_form, stock, stock_below_ground,
                            stock_below_ground_topsoil),
@@ -2070,7 +2105,14 @@ if (length(survey_forms) == 2) {
         select(survey_form, code_country, code_plot, plot_id, survey_year,
                repetition, profile_id, profile_id_form, soil_depth,
                stock, stock_below_ground, stock_below_ground_topsoil,
-               depth, density)) %>%
+               depth, density))
+
+  profile_stocks_long <- profile_stocks_long %>%
+    bind_rows(
+      # Add data for 0-cm depth
+      profile_stocks_long %>%
+        filter(depth == 1) %>%
+        mutate(depth = 0)) %>%
     arrange(code_country,
             code_plot,
             survey_year,
