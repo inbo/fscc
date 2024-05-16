@@ -173,6 +173,17 @@ sync_local_data(list_subfolders_data = "layer1_data",
 
 
 
+# 7. Create attribute table ----
+
+source("./src/functions/create_attribute_catalogue.R")
+
+create_attribute_catalogue(data_frame = c("so_som", "so_pfh",
+                                          "so_strat"),
+                           path_to_save = "./data/layer1_data/so/")
+
+create_attribute_catalogue(data_frame = c("s1_som", "s1_pfh",
+                                          "s1_strat"),
+                           path_to_save = "./data/layer1_data/s1/")
 
 
 
