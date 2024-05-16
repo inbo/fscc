@@ -6734,7 +6734,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                         (.data$layer_number != .data$layer_number_deepest),
                       .data$next_horizon_limit_up,
                       # If the layers are overlapping:
-                      # take the average of the adjacent overlapping depth limits
+                      # take the average of the adjacent overlapping depth
+                      # limits
                       ifelse(!is.na(.data$horizon_limit_low) &
                                !is.na(.data$next_horizon_limit_up) &
                                (.data$horizon_limit_low >
