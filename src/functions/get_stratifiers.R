@@ -231,6 +231,7 @@ get_stratifiers <- function(level) {
                              bs_class, "_",
                              EFTC_harmonised, "_",
                              Source_EFTC, "_",
+                             main.tree.species.code, "_",
                              code_humus, "_",
                              unified_humus, "_",
                              remark)) %>%
@@ -254,11 +255,13 @@ get_stratifiers <- function(level) {
                       "bs_class",
                       "code_forest_type",
                       "eftc_source",
+                      "code_tree_species",
                       "code_humus",
                       "humus_type",
                       "remark_harmonisation_fscc"),
              sep = "_") %>%
     mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
+    mutate(code_tree_species = as.numeric(code_tree_species)) %>%
     mutate_if(
       function(x) !is.Date(x),
       ~ifelse(. == "NA" | . == "", NA_character_, .)) %>%
@@ -445,8 +448,11 @@ get_stratifiers <- function(level) {
                 arrange(-count) %>%
                 slice_head() %>%
                 ungroup() %>%
-                select(plot_id, code_tree_species),
+                select(plot_id, code_tree_species) %>%
+                rename(code_tree_species_pcc = code_tree_species),
               by = "plot_id") %>%
+    mutate(code_tree_species = coalesce(code_tree_species,
+                                        code_tree_species_pcc)) %>%
     left_join(d_tree_spec,
               by = join_by(code_tree_species == code)) %>%
     rename(main_tree_species = description) %>%
@@ -646,16 +652,20 @@ get_stratifiers <- function(level) {
   }
 
   assertthat::assert_that(file.exists(paste0("./data/additional_data/",
-                                             "S1_PRF_ADDS.csv")),
+                                             "S1_PRF_ADDS.xlsx")),
                           msg = paste0("'./data/additional_data/",
-                                       "S1_PRF_ADDS.csv' ",
+                                       "S1_PRF_ADDS.xlsx' ",
                                        "does not exist."))
 
   # Retrieve harmonised stratifiers and aggregate per plot
 
   s1_prf_adds_agg <-
-    read.csv(paste0("./data/additional_data/",
-                    "S1_PRF_ADDS.csv"), sep = ";") %>%
+    openxlsx::read.xlsx(paste0("./data/additional_data/",
+                               "S1_PRF_ADDS.xlsx"),
+                        sheet = 1) %>%
+    # read.csv(paste0("./data/additional_data/",
+    #                 "S1_PRF_ADDS.csv"), sep = ";") %>%
+    as_tibble() %>%
     mutate(date_profile_desc =
              as.Date(parsedate::parse_iso_8601(parsedate::parse_date(
                date_profile_desc)))) %>%
@@ -667,7 +677,8 @@ get_stratifiers <- function(level) {
                              STOCKDEPTH)) %>%
     # Filter for the most recent survey_year
     group_by(plot_id) %>%
-    filter(survey_year == max(survey_year)) %>%
+    filter(is.na(survey_year) |
+             survey_year == max(survey_year)) %>%
     ungroup() %>%
     group_by(plot_id) %>%
     # Sometimes there are different options
@@ -693,6 +704,10 @@ get_stratifiers <- function(level) {
                       "humus_type",
                       "eff_soil_depth"),
              sep = "_") %>%
+    mutate(eff_soil_depth = ifelse(
+      eff_soil_depth == "NA",
+      NA_character_,
+      eff_soil_depth)) %>%
     mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
     mutate_if(
       function(x) !is.Date(x),
