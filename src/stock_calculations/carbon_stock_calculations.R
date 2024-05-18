@@ -22,7 +22,10 @@
 stopifnot(require("tidyverse"),
           require("assertthat"),
           require("mpspline2"),
-          require("ggplot2"))
+          require("ggplot2"),
+          require("rempsyc"),
+          require("patchwork"),
+          require("xgboost"))
 
 source("./src/functions/get_env.R")
 
@@ -34,9 +37,7 @@ source("./src/functions/get_env.R")
 
 level <- "LI"
 level <- "LII"
-
-
-# 3. Calculate stocks ----
+calculate_new_stocks <- FALSE
 
 # Import data
 
@@ -44,6 +45,11 @@ source("./src/functions/read_processed.R")
 read_processed(save_to_env = TRUE)
 
 
+# Get stocks
+
+if (calculate_new_stocks == TRUE) {
+
+# 3. Calculate stocks ----
 
 if (level == "LI") {
 
@@ -80,180 +86,139 @@ if (level == "LII") {
 
 }
 
+} else {
 
+  # Import most recent stocks
 
+  dir <- paste0(list.dirs("./output/stocks", recursive = FALSE)[
+    grepl("_carbon_stocks",
+          list.dirs("./output/stocks", recursive = FALSE))], "/")
 
+  for (survey_form_i in c("s1", "so")) {
 
-# 4. Compile data per level ----
+    # Layers
 
-if (level == "LI") {
+    data <- read.csv(paste0(dir,
+                            survey_form_i,
+                            "_layers.csv"),
+                     sep = ";")
 
-  # df_layer_li <-
-  #   bind_rows(s1_som_below_ground %>%
-  #               mutate(survey_form = "s1_som") %>%
-  #               relocate(survey_form, .before = partner_short) %>%
-  #               mutate(repetition = as.character(repetition)) %>%
-  #               select(-avail_thick,
-  #                      -avail_toc,
-  #                      -avail_bd,
-  #                      -avail_cf),
-  #             s1_pfh_below_ground %>%
-  #               mutate(survey_form = "s1_pfh") %>%
-  #               relocate(survey_form, .before = partner_short) %>%
-  #               select(-avail_thick,
-  #                      -avail_toc,
-  #                      -avail_bd,
-  #                      -avail_cf),
-  #             s1_som_forest_floor %>%
-  #               mutate(survey_form = "s1_som") %>%
-  #               relocate(survey_form, .before = partner_short) %>%
-  #               relocate(density, .before = stock_layer) %>%
-  #               mutate(repetition = as.character(repetition)) %>%
-  #               select(-avail_thick,
-  #                      -avail_toc,
-  #                      -avail_bd,
-  #                      -avail_org_layer_weight),
-  #             s1_pfh_forest_floor %>%
-  #               mutate(survey_form = "s1_pfh") %>%
-  #               relocate(survey_form, .before = partner_short) %>%
-  #               relocate(density, .before = stock_layer) %>%
-  #               select(-avail_thick,
-  #                      -avail_toc,
-  #                      -avail_bd,
-  #                      -avail_org_layer_weight)) %>%
-  #   mutate(profile_id_form = paste0(survey_form, "_",
-  #                                   profile_id)) %>%
-  #   relocate(profile_id_form, .after = profile_id) %>%
-  #   arrange(partner_short,
-  #           code_plot,
-  #           survey_year,
-  #           profile_id,
-  #           layer_number)
-  #
-  #
-  # df_stocks_li <-
-  #   bind_rows(s1_som_profile_c_stocks %>%
-  #               mutate(survey_form = "s1_som") %>%
-  #               relocate(survey_form, .before = partner_short) %>%
-  #               mutate(repetition = as.character(repetition)),
-  #             s1_pfh_profile_c_stocks %>%
-  #               mutate(survey_form = "s1_pfh") %>%
-  #               relocate(survey_form, .before = partner_short)) %>%
-  #   as_tibble() %>%
-  #   mutate(profile_id_form = paste0(survey_form, "_",
-  #                                   profile_id)) %>%
-  #   relocate(profile_id_form, .after = profile_id) %>%
-  #   rename(use_stock_topsoil = use_stock_until_30) %>%
-  #   # select(-matches("^stock_[1-9][0-9]*0$")) %>%
-  #   # select(-stock_ol, -stock_ofh) %>%
-  #   arrange(partner_short,
-  #           code_plot,
-  #           survey_year,
-  #           profile_id)
-  #
-  # df_stocks_plot_li <-
-  #   bind_rows(s1_som_plot_c_stocks %>%
-  #               mutate(survey_form = "s1_som") %>%
-  #               relocate(survey_form, .before = partner_short),
-  #             s1_pfh_plot_c_stocks %>%
-  #               mutate(survey_form = "s1_pfh") %>%
-  #               relocate(survey_form, .before = partner_short)) %>%
-  #   rename(use_stock_topsoil = use_stock_until_30) %>%
-  #   select(-matches("^stock_[1-9][0-9]*0$")) %>%
-  #   arrange(partner_short,
-  #           code_plot,
-  #           survey_year)
+    assign_env(paste0(survey_form_i, "_layers"),
+               data)
+
+    # Profile stocks
+
+    data <- read.csv(paste0(dir,
+                            survey_form_i,
+                            "_profile_c_stocks.csv"),
+                     sep = ";")
+
+    assign_env(paste0(survey_form_i, "_profile_c_stocks"),
+               data)
+
+    # Plot stocks
+
+    data <- read.csv(paste0(dir,
+                            survey_form_i,
+                            "_plot_c_stocks.csv"),
+                     sep = ";")
+
+    assign_env(paste0(survey_form_i, "_plot_c_stocks"),
+               data)
+
+  }
 
 }
 
 
+# 4. Calculate variables per plot_id ----
 
-
-
-if (level == "LII") {
-
-# df_layer_lii <-
-#   bind_rows(so_som_below_ground %>%
-#               mutate(survey_form = "so_som") %>%
-#               relocate(survey_form, .before = partner_short) %>%
-#               mutate(repetition = as.character(repetition)) %>%
-#               select(-avail_thick,
-#                      -avail_toc,
-#                      -avail_bd,
-#                      -avail_cf),
-#             so_pfh_below_ground %>%
-#               mutate(survey_form = "so_pfh") %>%
-#               relocate(survey_form, .before = partner_short) %>%
-#               select(-avail_thick,
-#                      -avail_toc,
-#                      -avail_bd,
-#                      -avail_cf),
-#             so_som_forest_floor %>%
-#               mutate(survey_form = "so_som") %>%
-#               relocate(survey_form, .before = partner_short) %>%
-#               relocate(density, .before = stock_layer) %>%
-#               mutate(repetition = as.character(repetition)) %>%
-#               select(-avail_thick,
-#                      -avail_toc,
-#                      -avail_bd,
-#                      -avail_org_layer_weight),
-#             so_pfh_forest_floor %>%
-#               mutate(survey_form = "so_pfh") %>%
-#               relocate(survey_form, .before = partner_short) %>%
-#               relocate(density, .before = stock_layer) %>%
-#               select(-avail_thick,
-#                      -avail_toc,
-#                      -avail_bd,
-#                      -avail_org_layer_weight)) %>%
-#   mutate(profile_id_form = paste0(survey_form, "_",
-#                                   profile_id)) %>%
-#   relocate(profile_id_form, .after = profile_id) %>%
-#   arrange(partner_short,
-#           code_plot,
-#           survey_year,
-#           profile_id,
-#           layer_number)
-#
-#
-# df_stocks_lii <-
-#   bind_rows(so_som_profile_c_stocks %>%
-#               mutate(survey_form = "so_som") %>%
-#               relocate(survey_form, .before = partner_short) %>%
-#               mutate(repetition = as.character(repetition)),
-#             so_pfh_profile_c_stocks %>%
-#               mutate(survey_form = "so_pfh") %>%
-#               relocate(survey_form, .before = partner_short)) %>%
-#   as_tibble() %>%
-#   mutate(profile_id_form = paste0(survey_form, "_",
-#                                   profile_id)) %>%
-#   relocate(profile_id_form, .after = profile_id) %>%
-#   rename(use_stock_topsoil = use_stock_until_30) %>%
-#   # select(-matches("^stock_[1-9][0-9]*0$")) %>%
-#   # select(-stock_ol, -stock_ofh) %>%
-#   arrange(partner_short,
-#           code_plot,
-#           survey_year,
-#           profile_id)
-
-
-
-# df_stocks_plot_lii <-
-#   bind_rows(so_som_plot_c_stocks %>%
-#               mutate(survey_form = "so_som") %>%
-#               relocate(survey_form, .before = partner_short),
-#             so_pfh_plot_c_stocks %>%
-#               mutate(survey_form = "so_pfh") %>%
-#               relocate(survey_form, .before = partner_short)) %>%
-#   rename(use_stock_topsoil = use_stock_until_30) %>%
-#   select(-matches("^stock_[1-9][0-9]*0$")) %>%
-#   arrange(partner_short,
-#           code_plot,
-#           survey_year)
-
+# Define a function to calculate slope of linear regression
+calculate_slope <- function(x, y) {
+  if(length(unique(x)) > 1 &
+     # Spanning more than five years
+     ((max(x) - min(x)) > 8)) {
+    model <- lm(y ~ x)
+    coef(model)[[2]]  # Slope coefficient
+  } else {
+    NA_real_
+  }
 }
 
+calculate_intercept <- function(x, y) {
+  if(length(unique(x)) > 1 &
+     # Spanning more than five years
+     ((max(x) - min(x)) > 8)) {
+    model <- lm(y ~ x)
+    coef(model)[[1]]  # Slope coefficient
+  } else {
+    NA_real_
+  }
+}
 
-# x. Add national carbon stock estimates ----
+plot_c_stocks_summ <-
+  bind_rows(s1_plot_c_stocks,
+            so_plot_c_stocks) %>%
+  mutate(stock_forest_floor = ifelse(
+    is.na(unknown_forest_floor) | unknown_forest_floor == FALSE,
+    coalesce(stock_forest_floor,
+             0),
+    NA_real_)) %>%
+  as_tibble() %>%
+  # Since data from the '90s are often methodologically incomparible
+  # filter(survey_year >= 2000) %>%
+  # Since fixed-depth layer data are supposed to be more complete,
+  # and because it is better to use data from one sampling approach
+  filter(grepl("som", survey_form)) %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id,
+           survey_form, partner_short, partner_code,
+           code_country, code_plot,
+           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           wrb_ref_soil_group, eftc, humus_form, parent_material,
+           biogeographical_region, main_tree_species, bs_class) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock),
+    stock_change_min = calculate_slope(survey_year, stock_min),
+    stock_change_max = calculate_slope(survey_year, stock_max),
+    int_stock = calculate_intercept(survey_year, stock),
+    int_stock_min = calculate_intercept(survey_year, stock_min),
+    int_stock_max = calculate_intercept(survey_year, stock_max),
+    survey_year_earliest = min(survey_year),
+    survey_year_last = max(survey_year),
+    survey_year_difference = max(survey_year) - min(survey_year),
+    survey_year_count = n_distinct(survey_year),
+    stock_earliest = stock[which(survey_year == survey_year_earliest)],
+    stock_min = min(stock_min),
+    stock_max = max(stock_max),
+    stock = mean(stock),
+    use_stock_topsoil =
+      any(use_stock_topsoil == TRUE),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  relocate(stock, .before = stock_min) %>%
+  mutate(
+    stock_start = (survey_year_earliest * stock_change + int_stock),
+    # Net C influx - relative (% ha-1 year-1)
+    stock_change_rel = 100 * stock_change /
+      # Predicted stock at the start year
+      (stock_start),
+    stock_change_rel_min = 100 * stock_change_min /
+      (survey_year_earliest * stock_change_min + int_stock_min),
+    stock_change_rel_max = 100 * stock_change_max /
+      (survey_year_earliest * stock_change_max + int_stock_max))
+
+
+
+
+
+
+
+
+# 5. Add national carbon stock estimates ----
 
 national_carbon_stocks_harmonised <-
   read.csv(paste0("./data/additional_data/national_coauthor_carbon_stocks/",
@@ -266,452 +231,41 @@ national_carbon_stocks_harmonised <-
 
 
 
-# 5. Add stratifiers ----
-# (For statistics/visualisation purposes)
 
-if (level == "LI") {
 
-  # source("./src/functions/get_stratifiers.R")
-  # s1_strat <- get_stratifiers(level = "LI")
-  #
-  # source("./src/functions/save_to_google_drive.R")
-  # save_to_google_drive(objects_to_save = "s1_strat",
-  #                      path_name = "layer1_data")
-  #
-  # s1_strat <- s1_strat %>%
-  #   select(plot_id, longitude_dec, latitude_dec, slope, eff_soil_depth,
-  #          wrb_soil_group, forest_type, humus_type,
-  #          parent_material, biogeo,
-  #          main_tree_species, bs_class)
-  #
-  # colSums(!is.na(s1_strat))
-  #
-  #
-  # # Add stratifiers to the data
-  #
-  # df_stocks_plot_li <- df_stocks_plot_li %>%
-  #   left_join(s1_strat,
-  #             by = "plot_id")
-  #
-  #
-  # df_stocks_plot_li <- df_stocks_plot_li %>%
-  #   mutate(humus_type = case_when(
-  #     humus_type == "Amphi (or Amphihumus)" ~ "Amphi",
-  #     humus_type %in% c("Histomull", "Histomoder") ~ "Peat",
-  #     TRUE ~ humus_type))
-}
-
-
-if (level == "LII") {
-
-  # source("./src/functions/get_stratifiers.R")
-  # so_strat <- get_stratifiers(level = "LII")
-  #
-  # source("./src/functions/save_to_google_drive.R")
-  # save_to_google_drive(objects_to_save = "so_strat",
-  #                      path_name = "layer1_data")
-  #
-  # so_strat <- so_strat %>%
-  #   select(plot_id, longitude_dec, latitude_dec, slope, eff_soil_depth,
-  #          rooting_depth,
-  #          wrb_soil_group, forest_type, humus_type,
-  #          parent_material, biogeo,
-  #          main_tree_species, bs_class)
-  #
-  # colSums(!is.na(so_strat))
-  #
-  #
-  # # Add stratifiers to the data
-  #
-  # df_stocks_plot_lii <- df_stocks_plot_lii %>%
-  #   left_join(so_strat,
-  #             by = "plot_id")
-  #
-  #
-  #
-  # # Format and print the names for attribute catalogue:
-  #
-  # names_list <-
-  #   sort(unique(c(names(so_strat))))
-  #
-  # cat(paste0("-   ", names_list, ": \n "), sep = "\n")
-  #
-  #
-  # df_layer_lii <- df_layer_lii %>%
-  #   left_join(so_strat,
-  #             by = "plot_id")
-  #
-  # df_stocks_lii <- df_stocks_lii %>%
-  #   left_join(so_strat,
-  #             by = "plot_id")
-
-  # Add colours (for visualisation)
-
-  df_layer <- df_layer %>%
-    mutate(unique_layer_repetition =
-             paste0(plot_id, "_",
-                    survey_year, "_",
-                    repetition, "_",
-                    code_layer)) %>%
-    left_join(so_pfh %>%
-                mutate(unique_layer_repetition =
-                         paste0(plot_id, "_",
-                                survey_year, "_",
-                                profile_pit_id, "_",
-                                horizon_master)) %>%
-                select(unique_layer_repetition,
-                       colour_moist_hex),
-              by = "unique_layer_repetition") %>%
-    select(-unique_layer_repetition) %>%
-    mutate(colour_moist_hex =
-             ifelse(grepl("som", .data$survey_form) &
-                      !is.na(.data$colour_moist_hex),
-                    NA,
-                    .data$colour_moist_hex))
-
-}
-
-
-
-
-
-
-# 6. Prepare files to share with partners ----
-
-dir <- "./output/stocks/20231207_to_share_with_partners/"
-
-# Some German plot_ids need to be excluded in LI because
-# they concern different non-unique plots across different Länder
-
-# german_plot_ids_exclude <-
-#   c("4_259", "4_260", "4_266", "4_267", "4_283", "4_284", "4_285",
-#     "4_286", "4_287", "4_288", "4_300", "4_306", "4_307" )
-
-# Some columns need to be excluded because not informative
-
-cols_to_exclude <- c("origin",
-                     "q_flag",
-                     "line_nr",
-                     "qif_key",
-                     "unique_survey",
-                     "unique_survey_repetition",
-                     "unique_survey_layer",
-                     "unique_layer_repetition",
-                     "unique_layer",
-                     "origin_merged",
-                     "origin_merge_info",
-                     "layer_number_bg",
-                     "layer_number_ff",
-                     "organic_layer_weight_wrong_unit",
-                     "sum_texture",
-                     "bulk_density_layer_weight",
-                     "horizon_number",
-                     "unique_survey_profile",
-                     "colour_moist_hex")
-
-## 6.1. s1_som ----
-
-s1_som_output <- s1_som %>%
- # filter(!plot_id %in% german_plot_ids_exclude) %>%
-  select(-any_of(cols_to_exclude)) %>%
-  relocate(plot_id, .after = code_plot) %>%
-  relocate(layer_thickness, .after = layer_limit_inferior) %>%
-  mutate(profile_id = paste0(survey_year, "_",
-                             plot_id, "_",
-                             repetition)) %>%
-  relocate(profile_id, .after = repetition) %>%
-  relocate(date_labor_analyses, .before = change_date) %>%
-  relocate(download_date, .after = change_date) %>%
-  rename(code_layer_orig = code_layer_original) %>%
-  relocate(sum_acid_cations, .after = rea_fe) %>%
-  relocate(sum_base_cations, .after = rea_fe) %>%
-  relocate(c_to_n_ratio, .after = rea_fe) %>%
-  relocate(organic_layer_weight, .after = bulk_density) %>%
-  relocate(partner_code, .after = code_country) %>%
-  select(
-    # Selecting columns without the specified patterns
-    which(!grepl("_rt|_loq|_orig|_source", names(.))),
-    # Selecting columns with the specified patterns in the desired order
-    contains("_source"),
-    contains("_orig"),
-    contains("_loq"),
-    contains("_rt"))
-
-cat(names(s1_som_output), sep = "\n")
-
-write.table(s1_som_output,
-            file = paste0(dir, "s1_som_layer1.csv"),
-            row.names = FALSE,
-            na = "",
-            sep = ";",
-            dec = ".")
-
-
-
-## 6.2. so_som ----
-
-so_som_output <- so_som %>%
-  select(-any_of(cols_to_exclude)) %>%
-  relocate(plot_id, .after = code_plot) %>%
-  relocate(layer_thickness, .after = layer_limit_inferior) %>%
-  mutate(profile_id = paste0(survey_year, "_",
-                             plot_id, "_",
-                             repetition)) %>%
-  relocate(profile_id, .after = repetition) %>%
-  relocate(date_labor_analyses, .before = change_date) %>%
-  relocate(download_date, .after = change_date) %>%
-  rename(code_layer_orig = code_layer_original) %>%
-  relocate(sum_acid_cations, .after = base_saturation) %>%
-  relocate(sum_base_cations, .after = base_saturation) %>%
-  relocate(c_to_n_ratio, .after = base_saturation) %>%
-  relocate(organic_layer_weight, .after = bulk_density) %>%
-  relocate(partner_code, .after = code_country) %>%
-  select(
-    # Selecting columns without the specified patterns
-    which(!grepl("_rt|_loq|_orig|_source", names(.))),
-    # Selecting columns with the specified patterns in the desired order
-    contains("_source"),
-    contains("_orig"),
-    contains("_loq"),
-    contains("_rt"))
-
-cat(names(so_som_output), sep = "\n")
-
-write.table(so_som_output,
-            file = paste0(dir, "so_som_layer1.csv"),
-            row.names = FALSE,
-            na = "",
-            sep = ";",
-            dec = ".")
-
-
-# Format and print the names for attribute catalogue:
-
-names_list <-
-  sort(unique(c(names(s1_som_output), names(so_som_output),
-                names(s1_pfh_output), names(so_pfh_output))))
-
-cat(paste0("-   **", names_list, "** - "), sep = "\n")
-
-
-
-
-
-
-## 6.3. s1_pfh ----
-
-s1_pfh_output <- s1_pfh %>%
- # filter(!plot_id %in% german_plot_ids_exclude) %>%
-  select(-any_of(cols_to_exclude)) %>%
-  relocate(plot_id, .after = code_plot) %>%
-  relocate(bulk_density, .before = horizon_bulk_dens_measure) %>%
-  relocate(layer_thickness, .after = horizon_limit_low) %>%
-  mutate(profile_id = paste0(survey_year, "_",
-                             plot_id, "_",
-                             profile_pit_id)) %>%
-  relocate(profile_id, .after = profile_pit_id) %>%
-  relocate(date_labor_analyses, .before = change_date) %>%
-  relocate(download_date, .after = change_date) %>%
-  relocate(sum_base_cations, .after = horizon_cec) %>%
-  relocate(c_to_n_ratio, .after = horizon_cec) %>%
-  relocate(partner_code, .after = code_country) %>%
-  relocate(organic_layer_weight, .after = bulk_density) %>%
-  relocate(coarse_fragment_vol, .after = horizon_bulk_dens_est) %>%
-  relocate(code_horizon_coarse_vol, .after = coarse_fragment_vol) %>%
-  relocate(horizon_coarse_weight, .after = coarse_fragment_vol) %>%
-  select(
-    # Selecting columns without the specified patterns
-    which(!grepl("_rt|_loq|_orig|_source", names(.))),
-    # Selecting columns with the specified patterns in the desired order
-    contains("_source"),
-    contains("_orig"),
-    contains("_loq"),
-    contains("_rt"))
-
-cat(names(s1_pfh_output), sep = "\n")
-
-write.table(s1_pfh_output,
-            file = paste0(dir, "s1_pfh_layer1.csv"),
-            row.names = FALSE,
-            na = "",
-            sep = ";",
-            dec = ".")
-
-
-
-
-
-## 6.4. so_pfh ----
-
-so_pfh_output <- so_pfh %>%
-  select(-any_of(cols_to_exclude)) %>%
-  relocate(plot_id, .after = code_plot) %>%
-  relocate(bulk_density, .before = horizon_bulk_dens_measure) %>%
-  relocate(layer_thickness, .after = horizon_limit_low) %>%
-  mutate(profile_id = paste0(survey_year, "_",
-                             plot_id, "_",
-                             profile_pit_id)) %>%
-  relocate(profile_id, .after = profile_pit_id) %>%
-  relocate(date_labor_analyses, .before = change_date) %>%
-  relocate(download_date, .after = change_date) %>%
-  relocate(sum_base_cations, .after = horizon_cec) %>%
-  relocate(c_to_n_ratio, .after = horizon_cec) %>%
-  relocate(partner_code, .after = code_country) %>%
-  relocate(organic_layer_weight, .after = bulk_density) %>%
-  relocate(coarse_fragment_vol, .after = horizon_bulk_dens_est) %>%
-  relocate(code_horizon_coarse_vol, .after = coarse_fragment_vol) %>%
-  relocate(horizon_coarse_weight, .after = coarse_fragment_vol) %>%
-  select(
-    # Selecting columns without the specified patterns
-    which(!grepl("_rt|_loq|_orig|_source", names(.))),
-    # Selecting columns with the specified patterns in the desired order
-    contains("_source"),
-    contains("_orig"),
-    contains("_loq"),
-    contains("_rt"))
-
-cat(names(so_pfh_output), sep = "\n")
-
-write.table(so_pfh_output,
-            file = paste0(dir, "so_pfh_layer1.csv"),
-            row.names = FALSE,
-            na = "",
-            sep = ";",
-            dec = ".")
-
-
-
-## 6.5. s1 profile stocks ----
-
-df_stocks_li_output <- df_stocks_li %>%
-  filter(!plot_id %in% german_plot_ids_exclude) %>%
-  mutate(feedback_experts = NA) %>%
-  format_stocks()
-
-source("./src/functions/save_excel.R")
-save_excel(df_stocks_li_output,
-           file = paste0(dir, "s1_profile_soc_stocks.xlsx"))
-
-
-## 6.6. s1 plot stocks ----
-
-df_stocks_plot_li_output <- df_stocks_plot_li %>%
-  filter(!plot_id %in% german_plot_ids_exclude) %>%
-  select(-partner_short) %>%
-  left_join(d_partner %>%
-              select(code, desc_short),
-            by = join_by("partner_code" == "code")) %>%
-  rename(partner_short = desc_short) %>%
-  relocate(partner_short, .after = survey_form) %>%
-  mutate(feedback_experts = NA) %>%
-  format_stocks()
-
-source("./src/functions/save_excel.R")
-save_excel(df_stocks_plot_li_output,
-           file = paste0(dir, "s1_plot_soc_stocks.xlsx"))
-
-
-
-## 6.7. so profile stocks ----
-
-df_stocks_lii_output <- df_stocks_lii %>%
-  filter(!plot_id %in% german_plot_ids_exclude) %>%
-  mutate(feedback_experts = NA) %>%
-  format_stocks()
-
-source("./src/functions/save_excel.R")
-save_excel(df_stocks_lii_output,
-           file = paste0(dir, "so_profile_soc_stocks.xlsx"))
-
-
-## 6.8. so plot stocks ----
-
-df_stocks_plot_lii_output <- df_stocks_plot_lii %>%
-  filter(!plot_id %in% german_plot_ids_exclude) %>%
-  select(-partner_short) %>%
-  left_join(d_partner %>%
-              select(code, desc_short),
-            by = join_by("partner_code" == "code")) %>%
-  rename(partner_short = desc_short) %>%
-  relocate(partner_short, .after = survey_form) %>%
-  mutate(feedback_experts = NA) %>%
-  format_stocks()
-
-source("./src/functions/save_excel.R")
-save_excel(df_stocks_plot_lii_output,
-           file = paste0(dir, "so_plot_soc_stocks.xlsx"))
-
-
-# Format and print the names for attribute catalogue:
-
-names_list <-
-  sort(unique(c(names(df_stocks_li_output), names(df_stocks_plot_li_output),
-                names(df_stocks_lii_output), names(df_stocks_plot_lii_output))))
-
-cat(paste0("-   **", names_list, "** - "), sep = "\n")
-
-
-
-
-## 6.9. Additional manual corrections ----
-
-path <- "./data/additional_data/additional_manual_corrections_fscc.xlsx"
-
-assertthat::assert_that(file.exists(path))
-
-df_to_correct <-
-  openxlsx::read.xlsx(path,
-                      sheet = 1) %>%
-  mutate(code_line = as.character(code_line)) %>%
-  rename(observation_date = change_date) %>%
-  # Assuming the Excel epoch is 1899-12-30
-  mutate(observation_date = as.Date(.data$observation_date,
-                                    origin = "1899-12-30")) %>%
-  mutate(observation_date =
-           as.Date(parsedate::parse_iso_8601(.data$observation_date)))
-
-
-source("./src/functions/save_excel.R")
-save_excel(df_to_correct %>%
-             filter(str_starts(survey_form, "so")),
-           file = paste0(dir, "so_additional_manual_corrections.xlsx"))
-
-save_excel(df_to_correct %>%
-             filter(str_starts(survey_form, "s1")),
-           file = paste0(dir, "s1_additional_manual_corrections.xlsx"))
-
-
-
-
-
-
-# 7. Statistics ----
+# 6. Statistics ----
 
 # C stocks until 100
 
 data_frame <-
-  bind_rows(df_stocks_li %>%
+  bind_rows(so_plot_c_stocks %>%
               filter(use_stock_topsoil == FALSE) %>%
-              select(plot_id, c_stock),
-            df_stocks_lii %>%
+              filter(is.na(unknown_forest_floor) |
+                       unknown_forest_floor == FALSE) %>%
+              select(plot_id, stock),
+            s1_plot_c_stocks %>%
               filter(use_stock_topsoil == FALSE) %>%
-              select(plot_id, c_stock)) %>%
+              filter(is.na(unknown_forest_floor) |
+                       unknown_forest_floor == FALSE) %>%
+              select(plot_id, stock)) %>%
   mutate(all = "All")
 
-response <- "c_stock"
+response <- "stock"
 
 group <- "all"
 
-rcompanion_groupwiseMean(
-  group = group,
-  var = response,
-  data = data_frame,
-  conf = 0.95,
-  digits = 5,
-  R = 9100,
-  traditional = FALSE,
-  bca = TRUE,
-  na.rm = TRUE)
+# Too time-consuming
+
+# rcompanion_groupwiseMean(
+#   group = group,
+#   var = response,
+#   data = data_frame,
+#   conf = 0.95,
+#   digits = 5,
+#   R = 9100,
+#   traditional = FALSE,
+#   bca = TRUE,
+#   na.rm = TRUE)
 
 #    n   Mean Conf.level Bca.lower Bca.upper
 # 9097 134.26       0.95     131.5    137.34
@@ -729,7 +283,9 @@ min_below_ground <-
               filter(contains_peat == FALSE) %>%
               select(plot_id, stock_below_ground)) %>%
   pull(stock_below_ground) %>%
-  median
+  summary
+
+min_below_ground
 
 # Below-ground mineral C stocks until 30
 
@@ -741,9 +297,10 @@ min_below_ground_topsoil <-
               filter(contains_peat == FALSE) %>%
               select(plot_id, stock_below_ground_topsoil)) %>%
   pull(stock_below_ground_topsoil) %>%
-  median
+  summary
 
-min_below_ground_topsoil / min_below_ground * 100
+as.numeric(min_below_ground_topsoil["Median"] /
+             min_below_ground["Median"] * 100)
 
 # Below-ground peat C stocks until 100
 
@@ -757,7 +314,9 @@ peat_below_ground <-
               filter(contains_peat == TRUE) %>%
               select(plot_id, stock_below_ground)) %>%
   pull(stock_below_ground) %>%
-  median
+  summary
+
+peat_below_ground
 
 # Below-ground peat C stocks until 30
 
@@ -769,37 +328,136 @@ peat_below_ground_topsoil <-
               filter(contains_peat == TRUE) %>%
               select(plot_id, stock_below_ground_topsoil)) %>%
   pull(stock_below_ground_topsoil) %>%
-  median
+  summary
 
-peat_below_ground_topsoil / peat_below_ground * 100
+as.numeric(peat_below_ground_topsoil["Median"] /
+             peat_below_ground["Median"] * 100)
 
 
 
 # Forest floor
 
-  bind_rows(s1_plot_c_stocks %>%
-              # mutate(c_stock_forest_floor =
-              #          ifelse(is.na(c_stock_forest_floor),
-              #                 0,
-              #                 .data$c_stock_forest_floor)) %>%
-              select(plot_id, stock_forest_floor),
-            so_plot_c_stocks %>%
-                # mutate(c_stock_forest_floor =
-                #          ifelse(is.na(c_stock_forest_floor),
-                #                 0,
-                #                 .data$c_stock_forest_floor)) %>%
-              select(plot_id, stock_forest_floor)) %>%
-    filter(!is.na(stock_forest_floor)) %>%
-    pull(stock_forest_floor) %>%
-    median
+bind_rows(s1_plot_c_stocks %>%
+            filter(is.na(unknown_forest_floor) |
+                     unknown_forest_floor == FALSE) %>%
+            mutate(stock_forest_floor =
+                     coalesce(stock_forest_floor, 0)) %>%
+            select(plot_id, stock_forest_floor),
+          so_plot_c_stocks %>%
+            filter(is.na(unknown_forest_floor) |
+                     unknown_forest_floor == FALSE) %>%
+              mutate(stock_forest_floor =
+                       coalesce(stock_forest_floor, 0)) %>%
+            select(plot_id, stock_forest_floor)) %>%
+  filter(!is.na(stock_forest_floor)) %>%
+  pull(stock_forest_floor) %>%
+  summary
+
+
+
+
+
+# Annual changes
+
+plot_c_stocks_summ %>%
+  filter(!is.na(stock_change_rel)) %>%
+  pull(survey_year_last) %>%
+  max
+
+plot_c_stocks_summ %>%
+  filter(!is.na(stock_change_rel)) %>%
+  filter(contains_peat == FALSE) %>%
+  pull(stock_change) %>%
+  summary
+
+plot_c_stocks_summ %>%
+  filter(!is.na(stock_change_rel)) %>%
+  filter(contains_peat == FALSE) %>%
+  pull(stock_change) %>%
+  quantile(c(0.05, 0.95))
+
+plot_c_stocks_summ %>%
+  filter(!is.na(stock_change_rel)) %>%
+  filter(contains_peat == FALSE) %>%
+  pull(stock_change_rel) %>%
+  summary
 
 
 
 
 
 
+## Boosted regression tree
 
-# To do: NA c stocks forest floor should be 0!
+plot_c_stocks <-
+  bind_rows(s1_plot_c_stocks,
+            so_plot_c_stocks) %>%
+  mutate(stock_forest_floor = ifelse(
+    is.na(unknown_forest_floor) | unknown_forest_floor == FALSE,
+    coalesce(stock_forest_floor,
+             0),
+    NA_real_)) %>%
+  filter(!is.na(stock_forest_floor)) %>%
+    group_by(plot_id,
+             survey_form, partner_short, partner_code,
+             code_country, country, code_plot,
+             latitude_dec, longitude_dec, mat, map, slope, altitude,
+             wrb_ref_soil_group, eftc, humus_form, parent_material,
+             biogeographical_region, main_tree_species, bs_class) %>%
+    reframe(
+      stock_min = min(stock_min),
+      stock_max = max(stock_max),
+      stock = mean(stock),
+      stock_topsoil = mean(stock_topsoil)) %>%
+    relocate(stock, .before = stock_min) %>%
+    select(stock_topsoil,
+           country, latitude_dec, mat, map, altitude, wrb_ref_soil_group,
+           eftc, humus_form, parent_material, biogeographical_region,
+           main_tree_species, bs_class) %>%
+    na.omit()
+
+
+
+
+  # Split the data into training and testing sets
+  set.seed(123)  # For reproducibility
+  train_idx <- sample(nrow(plot_c_stocks), nrow(plot_c_stocks) * 0.8)
+  train_data <- plot_c_stocks[train_idx, ] %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.factor, as.integer)
+  test_data <- plot_c_stocks[-train_idx, ] %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.factor, as.integer)
+
+
+  sparse_matrix <- Matrix::sparse.model.matrix(humus_form ~ ., data = test_data)[,-1]
+
+
+  # Target
+  y_train <- as.numeric(train_data$stock_topsoil)
+  y_test <- as.numeric(test_data$stock_topsoil)
+
+  # Features
+  x_train <- train_data %>% select(-stock_topsoil)
+  x_test <- test_data %>% select(-stock_topsoil)
+
+  xgb_train <- xgb.DMatrix(data = as.matrix(x_train), label = y_train)
+  xgb_test <- xgb.DMatrix(data = as.matrix(x_test), label = y_test)
+
+  xgb_params <- list(
+    booster = "gbtree",
+    eta = 0.01,
+    max_depth = 8,
+    gamma = 4,
+    subsample = 0.75,
+    colsample_bytree = 1,
+    objective = "multi:softprob",
+    eval_metric = "mlogloss",
+    num_class = length(levels(iris$Species))
+  )
+
+
+  xgb_model <- xgb.train(params = )
 
 
 
@@ -809,117 +467,198 @@ peat_below_ground_topsoil / peat_below_ground * 100
 
 # 8. Data visualisation ----
 
-## 8.1. Make a graph per plot_id ----
+## 8.2. Plots per stratifier ----
 
-# Input
+plot_c_stocks <-
+  bind_rows(s1_plot_c_stocks,
+            so_plot_c_stocks) %>%
+  mutate(stock_forest_floor = ifelse(
+    is.na(unknown_forest_floor) | unknown_forest_floor == FALSE,
+    coalesce(stock_forest_floor,
+             0),
+    NA_real_)) %>%
+  group_by(plot_id,
+           partner_short, partner_code,
+           code_country, country, code_plot,
+           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           wrb_ref_soil_group, eftc, humus_form, parent_material,
+           biogeographical_region, main_tree_species, bs_class) %>%
+  reframe(
+    stock_min = min(stock_min),
+    stock_max = max(stock_max),
+    stock = mean(stock),
+    stock_topsoil = mean(stock_topsoil),
+    stock_below_ground = mean(stock_below_ground),
+    stock_below_ground_topsoil = mean(stock_below_ground_topsoil),
+    stock_forest_floor = mean(stock_forest_floor),
+    use_stock_topsoil =
+      any(use_stock_topsoil == TRUE))
 
-df_layer <- df_layer_lii
-df_stocks <- df_stocks_lii
+assert_that(all(c("wrb_ref_soil_group",
+                  "eftc",
+                  "humus_form",
+                  "biogeographical_region") %in% names(plot_c_stocks)))
 
-# plot_ids <- unique(df_stocks_lii$plot_id)
-# Arrange data
+source("./src/functions/graph_interval.R")
 
-plot_ids <- unique(df_layer$plot_id)
-
-# Evaluate for each of the plot surveys
-
-for (i in seq_along(plot_ids)) {
-
-    df_stocks_lii %>%
-    filter(plot_id == plot_ids[22]) %>%
-    distinct(profile_id, .keep_all = TRUE) %>%
-    mutate(survey_id = paste0(survey_form, "_",
-                              survey_year)) %>%
-    distinct(survey_id, .keep_all = TRUE)
-
-
-
-  profiles_i <- df_layer %>%
-    filter(plot_id == plot_ids[i]) %>%
-    distinct(profile_id) %>%
-    pull(profile_id)
-
-  for (j in seq_along(profiles_i)) {
-
-    prof_id_j <- profiles_i[j]
-
-    df_prof_j <- df_layer %>%
-      filter(profile_id == prof_id_i)
-
-    df_stock_j <- df_stocks %>%
-      filter(profile_id == prof_id_i)
-
-  }
-  }
+dir <- paste0(list.dirs("./output/stocks", recursive = FALSE)[
+  grepl("_carbon_stocks",
+        list.dirs("./output/stocks", recursive = FALSE))], "/")
 
 
+### Humus form ----
 
-## 8.2. Violin plots per stratifier ----
+p1 <- graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock_forest_floor)) %>%
+                 mutate(humus_form = case_when(
+                   grepl("Histo", humus_form) |
+                     humus_form %in% c("Peat", "Anmoor") ~
+                     "Semi-terr.",
+                   .default = humus_form)) %>%
+                 filter(humus_form %in% c("Mull", "Moder", "Mor",
+                                          "Amphi", "Semi-terr.")),
+               response = "stock_forest_floor",
+               group = "humus_form",
+               path_export = paste0(dir, "graphs/"),
+               mode = "dark",
+               version = "dark",
+               x_max = 150,
+               width = 5,
+               aspect.ratio = 0.4,
+               return = TRUE)
 
-stopifnot(require("tidyverse"),
-          require("assertthat"),
-          require("aqp"),
-          require("ggplot2"),
-          require("boot"),
-          require("rempsyc"),
-          # require("INBOtheme"),
-          require("ggtext"))
-
-assert_that(all(c("wrb_soil_group",
-                  "forest_type",
-                  "humus_type",
-                  "biogeo") %in% names(so_plot_c_stocks)))
-
-
-source("./src/functions/graph_violin.R")
-
-# graph_violin(data_frame = so_plot_c_stocks,
-#              response = "stock",
-#              group = "forest_type",
-#              path_export = "./output/stocks/20240324_carbon_stocks/")
-#
-# graph_violin(data_frame = so_plot_c_stocks,
-#              response = "c_stock",
-#              group = "wrb_soil_group",
-#              path_export = "./output/stocks/20240324_carbon_stocks/")
+graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock_forest_floor)) %>%
+                 mutate(humus_form = case_when(
+                   grepl("Histo", humus_form) |
+                     humus_form %in% c("Peat", "Anmoor") ~
+                     "Semi-terr.",
+                   .default = humus_form)) %>%
+                 filter(humus_form %in% c("Mull", "Moder", "Mor",
+                                          "Amphi", "Semi-terr.")),
+               response = "stock_forest_floor",
+               group = "humus_form",
+               path_export = paste0(dir, "graphs/"),
+               x_max = 88,
+               aspect.ratio = 0.35)
 
 
+### WRB soil group ----
 
-graph_violin(data_frame = s1_plot_c_stocks %>%
-               filter(!is.na(stock_forest_floor)),
-             data_frame_2 = so_plot_c_stocks %>%
-               filter(!is.na(stock_forest_floor)),
-             response = "stock_forest_floor",
-             group = "humus_type",
-             path_export = "./output/stocks/20240324_carbon_stocks/")
+plot_c_stocks <-
+  bind_rows(s1_plot_c_stocks,
+            so_plot_c_stocks) %>%
+  mutate(stock_forest_floor = ifelse(
+    is.na(unknown_forest_floor) | unknown_forest_floor == FALSE,
+    coalesce(stock_forest_floor,
+             0),
+    NA_real_)) %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  group_by(plot_id,
+           partner_short, partner_code,
+           code_country, country, code_plot,
+           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           wrb_ref_soil_group, eftc, humus_form, parent_material,
+           biogeographical_region, main_tree_species, bs_class) %>%
+  reframe(
+    stock_min = min(stock_min),
+    stock_max = max(stock_max),
+    stock = mean(stock),
+    stock_topsoil = mean(stock_topsoil),
+    stock_below_ground = mean(stock_below_ground),
+    stock_below_ground_topsoil = mean(stock_below_ground_topsoil),
+    stock_forest_floor = mean(stock_forest_floor),
+    use_stock_topsoil =
+      any(use_stock_topsoil == TRUE))
 
-graph_violin(data_frame = s1_plot_c_stocks %>%
-               filter(use_stock_topsoil == FALSE) %>%
-               filter(!is.na(biogeo)) %>%
-               rename(biogeographical_region = biogeo),
-             data_frame_2 = so_plot_c_stocks %>%
-               filter(use_stock_topsoil == FALSE) %>%
-               filter(biogeo != "Black Sea") %>%
-               rename(biogeographical_region = biogeo),
-             response = "stock",
-             group = "biogeographical_region",
-             path_export = "./output/stocks/20240324_carbon_stocks/")
+p2 <- graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock_forest_floor)),
+               response = "stock",
+               group = "wrb_ref_soil_group",
+               path_export = paste0(dir, "graphs/"),
+               mode = "dark",
+               version = "dark",
+               x_max = 1000,
+               number_of_groups = 10,
+               width = 5,
+               aspect.ratio = 0.8,
+               return = TRUE)
 
-graph_violin(data_frame = s1_plot_c_stocks %>%
-               filter(use_stock_topsoil == FALSE),
-             data_frame_2 = so_plot_c_stocks %>%
-               filter(use_stock_topsoil == FALSE),
-             response = "stock",
-             group = "wrb_soil_group",
-             path_export = "./output/stocks/20240324_carbon_stocks/")
+graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock_forest_floor)) %>%
+                 filter(use_stock_topsoil == FALSE),
+               response = "stock",
+               group = "wrb_ref_soil_group",
+               path_export = paste0(dir, "graphs/"),
+               x_max = 1000,
+               number_of_groups = 10,
+               aspect.ratio = 0.7)
 
-graph_violin(data_frame = s1_plot_c_stocks %>%
-               filter(use_stock_topsoil == FALSE),
-             data_frame_2 = so_plot_c_stocks %>%
-               filter(use_stock_topsoil == FALSE),
-             response = "stock",
-             group = "forest_type",
-             path_export = "./output/stocks/20240324_carbon_stocks/")
+### EFTC ----
+
+d_forest_type <- read.csv("./data/additional_data/d_forest_type.csv",
+                          sep = ";")
+
+p3 <- graph_interval(data = plot_c_stocks %>%
+                       filter(!is.na(stock_forest_floor)) %>%
+                       filter(use_stock_topsoil == FALSE) %>%
+                       left_join(d_forest_type %>%
+                                   select(code,
+                                          short_descr, very_short_descr) %>%
+                                   rename(eftc = short_descr) %>%
+                                   rename(eftc_short = very_short_descr) %>%
+                                   rename(eftc_code = code),
+                                 by = "eftc") %>%
+                       mutate(eftc = paste0(eftc_code, ". ",
+                                            eftc_short, "<br>")),
+                     response = "stock",
+                     group = "eftc",
+                     path_export = paste0(dir, "graphs/"),
+                     mode = "dark",
+                     version = "dark",
+                     x_max = 1000,
+                     number_of_groups = 14,
+                     width = 5,
+                     aspect.ratio = 1.4,
+                     return = TRUE)
+
+graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock_forest_floor)) %>%
+                 filter(use_stock_topsoil == FALSE) %>%
+                 left_join(d_forest_type %>%
+                             select(code,
+                                    short_descr, very_short_descr) %>%
+                             rename(eftc = short_descr) %>%
+                             rename(eftc_short = very_short_descr) %>%
+                             rename(eftc_code = code),
+                           by = "eftc") %>%
+                 mutate(eftc = paste0(eftc_code, ". ",
+                                      eftc_short, "<br>")),
+               response = "stock",
+               group = "eftc",
+               path_export = paste0(dir, "graphs/"),
+               x_max = 1000,
+               number_of_groups = 14,
+               aspect.ratio = 1.2,
+               return = TRUE)
+
+
+
+p <- p2 / p1 / p3 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.direction = "vertical",
+        legend.justification = c("left", "top"))
+
+
+ggsave(filename = paste0("patchwork", ".png"),
+       plot = p,
+       path = paste0(dir, "graphs/"),
+       dpi = 500,
+       height = 14,
+       width = 5)
+
+
 
 
 
@@ -928,91 +667,224 @@ graph_violin(data_frame = s1_plot_c_stocks %>%
 
 ## 8.3. Make a map ----
 
+### 8.3.1. Mean ----
+
 source("./src/functions/map_icpf.R")
+source("./src/functions/as_sf.R")
 
 data_s1 <- s1_plot_c_stocks %>%
   filter(grepl("som", survey_form)) %>%
-  # filter(use_stock_topsoil == FALSE) %>%
-  filter(stock_topsoil <= 400) %>%
-  group_by(plot_id) %>%
-  slice_max(order_by = survey_year) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  # filter(survey_year >= 2000) %>%
+  group_by(plot_id,
+           survey_form, partner_short, partner_code,
+           code_country, code_plot,
+           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           wrb_ref_soil_group, eftc, humus_form, parent_material,
+           biogeographical_region, main_tree_species, bs_class) %>%
+  reframe(
+    stock_min = min(stock_min),
+    stock_max = max(stock_max),
+    stock = mean(stock),
+    stock_topsoil = mean(stock_topsoil)) %>%
+  relocate(stock, .before = stock_min) %>%
   filter(!is.na(latitude_dec) &
            !is.na(longitude_dec)) %>%
   as_sf
 
-# source("./src/sandbox/map_icpf_continuous2.R")
-#
-# map_icpf2(layers = "data_s1",
-#          title = "Forest soil carbon stock (most recent) · **Level I**",
-#          legend_title = paste0("**Organic carbon stock**<br>",
-#                                "(forest floor + topsoil)<br>",
-#                                "t C ha<sup>-1</sup>"),
-#          biogeo_palette = NULL,
-#          legend_classes = NULL,
-#          point_size = 0.3,
-#          with_logo = FALSE,
-#          count_plots_legend = FALSE,
-#          offset_x = 0.18, #1.3,
-#          offset_x2 = 0.01, # 0.075,
-#          export_name = "c_stock_most_recent_s1",
-#          export_folder = "stocks/20240324_carbon_stocks")
 
 
 data_so <- so_plot_c_stocks %>%
   filter(grepl("som", survey_form)) %>%
-  # filter(use_stock_topsoil == FALSE) %>%
-  filter(stock_topsoil <= 400) %>%
-  group_by(plot_id) %>%
-  slice_max(order_by = survey_year) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  # filter(survey_year >= 2000) %>%
+  group_by(plot_id,
+           survey_form, partner_short, partner_code,
+           code_country, code_plot,
+           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           wrb_ref_soil_group, eftc, humus_form, parent_material,
+           biogeographical_region, main_tree_species, bs_class) %>%
+  reframe(
+    stock_min = min(stock_min),
+    stock_max = max(stock_max),
+    stock = mean(stock),
+    stock_topsoil = mean(stock_topsoil)) %>%
+  relocate(stock, .before = stock_min) %>%
   filter(!is.na(latitude_dec) &
            !is.na(longitude_dec)) %>%
   as_sf
 
-# source("./src/sandbox/map_icpf_continuous2.R")
-#
-# map_icpf2(layers = "data_so",
-#           title = "Forest soil carbon stock (most recent) · **Level II**",
-#           legend_title = paste0("**Organic carbon stock**<br>",
-#                                 "(forest floor + topsoil)<br>",
-#                                 "t C ha<sup>-1</sup>"),
-#           biogeo_palette = NULL,
-#           legend_classes = NULL,
-#           point_size = 0.6,
-#           with_logo = FALSE,
-#           count_plots_legend = FALSE,
-#           offset_x = 0.18,
-#           offset_x2 = 0.01,
-#           export_name = "c_stock_most_recent_so",
-#           export_folder = "stocks/20240324_carbon_stocks")
+# Level I
 
+p1 <- map_icpf2(layers = "data_s1",
+          title = paste0("**Forest soil carbon stock**",
+                         " · ",
+                         "Level I<br>",
+                         n_distinct(data_s1$plot_id), " plots ",
+                         "(forest floor + topsoil)<br>",
+                         "Mean over survey period (1985 - 2022)"
+          ),
+          legend_title = paste0("**Carbon stock**<br>",
+                                "t C ha<sup>-1</sup>"),
+          biogeo_palette = NULL,
+          legend_classes = NULL,
+          variable_continuous = "stock_topsoil",
+          point_size = 0.1,
+          with_logo = FALSE,
+          count_plots_legend = FALSE,
+          mode = "dark",
+          inset_maps_offset_x = 1.5,
+          export_name = "s1_mean_dark",
+          export_folder = paste0(dir, "graphs/"),
+          return = TRUE)
 
-map_icpf(layers = "data_so",
-         title = "Forest soil carbon stock (most recent) · **Level II**",
-         legend_title = paste0("**Organic carbon stock**<br>",
-                               "(forest floor + topsoil)<br>",
+map_icpf2(layers = "data_s1",
+          title = paste0("**Forest soil carbon stock**",
+                         " · ",
+                         "Level I<br>",
+                         n_distinct(data_s1$plot_id), " plots ",
+                         "(forest floor + topsoil)<br>",
+                         "Mean over time (1985 - 2022)"
+          ),
+          legend_title = paste0("**Carbon stock**<br>",
+                                "t C ha<sup>-1</sup>"),
+          biogeo_palette = NULL,
+          legend_classes = NULL,
+          variable_continuous = "stock_topsoil",
+          point_size = 0.1,
+          with_logo = FALSE,
+          count_plots_legend = FALSE,
+          inset_maps_offset_x = 1.5,
+          export_name = "s1_mean",
+          export_folder = paste0(dir, "graphs/"))
+
+# Level II
+
+map_icpf2(layers = "data_so",
+          title = paste0("**Forest soil carbon stock**",
+                         " · ",
+                         "Level II<br>",
+                         n_distinct(data_so$plot_id), " plots ",
+                         "(forest floor + topsoil)<br>",
+                         "Mean over survey period (1990 - 2023)"
+          ),
+         legend_title = paste0("**Carbon stock**<br>",
                                "t C ha<sup>-1</sup>"),
          biogeo_palette = NULL,
          legend_classes = NULL,
          variable_continuous = "stock_topsoil",
-         point_size = 0.6,
+         point_size = 0.8,
          with_logo = FALSE,
          count_plots_legend = FALSE,
-         inset_maps_offset_x = 0.18,
-         export_name = "test",
-         export_folder = "stocks/20240324_carbon_stocks")
+         mode = "dark",
+         inset_maps_offset_x = 1.5,
+         export_name = "so_mean_dark",
+         export_folder = paste0(dir, "graphs/"),
+         return = TRUE)
+
+
+map_icpf2(layers = "data_so",
+          title = paste0("**Forest soil carbon stock**",
+                         " · ",
+                         "Level II<br>",
+                         n_distinct(data_so$plot_id), " plots ",
+                         "(forest floor + topsoil)<br>",
+                         "Mean over survey period (1990 - 2023)"
+          ),
+          legend_title = paste0("**Carbon stock**<br>",
+                                "t C ha<sup>-1</sup>"),
+          biogeo_palette = NULL,
+          legend_classes = NULL,
+          variable_continuous = "stock_topsoil",
+          point_size = 0.8,
+          with_logo = FALSE,
+          count_plots_legend = FALSE,
+          inset_maps_offset_x = 1.5,
+          export_name = "so_mean",
+          export_folder = paste0(dir, "graphs/"))
+
+
+### 8.3.2. Change ----
+
+plot_c_stocks_summ %>%
+  filter(!is.na(stock_change)) %>%
+  filter(grepl("s1_", survey_form)) %>%
+  mutate(partner_short = as.factor(partner_short)) %>%
+  select(survey_year_earliest, survey_year_last, survey_year_difference,
+         survey_year_count, partner_short) %>%
+  summary
+
+plot_c_stocks_summ %>%
+  filter(!is.na(stock_change)) %>%
+  filter(grepl("so_", survey_form)) %>%
+  mutate(partner_short = as.factor(partner_short)) %>%
+  select(survey_year_earliest, survey_year_last, survey_year_difference,
+         survey_year_count, partner_short) %>%
+  summary
+
+data_change_so <- plot_c_stocks_summ %>%
+  filter(!is.na(stock_change)) %>%
+  filter(grepl("so_", survey_form)) %>%
+  as_sf
+
+map_icpf2(layers = "data_change_so",
+          title = paste0("**Annual increase** in **forest soil carbon stock** ",
+                         " · Level II<br>",
+                         n_distinct(data_change_so$plot_id), " plots ",
+                         "(forest floor + soil)<br>",
+                         "1991 - 2023 (time span per plot: 9 - 29 years)"),
+          legend_title = paste0("**Annual increase**<br>",
+                                "carbon stock<br>",
+                                "t C ha<sup>-1</sup> year<sup>-1</sup>"),
+          biogeo_palette = NULL,
+          legend_classes = NULL,
+          variable_continuous = "stock_change",
+          point_size = 1.5,
+          with_logo = FALSE,
+          count_plots_legend = FALSE,
+          inset_maps_offset_x = 0.9,
+          export_name = "so_change",
+          export_folder = paste0(dir, "graphs/"))
+
+
+
+p2 <- map_icpf2(layers = "data_change_so",
+          title = paste0("**Annual increase** in **forest soil carbon stock** ",
+                         " · Level II<br>",
+                         n_distinct(data_change_so$plot_id), " plots ",
+                         "(forest floor + soil)<br>",
+                         "1991 - 2023 (time span per plot: 9 - 29 years)"),
+          legend_title = paste0("**Annual increase**<br>",
+                                "carbon stock<br>",
+                                "t C ha<sup>-1</sup> year<sup>-1</sup>"),
+          biogeo_palette = NULL,
+          legend_classes = NULL,
+          variable_continuous = "stock_change",
+          point_size = 1.5,
+          with_logo = FALSE,
+          count_plots_legend = FALSE,
+          mode = "dark",
+          inset_maps_offset_x = 0.9,
+          export_name = "so_change_dark",
+          export_folder = paste0(dir, "graphs/"),
+          return = TRUE)
 
 
 
 
 
 
+p <- p1 / p2
 
 
-
-
-
-
-
+ggsave(filename = paste0("patchwork_map", ".png"),
+       plot = p2,
+       path = paste0(dir, "graphs/"),
+       dpi = 500,
+       height = 14,
+       width = 5.5)
 
 
 

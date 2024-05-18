@@ -2038,7 +2038,7 @@ if (length(survey_forms) == 2) {
 
   write.table(plot_stocks,
               file = paste0(dir,
-                            survey_form,
+                            survey_form_orig,
                             "_plot_",
                             shorter_var_name, "_stocks.csv"),
               row.names = FALSE,
