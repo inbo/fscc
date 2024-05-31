@@ -27,9 +27,6 @@
 
 # 1. Prepare packages ----
 
-# Update the CRAN mirror
-options(repos = c(CRAN = "https://cloud.r-project.org"))
-
 # Define required packages
 stopifnot(require("sf"),
           require("tidyverse"),
@@ -37,7 +34,8 @@ stopifnot(require("sf"),
           require("parsedate"),
           require("googlesheets4"),
           require("googledrive"),
-          require("assertthat"))
+          require("assertthat"),
+          require("aqp"))
 
 
 
@@ -57,14 +55,42 @@ sync_local_data(list_subfolders_data = "raw_data",
 # and place them in "./data/raw_data/" folder. Data forms should be grouped
 # in subfolders with the survey code as name (e.g. in "./data/raw_data/so/").
 
-# Retrieve the date on which 'layer 0' data were downloaded
-# from ICP Forests website
 
-source("./src/functions/get_date_local.R")
-download_date <- get_date_local(path = "./data/raw_data/",
-                                save_to_env = TRUE,
-                                collapsed = TRUE)
-download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
+
+
+# Input level ----
+
+level <- "LII"
+
+
+# Define surveys and survey forms within level
+
+list_surveys <- list(so = c("som", "prf", "pls", "pfh", "lqa"),
+                     s1 = c("som", "prf", "pls", "pfh", "lqa"),
+                     si = c("eve", "plt", "sta", "tco"),
+                     y1 = c("pl1", "st1", "ev1"),
+                     sw = c("swa", "swc"))
+
+if (level == "LI") {
+
+  level_surveys <-
+    list_surveys[names(list_surveys) %in% c("y1", "s1")]
+
+}
+
+if (level == "LII") {
+
+  level_surveys <-
+    list_surveys[names(list_surveys) %in% c("si", "so", "sw")]
+
+}
+
+
+list_survey_forms <- unlist(
+  lapply(names(level_surveys), function(name) {
+    paste0(name, "_", level_surveys[[name]])
+  })
+)
 
 
 
@@ -74,14 +100,47 @@ download_date_pir <- as.Date(parsedate::parse_iso_8601(download_date))
 # Firstly read "y1" and "si", as their coordinates are used to list coordinates
 # of "s1" and "so"
 
+cat("Import raw data\n")
+
 source("./src/functions/read_raw.R")
+
+if (level == "LI") {
+
 read_raw("y1", save_to_env = TRUE)
-read_raw("si", save_to_env = TRUE)
 read_raw("s1", save_to_env = TRUE)
+}
+
+if (level == "LII") {
+
+read_raw("si", save_to_env = TRUE)
 read_raw("so", save_to_env = TRUE)
 read_raw("sw", save_to_env = TRUE)
+}
 
-## 3.2. Merge duplicate records in "so_som" ----
+
+
+## 3.2. Solve issues with duplicate records ----
+
+
+if (level == "LI") {
+
+  cat("Solve issues with duplicate records\n")
+
+  source("./src/functions/solve_record_inconsistencies.R")
+  s1_som <- solve_record_inconsistencies(survey_form = "s1_som",
+                                         data_frame = s1_som,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+  s1_pfh <- solve_record_inconsistencies(survey_form = "s1_pfh",
+                                         data_frame = s1_pfh,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+}
+
+
+if (level == "LII") {
+
+cat("Merge duplicate records 'so_som'\n")
 
 source("./src/functions/merge_duplicate_records.R")
 so_som <- merge_duplicate_records(survey_form = "so_som",
@@ -89,6 +148,7 @@ so_som <- merge_duplicate_records(survey_form = "so_som",
                                   merge = TRUE,
                                   save_to_env = FALSE)
 
+cat("Solve other issues with duplicate records\n")
 
 source("./src/functions/solve_record_inconsistencies.R")
 so_som <- solve_record_inconsistencies(survey_form = "so_som",
@@ -96,7 +156,7 @@ so_som <- solve_record_inconsistencies(survey_form = "so_som",
                                      solve = TRUE,
                                      save_to_env = FALSE)
 
-
+}
 
 
 
@@ -112,16 +172,27 @@ so_som <- solve_record_inconsistencies(survey_form = "so_som",
 # Apply gapfill_from_pir scripts
 
 source("./src/functions/gapfill_from_pir.R")
+
+cat("Gap-fill from PIRs (data corrected by partners)\n")
+
+
+if (level == "LI") {
+
 gapfill_from_pir(code_survey = "y1",
                  save_to_env = TRUE)
-gapfill_from_pir(code_survey = "si",
-                 save_to_env = TRUE)
 gapfill_from_pir(code_survey = "s1",
+                 save_to_env = TRUE)
+}
+
+if (level == "LII") {
+
+gapfill_from_pir(code_survey = "si",
                  save_to_env = TRUE)
 gapfill_from_pir(code_survey = "so",
                  save_to_env = TRUE)
 gapfill_from_pir(code_survey = "sw",
                  save_to_env = TRUE)
+}
 
 # TO DO: initiate a column for each parameter to indicate the sources of the
 # data (e.g. "layer 0", "partner communication", ...)
@@ -142,12 +213,14 @@ bind_objects_starting_with(object_name_start = "pir_applied",
 wb <- createWorkbook()
 addWorksheet(wb, "Inconsistency report")
 writeData(wb, 1, pir_applied)
-addFilter(wb, 1, row = 1, cols = 1:ncol(pir_applied))
+addFilter(wb, 1, row = 1, cols = seq_len(ncol(pir_applied)))
 freezePane(wb, 1, firstActiveRow = 2, firstActiveCol = 1)
 addCreator(wb, "ICP Forests - FSCC")
 openxlsx::saveWorkbook(wb,
                        file = paste0("./output/gap_filling_details/",
-                                     "20230302_applied_pirs.xlsx"),
+                                     "20230302_applied_pirs_",
+                                     tolower(level),
+                                     ".xlsx"),
                        overwrite = TRUE)
 
 
@@ -158,12 +231,18 @@ openxlsx::saveWorkbook(wb,
 
 ## 4.2. Gap-fill using old database sources (e.g. AFSCDB.LII) ----
 # Note: only focussing on parameters for C stock calculations
+# To do: expand for other parameters
+# To do: expand for LI
 
 ### 4.2.1. Gap-filling existing records ----
 
+if (level == "LII") {
+
+cat("Gap-fill from old database sources (AFSCDB.LII)\n")
+
 # Import afscdb so_som data
 
-file_path <- paste0("./data/additional_data/afscdb_LII_2_2/",
+file_path <- paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
                     "AFSCDB_LII_2_2_080515_som.csv")
 
 assertthat::assert_that(file.exists(file_path),
@@ -244,7 +323,7 @@ so_som <- so_som %>%
                      coarse_fragment_vol_afscdb = coarse_fragment_vol,
                      part_size_clay_afscdb = part_size_clay),
             by = "unique_survey_layer")
-  
+
 # Merge the columns
 
 so_som <- so_som %>%
@@ -278,11 +357,12 @@ so_som <- so_som %>%
                   .data$part_size_clay,
                   .data$part_size_clay_afscdb)) %>%
   select(-part_size_clay_afscdb)
-  
 
+}
 
 ### 4.2.2. Adding missing records ----
 
+if (level == "LII") {
 
 # Check whether there are any "unique_survey" data in so_som_afscdb
 # that are absent in so_som
@@ -434,17 +514,26 @@ so_som <- rbind(so_som,
                 so_som_afscdb_to_add)
 
 } # End of adding afscdb records
-
+}
 
 
 
 ## 4.3. Gap-fill "so_prf" using manually harmonised profile data Nathalie ----
+# To do: assess whether machine learning predictions of a harmonised
+# WRB 2014/2015 are an option.
+
+
+if (level == "LII") {
+
+cat("Gap-fill 'so_prf' using manually harmonised profile data\n")
 
 assertthat::assert_that(file.exists(paste0("./data/additional_data/",
                                            "SO_PRF_ADDS.xlsx")),
                         msg = paste0("'./data/additional_data/",
                                      "SO_PRF_ADDS.xlsx' ",
                                      "does not exist."))
+
+# This file was created by Nathalie on 17 Oct 2023
 
 so_prf_adds <-
   openxlsx::read.xlsx(paste0("./data/additional_data/",
@@ -473,6 +562,7 @@ so_prf_adds_agg <- so_prf_adds %>%
                            METHOD_RSGu, "_",
                            DEPTHSTOCK, "_",
                            bs_class, "_",
+                           EFTC, "_",
                            remark)) %>%
   group_by(plot_id) %>%
   # Sometimes there are different options, e.g. plot_id 60_9
@@ -487,6 +577,7 @@ so_prf_adds_agg <- so_prf_adds %>%
                     "method_wrb_harmonisation_fscc",
                     "eff_soil_depth",
                     "bs_class",
+                    "forest_type",
                     "remark_harmonisation_fscc"),
            sep = "_") %>%
   mutate(eff_soil_depth = as.numeric(eff_soil_depth))
@@ -504,7 +595,7 @@ so_prf <- so_prf %>%
             by = "plot_id")
 
 
-
+}
 
 
 
@@ -522,11 +613,23 @@ so_prf <- so_prf %>%
 # the function to rename "code_layer" in "s1_som"
 # in case of ambiguous (non-unique) code_layers
 
+cat("Solve primary inconsistencies\n")
+
 source("./src/functions/get_primary_inconsistencies.R")
+
+if (level == "LI") {
+
 get_primary_inconsistencies(code_survey = "y1",
                             save_to_env = TRUE)
 get_primary_inconsistencies(code_survey = "s1", solve = TRUE,
                             save_to_env = TRUE)
+
+s1_pfh1 <- s1_pfh
+s1_som1 <- s1_som
+}
+
+if (level == "LII") {
+
 get_primary_inconsistencies(code_survey = "si",
                             save_to_env = TRUE)
 get_primary_inconsistencies(code_survey = "so", solve = TRUE,
@@ -534,9 +637,12 @@ get_primary_inconsistencies(code_survey = "so", solve = TRUE,
 get_primary_inconsistencies(code_survey = "sw",
                             save_to_env = TRUE)
 
+so_pfh1 <- so_pfh
+so_som1 <- so_som
+}
+
 source("./src/functions/bind_objects_starting_with.R")
 bind_objects_starting_with("list_primary_inconsistencies", save_to_env = TRUE)
-View(list_primary_inconsistencies)
 
 
 
@@ -553,7 +659,6 @@ View(list_primary_inconsistencies)
 
 # get_coordinate_inconsistencies(boundary_buffer_meter = 3000,
 #                                save_to_env = TRUE)
-# View(list_coordinate_inconsistencies)
 
 
 
@@ -565,29 +670,50 @@ View(list_primary_inconsistencies)
 # to facilitate gap-filling of "som" based on "pfh"
 # (e.g. layer limits forest floor)
 
+cat("Solve layer inconsistencies\n")
+
 source("./src/functions/get_layer_inconsistencies.R")
-so_pfh <- get_layer_inconsistencies(survey_form = "so_pfh",
-                                    data_frame = so_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
-so_som <- get_layer_inconsistencies(survey_form = "so_som",
-                                    data_frame = so_som,
-                                    solve = TRUE, save_to_env = FALSE)
+
+if (level == "LI") {
+
 s1_pfh <- get_layer_inconsistencies(survey_form = "s1_pfh",
                                     data_frame = s1_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
+                                    solve = TRUE,
+                                    save_to_env = FALSE)
 s1_som <- get_layer_inconsistencies(survey_form = "s1_som",
                                     data_frame = s1_som,
-                                    solve = TRUE, save_to_env = FALSE)
+                                    solve = TRUE,
+                                    save_to_env = FALSE)
+s1_pfh2 <- s1_pfh
+s1_som2 <- s1_som
+}
+
+if (level == "LII") {
+
+so_pfh <- get_layer_inconsistencies(survey_form = "so_pfh",
+                                    data_frame = so_pfh,
+                                    solve = TRUE,
+                                    save_to_env = FALSE)
+so_som <- get_layer_inconsistencies(survey_form = "so_som",
+                                    data_frame = so_som,
+                                    solve = TRUE,
+                                    save_to_env = FALSE)
+so_pfh2 <- so_pfh
+so_som2 <- so_som
+}
 
 
 source("./src/functions/bind_objects_starting_with.R")
 bind_objects_starting_with("list_layer_inconsistencies", save_to_env = TRUE)
-View(list_layer_inconsistencies)
 
 
 
-# TO DO: adjust layer depths in profiles that contain peat/mineral layers
-# with negative depths!!!
+
+# At this stage, link forest floor layers in "som" with those of "pfh"
+# in the same survey.
+# This can be used to gap-fill forest floor layer limits as well as bulk
+# densities
+
 
 
 
@@ -595,12 +721,29 @@ View(list_layer_inconsistencies)
 ## 5.4. Inconsistencies in range/presence of data ----
 # "solve = TRUE" converts data in the wrong units to the correct units
 
+cat("Solve range inconsistencies\n")
+
 source("./src/functions/get_range_inconsistencies.R")
+
+if (level == "LI") {
 
 s1_som <- get_range_inconsistencies("s1_som", s1_som,
                                     solve = TRUE, save_to_env = FALSE)
 s1_pfh <- get_range_inconsistencies("s1_pfh", s1_pfh,
                                     solve = TRUE, save_to_env = FALSE)
+s1_prf <- get_range_inconsistencies("s1_prf", s1_prf,
+                                    save_to_env = FALSE)
+s1_pls <- get_range_inconsistencies("s1_pls", s1_pls,
+                                    save_to_env = FALSE)
+y1_st1 <- get_range_inconsistencies("y1_st1", y1_st1,
+                                    save_to_env = FALSE)
+s1_pfh3 <- s1_pfh
+s1_som3 <- s1_som
+}
+
+
+if (level == "LII") {
+
 so_som <- get_range_inconsistencies("so_som", so_som,
                                     solve = TRUE, save_to_env = FALSE)
 so_pfh <- get_range_inconsistencies("so_pfh", so_pfh,
@@ -609,25 +752,44 @@ sw_swc <- get_range_inconsistencies("sw_swc", sw_swc,
                                     solve = TRUE, save_to_env = FALSE)
 so_prf <- get_range_inconsistencies("so_prf", so_prf,
                                     save_to_env = FALSE)
-s1_prf <- get_range_inconsistencies("s1_prf", s1_prf,
-                                    save_to_env = FALSE)
 so_pls <- get_range_inconsistencies("so_pls", so_pls,
-                                    save_to_env = FALSE)
-s1_pls <- get_range_inconsistencies("s1_pls", s1_pls,
                                     save_to_env = FALSE)
 si_sta <- get_range_inconsistencies("si_sta", si_sta,
                                     save_to_env = FALSE)
-y1_st1 <- get_range_inconsistencies("y1_st1", y1_st1,
-                                    save_to_env = FALSE)
+so_pfh3 <- so_pfh
+so_som3 <- so_som
+}
 
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
-View(list_range_inconsistencies)
+# source("./src/functions/bind_objects_starting_with.R")
+# bind_objects_starting_with("list_range_inconsistencies", save_to_env = TRUE)
+
+
+
+
+
 
 
 ## 5.5. Harmonise data below LOQ ----
 
+cat("Harmonise data below LOQ\n")
+
 source("./src/functions/harmonise_below_loqs.R")
+
+if (level == "LI") {
+
+  s1_som <- harmonise_below_loqs(survey_form = "s1_som",
+                                 data_frame = s1_som)
+
+  s1_pfh <- harmonise_below_loqs(survey_form = "s1_pfh",
+                                 data_frame = s1_pfh,
+                                 parameters = c("horizon_clay",
+                                                "horizon_silt",
+                                                "horizon_sand",
+                                                "horizon_c_organic_total",
+                                                "horizon_n_total"))
+}
+
+if (level == "LII") {
 
 so_som <- harmonise_below_loqs(survey_form = "so_som",
                                data_frame = so_som)
@@ -639,556 +801,236 @@ so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
                                               "horizon_sand",
                                               "horizon_c_organic_total",
                                               "horizon_n_total"))
+}
+
+
 
 
 
 ## 5.6. Inconsistencies in derived variables ----
-
 # TO DO: update to integrate LOQs better
+
+cat("Solve inconsistencies in derived variables\n")
+
 source("./src/functions/get_derived_variable_inconsistencies.R")
 
-so_som <- get_derived_variable_inconsistencies("so_som", so_som,
-                                               save_to_env = FALSE)
-so_pfh <- get_derived_variable_inconsistencies("so_pfh", so_pfh,
-                                               save_to_env = FALSE)
-s1_som <- get_derived_variable_inconsistencies("s1_som", s1_som,
-                                               save_to_env = FALSE)
-s1_pfh <- get_derived_variable_inconsistencies("s1_pfh", s1_pfh,
-                                               save_to_env = FALSE)
+if (level == "LI") {
+  s1_som <- get_derived_variable_inconsistencies("s1_som", s1_som,
+                                                 save_to_env = FALSE)
+  s1_pfh <- get_derived_variable_inconsistencies("s1_pfh", s1_pfh,
+                                                 save_to_env = FALSE)
+}
 
-source("./src/functions/bind_objects_starting_with.R")
-bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
-View(list_derived_inconsistencies)
+if (level == "LII") {
+
+  so_som <- get_derived_variable_inconsistencies("so_som", so_som,
+                                                 save_to_env = FALSE)
+  so_pfh <- get_derived_variable_inconsistencies("so_pfh", so_pfh,
+                                                 save_to_env = FALSE)
+
+}
+
+# source("./src/functions/bind_objects_starting_with.R")
+# bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
 
 
 
 
-# 6. Internal gap-filling ----
 
-  ## To do: Gap-fill effective soil depth Bruno?
-  
+# 6. Additional manual corrections ----
+
+# Some issues have not been picked up during the automated corrections
+
+if (level == "LII") {
+
+cat("Apply additional manual corrections\n")
+
+# Romania: organic_carbon_total of forest floors seem to be reported in %,
+# while those of the mineral layers are fine.
+# This is in line with the data in AFSCDB_LII.
+
+# Forest floor layers
+
+unique_layers_to_convert <- so_som %>%
+  filter(code_country == 52) %>%
+  filter(layer_type == "forest_floor") %>%
+  mutate(unit_issue_toc =
+           # Upper limit of organic_carbon_total plausible range in %
+           ifelse(.data$organic_carbon_total < 59,
+                  TRUE,
+                  FALSE))
+
+if (length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
+    0.9 * nrow(unique_layers_to_convert) &&
+    nrow(unique_layers_to_convert) >= 2) {
+
+  unique_layers_to_convert <-
+    unique(unique_layers_to_convert$unique_layer_repetition)
+
+  so_som <- so_som %>%
+    mutate(organic_carbon_total =
+             ifelse(.data$unique_layer_repetition %in%
+                      unique_layers_to_convert,
+                    10 * .data$organic_carbon_total,
+                    .data$organic_carbon_total))
+}
+
+# Plot 52_10
+# n_total of mineral layers should be divided by 10
+# (in comparison with AFSCDB_LII)
+
+unique_layers_to_convert <- so_som %>%
+  filter(plot_id == "52_10") %>%
+  filter(layer_type != "forest_floor") %>%
+  mutate(unit_issue_tn =
+           # Upper limit of n_total plausible range
+           ifelse(.data$n_total > 10,
+                  TRUE,
+                  FALSE))
+
+if (length(which(unique_layers_to_convert$unit_issue_tn == TRUE)) >=
+    0.7 * nrow(unique_layers_to_convert) &&
+    nrow(unique_layers_to_convert) >= 2) {
+
+  unique_layers_to_convert <-
+    unique(unique_layers_to_convert$unique_layer_repetition)
+
+  so_som <- so_som %>%
+    mutate(n_total =
+             ifelse(.data$unique_layer_repetition %in%
+                      unique_layers_to_convert,
+                    0.1 * .data$n_total,
+                    .data$n_total))
+}
+
+# Plot 52_12
+# organic_carbon_total of mineral layers should be a factor 10 higher
+# (in comparison with AFSCDB_LII)
+
+unique_layers_to_convert <- so_som %>%
+  filter(plot_id == "52_12") %>%
+  filter(layer_type != "forest_floor") %>%
+  mutate(unit_issue_toc =
+           # Upper limit of organic_carbon_total plausible range in %
+           ifelse(.data$organic_carbon_total < 15,
+                  TRUE,
+                  FALSE))
+
+if (length(which(unique_layers_to_convert$unit_issue_toc == TRUE)) >=
+    0.9 * nrow(unique_layers_to_convert) &&
+    nrow(unique_layers_to_convert) >= 2) {
+
+  unique_layers_to_convert <-
+    unique(unique_layers_to_convert$unique_layer_repetition)
+
+  so_som <- so_som %>%
+    mutate(organic_carbon_total =
+             ifelse(.data$unique_layer_repetition %in%
+                      unique_layers_to_convert,
+                    10 * .data$organic_carbon_total,
+                    .data$organic_carbon_total))
+}
+
+}
+
+
+
+
+
+# 7. Internal gap-filling ----
+
 # Gap-fill "som": parameters for C stock calculations
 # Note: At the moment, focus on parameters for C stock calculations only
-  
-  # Firstly apply the "get_layer_inconsistencies" function
-  # which already gap-fills layer limits
-  
-  # source("./src/functions/get_layer_inconsistencies.R")
-  # so_som <- get_layer_inconsistencies("so_som", so_som,
-  #                                     solve = TRUE, save_to_env = FALSE)
-  
-## 6.1. Source 1: "sw_swc" ----
-  
-  # Import additional sw_swc file with corresponding fixed-depth layers
-  # by Nathalie (manually created)
-  
-  # TO DO: automate the assignment of corresponding fixed-depth layers
-  
-  file_path <- "./data/additional_data/sw_swc/SW_SWC_code_layer_SOM.csv"
-  
-  assertthat::assert_that(file.exists(file_path),
-                          msg = paste0("'", file_path, "' ",
-                                       "does not exist."))
-  
-  sw_swc_adds <- read.csv2(file_path)
-  
-  # Preprocess file
-  
-  sw_swc_adds_sameyear <- sw_swc_adds %>%
-    rename(code_layer_som = code_layer_SOM) %>%
-    rename(plot_id = PLOTID) %>%
-    # Remove records without corresponding fixed-depth layer
-    filter(code_layer_som %in%
-             c("O", "OH", "OFH",
-               "M05", "M51", "M01", "M12", "M24", "M48")) %>%
-    # Create unique_survey_layer
-    mutate(unique_survey_layer =
-             paste0(code_country, "_",
-                    survey_year, "_",
-                    code_plot, "_",
-                    code_layer_som)) %>%
-    # Create unique_layer
-    mutate(unique_layer =
-             paste0(code_country, "_",
-                    code_plot, "_",
-                    code_layer_som)) %>%
-    # Aggregate over replicates
-    group_by(unique_survey_layer, unique_layer) %>%
-    summarise(bulk_density =
-                mean(bulk_density, na.rm = TRUE),
-              .groups = "drop")
-  
-  
-  # Aggregate different survey years per unique layer (plot_id x code_layer)
-  # To gap-fill data not from the same survey_year
-  
-  sw_swc_adds_otheryear <- sw_swc_adds_sameyear %>%
-    group_by(unique_layer) %>%
-    summarise(bulk_density =
-                mean(bulk_density, na.rm = TRUE),
-              .groups = "drop")
-  
-  
-  
-  
-  
-  
-## 6.2. Source 2: "so_pfh" ----
-  
-  # Redundant layers do already need to be removed from so_pfh before
-  # being able to harmonise the layers into pre-defined depth intervals
-  
-  # source("./src/functions/get_layer_inconsistencies.R")
-  # so_pfh_harmonised_layers <- get_layer_inconsistencies("so_pfh", so_pfh,
-  #                                                       solve = TRUE,
-  #                                                       save_to_env = FALSE)
-  
-  # This function converts random (e.g. pedogenic) depth layers
-  # into a dataframe with pre-defined fixed-depth layers
-  
-  assertthat::assert_that("layer_number" %in% names(so_pfh))
-  
-  source("./src/functions/harmonise_into_fixed_depth_layers.R")
-  
-  so_pfh_fixed <-
-    harmonise_into_fixed_depth_layers(survey_form = so_pfh)
-  
-  # The function harmonise_into_fixed_depth_layers automatically makes a
-  # column "bulk_density" which contains values for "horizon_bulk_dens_measure"
-  # if this exists, else "horizon_bulk_dens_est".
-  
-  # Convert coarse fragments to the right units (volume %)
-  
-  d_soil_coarse_fragments <-
-    read.csv2("./data/additional_data/d_soil_coarse_fragments.csv") %>%
-    select(code, coarse_fragment_vol_avg)
-  
-  so_pfh_fixed <- so_pfh_fixed %>%
-    # Convert volumetric coarse fragment codes to actual average vol %
-    left_join(d_soil_coarse_fragments,
-              by = join_by(code_horizon_coarse_vol == code)) %>%
-    # Convert weight percentages to volumetric percentages:
-    # Imagine: 1 m³ of fine earth contains
-    # e.g. 1300 kg fine earth (bulk density).
-    # Then, imagine the weight percentage of coarse fragments
-    # from that soil is 11 %.
-    # That means that there is 1300 kg * 11/89 = 160.7 kg of coarse fragments
-    # for 1 m³ of fine earth in this soil.
-    # Imagine the coarse fragments have a particle density of 2650 kg per m³.
-    # Then, we can calculate that this 160.7 kg of coarse fragments occupies
-    # 160.7/2650 = 0.061 m³.
-    # As such, the vol % of coarse fragments will be 0.061 / (1 + 0.061)
-    mutate(coarse_fragment_aid =
-             ifelse(!is.na(bulk_density) & !is.na(horizon_coarse_weight),
-                    (.data$bulk_density *
-                      (.data$horizon_coarse_weight /
-                         (100 - .data$horizon_coarse_weight))) / 2650,
-                    NA)) %>%
-    mutate(coarse_fragment_vol_converted =
-             ifelse(!is.na(.data$coarse_fragment_aid),
-                    as.numeric((.data$coarse_fragment_aid /
-                       (1 + .data$coarse_fragment_aid)) * 100),
-                    NA)) %>%
-    select(-coarse_fragment_aid) %>%
-    mutate(coarse_fragment_vol =
-             # If both volumetric codes and weight % are available:
-             ifelse(!is.na(.data$coarse_fragment_vol_avg) &
-                      !is.na(.data$coarse_fragment_vol_converted),
-                    # Better not to take the average in that case,
-                    # because the converted weight % seem more reliable
-                    # (volumetric classes were broad)
-                    # Priority: converted weight %
-                    .data$coarse_fragment_vol_converted,
-                    # Else, take whichever measure for coarse fragments
-                    # that is available
-                    ifelse(!is.na(.data$coarse_fragment_vol_converted),
-                           .data$coarse_fragment_vol_converted,
-                           .data$coarse_fragment_vol_avg)))
-  
+# To do: expand to other parameters
 
-  
-  # Aggregate different profiles per plot (per survey layer)
-  
-  so_pfh_fixed_depths_agg_prof <- so_pfh_fixed %>%
-    mutate(unique_survey_layer = paste0(code_country, "_",
-                                        survey_year, "_",
-                                        code_plot, "_",
-                                        code_layer)) %>%
-    mutate(unique_layer = paste0(code_country, "_",
-                                 code_plot, "_",
-                                 code_layer)) %>%
-    group_by(unique_survey_layer, unique_layer,
-             code_country, survey_year, code_plot, code_layer) %>%
-    summarise(layer_limit_superior =
-                mean(layer_limit_superior, na.rm = TRUE),
-              layer_limit_inferior =
-                mean(layer_limit_inferior, na.rm = TRUE),
-              horizon_c_organic_total =
-                mean(horizon_c_organic_total, na.rm = TRUE),
-              horizon_clay =
-                mean(horizon_clay, na.rm = TRUE),
-              bulk_density =
-                mean(bulk_density, na.rm = TRUE),
-              coarse_fragment_vol =
-                mean(coarse_fragment_vol, na.rm = TRUE),
-              .groups = "drop") %>%
-    as.data.frame %>%
-    mutate(layer_limit_superior = ifelse(is.nan(layer_limit_superior),
-                                         NA, layer_limit_superior),
-           layer_limit_inferior = ifelse(is.nan(layer_limit_inferior),
-                                         NA, layer_limit_inferior),
-           horizon_c_organic_total = ifelse(is.nan(horizon_c_organic_total),
-                                            NA, horizon_c_organic_total),
-           horizon_clay = ifelse(is.nan(horizon_clay),
-                                 NA, horizon_clay),
-           bulk_density = ifelse(is.nan(bulk_density),
-                                 NA, bulk_density),
-           coarse_fragment_vol = ifelse(is.nan(coarse_fragment_vol),
-                                        NA, coarse_fragment_vol))
-  
-  # Export so_pfh_fixed
-  
-  write.csv2(so_pfh_fixed_depths_agg_prof,
-             paste0("./output/gap_filling_details/",
-                    "20231020_so_pfh_fixed_depths_agg_prof.csv"),
-             row.names = FALSE,
-             na = "")
-  
-  # Aggregate different survey years per unique layer (plot_id x code_layer)
-  # To gap-fill data not from the same survey_year
-  
-  so_pfh_fixed_otheryear <- so_pfh_fixed %>%
-    mutate(unique_layer = paste0(code_country, "_",
-                                 code_plot, "_",
-                                 code_layer)) %>%
-    group_by(unique_layer,
-             code_country, code_plot, code_layer) %>%
-    summarise(layer_limit_superior =
-                mean(layer_limit_superior, na.rm = TRUE),
-              layer_limit_inferior =
-                mean(layer_limit_inferior, na.rm = TRUE),
-              horizon_clay =
-                mean(horizon_clay, na.rm = TRUE),
-              bulk_density =
-                mean(bulk_density, na.rm = TRUE),
-              coarse_fragment_vol =
-                mean(coarse_fragment_vol, na.rm = TRUE),
-              .groups = "drop") %>%
-    as.data.frame %>%
-    mutate(layer_limit_superior = ifelse(is.nan(layer_limit_superior),
-                                         NA, layer_limit_superior),
-           layer_limit_inferior = ifelse(is.nan(layer_limit_inferior),
-                                         NA, layer_limit_inferior),
-           horizon_clay = ifelse(is.nan(horizon_clay),
-                                 NA, horizon_clay),
-           bulk_density = ifelse(is.nan(bulk_density),
-                                 NA, bulk_density),
-           coarse_fragment_vol = ifelse(is.nan(coarse_fragment_vol),
-                                        NA, coarse_fragment_vol))
-  
-  # horizon_c_organic_total should not be assessed based on values from
-  # other survey years
-  
-  
-  
+cat("Gap-fill internally\n")
 
-  
-  
-  
- 
-  
-## 6.3. Source 3: "so_som" (other survey years) ----
-  
-  so_som_otheryear <- so_som %>%
-    group_by(unique_layer,
-             code_country, code_plot, code_layer) %>%
-    summarise(layer_limit_superior =
-                mean(layer_limit_superior, na.rm = TRUE),
-              layer_limit_inferior =
-                mean(layer_limit_inferior, na.rm = TRUE),
-              part_size_clay =
-                mean(part_size_clay, na.rm = TRUE),
-              bulk_density =
-                mean(bulk_density, na.rm = TRUE),
-              coarse_fragment_vol =
-                mean(coarse_fragment_vol, na.rm = TRUE),
-              .groups = "drop") %>%
-    as.data.frame %>%
-    mutate(layer_limit_superior = ifelse(is.nan(layer_limit_superior),
-                                         NA, layer_limit_superior),
-           layer_limit_inferior = ifelse(is.nan(layer_limit_inferior),
-                                         NA, layer_limit_inferior),
-           part_size_clay = ifelse(is.nan(part_size_clay),
-                                   NA, part_size_clay),
-           bulk_density = ifelse(is.nan(bulk_density),
-                                 NA, bulk_density),
-           coarse_fragment_vol = ifelse(is.nan(coarse_fragment_vol),
-                                        NA, coarse_fragment_vol))
-  
-  # organic_layer_weight and organic_carbon_total should not be assessed
-  # based on other survey years
-  
-  
-  
-  
-  
-  
-  
-  
-## 6.4. Compile ----
-  
-  # Add data to so_som
-  
-  so_som <- so_som %>%
-    # sw_swc same year
-    left_join(sw_swc_adds_sameyear %>%
-                select(-unique_layer) %>%
-                rename(bulk_density_sw_swc_sameyear =
-                         bulk_density),
-              by = "unique_survey_layer") %>%
-    # so_pfh same year
-    left_join(so_pfh_fixed_depths_agg_prof %>%
-                rename(organic_carbon_total_so_pfh_sameyear =
-                         horizon_c_organic_total,
-                       bulk_density_so_pfh_sameyear =
-                         bulk_density,
-                       coarse_fragment_vol_so_pfh_sameyear =
-                         coarse_fragment_vol,
-                       part_size_clay_so_pfh_sameyear =
-                         horizon_clay) %>%
-                select(unique_survey_layer,
-                       organic_carbon_total_so_pfh_sameyear,
-                       bulk_density_so_pfh_sameyear,
-                       coarse_fragment_vol_so_pfh_sameyear,
-                       part_size_clay_so_pfh_sameyear),
-              by = "unique_survey_layer") %>%
-    # so_som other year
-    left_join(so_som_otheryear %>%
-                rename(bulk_density_so_som_otheryear =
-                         bulk_density,
-                       coarse_fragment_vol_so_som_otheryear =
-                         coarse_fragment_vol,
-                       part_size_clay_so_som_otheryear =
-                         part_size_clay) %>%
-                select(unique_layer,
-                       bulk_density_so_som_otheryear,
-                       coarse_fragment_vol_so_som_otheryear,
-                       part_size_clay_so_som_otheryear),
-              by = "unique_layer") %>%
-    # sw_swc other year
-    left_join(sw_swc_adds_otheryear %>%
-                rename(bulk_density_sw_swc_otheryear =
-                         bulk_density),
-              by = "unique_layer") %>%
-    # so_pfh other year
-    left_join(so_pfh_fixed_otheryear %>%
-                rename(bulk_density_so_pfh_otheryear =
-                         bulk_density,
-                       coarse_fragment_vol_so_pfh_otheryear =
-                         coarse_fragment_vol,
-                       part_size_clay_so_pfh_otheryear =
-                         horizon_clay) %>%
-                select(unique_layer,
-                       bulk_density_so_pfh_otheryear,
-                       coarse_fragment_vol_so_pfh_otheryear,
-                       part_size_clay_so_pfh_otheryear),
-              by = "unique_layer")
-  
-  
-  # Bulk density: combine columns
-  
-  if (!"bulk_density_orig" %in% names(so_som)) {
-    so_som$bulk_density_orig <- so_som$bulk_density
-  }
-  
-  so_som <- so_som %>%
-    mutate(bulk_density_source =
-             # Priority 1: so_som data from same year
-             ifelse(!is.na(.data$bulk_density),
-                    "so_som (same year)",
-              # Priority 2: sw_swc data from same year
-              ifelse(!is.na(.data$bulk_density_sw_swc_sameyear),
-                     "sw_swc (same year)",
-               # Priority 3: so_pfh data from same year
-               ifelse(!is.na(.data$bulk_density_so_pfh_sameyear),
-                      "so_pfh (same year)",
-                # Priority 4: so_som data from other year
-                ifelse(!is.na(.data$bulk_density_so_som_otheryear),
-                       "so_som (other year)",
-                 # Priority 5: sw_swc data from other year
-                 ifelse(!is.na(.data$bulk_density_sw_swc_otheryear),
-                        "sw_swc (other year)",
-                  # Priority 6: so_pfh data from other year
-                  ifelse(!is.na(.data$bulk_density_so_pfh_otheryear),
-                         "so_pfh (other year)",
-                         NA)))))),
-           bulk_density =
-             # Priority 1: so_som data from same year
-             ifelse(!is.na(.data$bulk_density),
-                    .data$bulk_density,
-              # Priority 2: sw_swc data from same year
-              ifelse(!is.na(.data$bulk_density_sw_swc_sameyear),
-                     .data$bulk_density_sw_swc_sameyear,
-               # Priority 3: so_pfh data from same year
-               ifelse(!is.na(.data$bulk_density_so_pfh_sameyear),
-                      .data$bulk_density_so_pfh_sameyear,
-                # Priority 4: so_som data from other year
-                ifelse(!is.na(.data$bulk_density_so_som_otheryear),
-                       .data$bulk_density_so_som_otheryear,
-                 # Priority 5: sw_swc data from other year
-                 ifelse(!is.na(.data$bulk_density_sw_swc_otheryear),
-                        .data$bulk_density_sw_swc_otheryear,
-                  # Priority 6: so_pfh data from other year
-                  .data$bulk_density_so_pfh_otheryear)))))) %>%
-    select(-bulk_density_sw_swc_sameyear,
-           -bulk_density_so_pfh_sameyear,
-           -bulk_density_so_som_otheryear,
-           -bulk_density_sw_swc_otheryear,
-           -bulk_density_so_pfh_otheryear)
+source("./src/functions/gapfill_internally.R")
 
-  summary(as.factor(so_som$bulk_density_source))
-  
-  
-  
-  # Coarse fragments: combine columns
-  
-  if (!"coarse_fragment_vol_orig" %in% names(so_som)) {
-    so_som$coarse_fragment_vol_orig <- so_som$coarse_fragment_vol
-  }
-  
-  so_som <- so_som %>%
-    mutate(coarse_fragment_source =
-             # Priority 1: so_som from same year
-             ifelse(!is.na(.data$coarse_fragment_vol),
-                    "so_som (same year)",
-              # Priority 2: so_pfh from same year
-              ifelse(!is.na(.data$coarse_fragment_vol_so_pfh_sameyear),
-                     "so_pfh (same year)",
-               # Priority 3: so_som from other year
-               ifelse(!is.na(.data$coarse_fragment_vol_so_som_otheryear),
-                      "so_som (other year)",
-                # Priority 4: so_pfh from other year
-                ifelse(!is.na(.data$coarse_fragment_vol_so_pfh_otheryear),
-                       "so_pfh (other year)",
-                       NA)))),
-           coarse_fragment_vol =
-             # Priority 1: so_som from same year
-             ifelse(!is.na(.data$coarse_fragment_vol),
-                    .data$coarse_fragment_vol,
-              # Priority 2: so_pfh from same year
-              ifelse(!is.na(.data$coarse_fragment_vol_so_pfh_sameyear),
-                     .data$coarse_fragment_vol_so_pfh_sameyear,
-               # Priority 3: so_som from other year
-               ifelse(!is.na(.data$coarse_fragment_vol_so_som_otheryear),
-                      .data$coarse_fragment_vol_so_som_otheryear,
-                # Priority 4: so_pfh from other year
-                .data$coarse_fragment_vol_so_pfh_otheryear)))) %>%
-    select(-coarse_fragment_vol_so_pfh_sameyear,
-           -coarse_fragment_vol_so_som_otheryear,
-           -coarse_fragment_vol_so_pfh_otheryear)
+if (level == "LI") {
 
-  summary(as.factor(so_som$coarse_fragment_source))
-  
-  
-  # Organic layer weight: combine columns
-  # (Note: no other data sources for organic_layer_weight)
-  
-  
-  # Total organic carbon: combine columns
-  
-  if (!"organic_carbon_total_orig" %in% names(so_som)) {
-    so_som$organic_carbon_total_orig <- so_som$organic_carbon_total
-  }
-  
-  so_som <- so_som %>%
-    mutate(organic_carbon_total_source =
-             # Priority 1: so_som from same year
-             ifelse(!is.na(.data$organic_carbon_total),
-                    "so_som (same year)",
-                    # Priority 2: so_pfh from same year
-                    ifelse(!is.na(.data$organic_carbon_total_so_pfh_sameyear),
-                           "so_pfh (same year)",
-                           NA)),
-           organic_carbon_total =
-             # Priority 1: so_som from same year
-             ifelse(!is.na(.data$organic_carbon_total),
-                    .data$organic_carbon_total,
-                    # Priority 2: so_pfh from same year
-                    .data$organic_carbon_total_so_pfh_sameyear)) %>%
-    select(-organic_carbon_total_so_pfh_sameyear)
-  
-  summary(as.factor(so_som$organic_carbon_total_source))
-  
-  
-  # Clay: combine columns
-  
-  if (!"part_size_clay_orig" %in% names(so_som)) {
-    so_som$part_size_clay_orig <- so_som$part_size_clay
-  }
-  
-  so_som <- so_som %>%
-    mutate( part_size_clay_source =
-              # Priority 1: so_som from same year
-              ifelse(!is.na(.data$part_size_clay),
-                     "so_som (same year)",
-               # Priority 2: so_pfh from same year
-               ifelse(!is.na(.data$part_size_clay_so_pfh_sameyear),
-                      "so_pfh (same year)",
-                # Priority 3: so_som from other year
-                ifelse(!is.na(.data$part_size_clay_so_som_otheryear),
-                       "so_som (other year)",
-                 # Priority 4: so_pfh from other year
-                 ifelse(!is.na(.data$part_size_clay_so_pfh_otheryear),
-                        "so_pfh (other year)",
-                        NA)))),
-            part_size_clay =
-             # Priority 1: so_som from same year
-             ifelse(!is.na(.data$part_size_clay),
-                    .data$part_size_clay,
-              # Priority 2: so_pfh from same year
-              ifelse(!is.na(.data$part_size_clay_so_pfh_sameyear),
-                     .data$part_size_clay_so_pfh_sameyear,
-               # Priority 3: so_som from other year
-               ifelse(!is.na(.data$part_size_clay_so_som_otheryear),
-                      .data$part_size_clay_so_som_otheryear,
-                # Priority 4: so_pfh from other year
-                .data$part_size_clay_so_pfh_otheryear)))) %>%
-    select(-part_size_clay_so_pfh_sameyear,
-           -part_size_clay_so_som_otheryear,
-           -part_size_clay_so_pfh_otheryear)
-    
-  
-  summary(as.factor(so_som$part_size_clay_source))
-  
-  
-  
-  
-  
-  
-  
+s1_som <- gapfill_internally(survey_form = "s1_som",
+                           data_frame = s1_som,
+                           save_to_env = FALSE)
 
-# 7. Export the processed survey forms ----
+write.csv2(s1_pfh_fixed,
+           paste0("./output/gap_filling_details/",
+                  "s1_pfh_fixed_depths.csv"),
+           row.names = FALSE,
+           na = "")
 
-## 7.1. Save processed survey forms to Google Drive (layer 1) ----
+s1_pfh <- gapfill_internally(survey_form = "s1_pfh",
+                             data_frame = s1_pfh,
+                             save_to_env = FALSE)
+
+write.csv2(s1_som_pedogenic,
+           paste0("./output/gap_filling_details/",
+                  "s1_som_pedogenic.csv"),
+           row.names = FALSE,
+           na = "")
+
+}
+
+
+
+if (level == "LII") {
+
+so_som <- gapfill_internally(survey_form = "so_som",
+                             data_frame = so_som,
+                             save_to_env = FALSE)
+
+write.csv2(so_pfh_fixed,
+           paste0("./output/gap_filling_details/",
+                  "so_pfh_fixed_depths.csv"),
+           row.names = FALSE,
+           na = "")
+
+so_pfh <- gapfill_internally(survey_form = "so_pfh",
+                             data_frame = so_pfh,
+                             save_to_env = FALSE)
+
+write.csv2(so_som_pedogenic,
+           paste0("./output/gap_filling_details/",
+                  "so_som_pedogenic.csv"),
+           row.names = FALSE,
+           na = "")
+}
+
+
+
+
+# 8. Export the processed survey forms ----
+
+## 8.1. Save processed survey forms to Google Drive (layer 1) ----
 
 source("./src/functions/save_to_google_drive.R")
-save_to_google_drive(path_name = "layer1_data")
-save_to_google_drive(objects_to_save = c("si", "so"),
+save_to_google_drive(objects_to_save = c("si", "so", "sw"),
                      path_name = "layer1_data")
 
 
-## 7.2. Sync local data with Google Drive ----
+source("./src/functions/save_to_google_drive.R")
+save_to_google_drive(objects_to_save = c("y1", "s1"),
+                     path_name = "layer1_data")
+
+source("./src/functions/save_to_google_drive.R")
+save_to_google_drive(path_name = "layer1_data")
+
+## 8.2. Sync local data with Google Drive ----
 
 source("./src/functions/sync_local_data.R")
 sync_local_data(list_subfolders_data = "layer1_data",
                 list_subfolders_output = FALSE)
 
-## 7.3. For further processing: import the processed survey forms ----
+
+
+
+## 8.3. For further processing: import the processed survey forms ----
 
 source("./src/functions/read_processed.R")
 read_processed(save_to_env = TRUE)
-read_processed(survey_forms = c("si", "so"),
+read_processed(survey_forms = c("si", "so", "sw"),
                save_to_env = TRUE)
-
-
+read_processed(survey_forms = c("y1", "s1"),
+               path_name = "./data/layer1_data/",
+               save_to_env = TRUE)
 
