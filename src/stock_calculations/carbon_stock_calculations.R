@@ -37,7 +37,10 @@ source("./src/functions/get_env.R")
 
 level <- "LI"
 level <- "LII"
-calculate_new_stocks <- FALSE
+calculate_new_stocks <- FALSE # FALSE if you prefer to import
+                              # the most recently calculated stock data;
+                              # TRUE if you prefer to recalculate the stocks
+
 
 # Import data
 
@@ -132,11 +135,13 @@ if (level == "LII") {
 
 
 # 4. Calculate variables per plot_id ----
+# e.g. annual change in stock
+
 
 # Define a function to calculate slope of linear regression
 calculate_slope <- function(x, y) {
   if(length(unique(x)) > 1 &
-     # Spanning more than five years
+     # Spanning more than eight years
      ((max(x) - min(x)) > 8)) {
     model <- lm(y ~ x)
     coef(model)[[2]]  # Slope coefficient
@@ -145,9 +150,10 @@ calculate_slope <- function(x, y) {
   }
 }
 
+# Define a function to calculate intercept of linear regression
 calculate_intercept <- function(x, y) {
   if(length(unique(x)) > 1 &
-     # Spanning more than five years
+     # Spanning more than eight years
      ((max(x) - min(x)) > 8)) {
     model <- lm(y ~ x)
     coef(model)[[1]]  # Slope coefficient
@@ -155,6 +161,10 @@ calculate_intercept <- function(x, y) {
     NA_real_
   }
 }
+
+
+# Calculate annual stock change, etc
+# Compile "s1" and "so" for the time being
 
 plot_c_stocks_summ <-
   bind_rows(s1_plot_c_stocks,
@@ -219,6 +229,7 @@ plot_c_stocks_summ <-
 
 
 # 5. Add national carbon stock estimates ----
+# (reported by countries, to detect any systematic issues)
 
 national_carbon_stocks_harmonised <-
   read.csv(paste0("./data/additional_data/national_coauthor_carbon_stocks/",
@@ -234,42 +245,6 @@ national_carbon_stocks_harmonised <-
 
 
 # 6. Statistics ----
-
-# C stocks until 100
-
-data_frame <-
-  bind_rows(so_plot_c_stocks %>%
-              filter(use_stock_topsoil == FALSE) %>%
-              filter(is.na(unknown_forest_floor) |
-                       unknown_forest_floor == FALSE) %>%
-              select(plot_id, stock),
-            s1_plot_c_stocks %>%
-              filter(use_stock_topsoil == FALSE) %>%
-              filter(is.na(unknown_forest_floor) |
-                       unknown_forest_floor == FALSE) %>%
-              select(plot_id, stock)) %>%
-  mutate(all = "All")
-
-response <- "stock"
-
-group <- "all"
-
-# Too time-consuming
-
-# rcompanion_groupwiseMean(
-#   group = group,
-#   var = response,
-#   data = data_frame,
-#   conf = 0.95,
-#   digits = 5,
-#   R = 9100,
-#   traditional = FALSE,
-#   bca = TRUE,
-#   na.rm = TRUE)
-
-#    n   Mean Conf.level Bca.lower Bca.upper
-# 9097 134.26       0.95     131.5    137.34
-
 
 # Below-ground mineral C stocks until 100
 
@@ -384,7 +359,8 @@ plot_c_stocks_summ %>%
 
 
 
-
+## Bootstrapping for confidence intervals
+#  (...)
 
 
 ## Boosted regression tree
@@ -416,49 +392,7 @@ plot_c_stocks <-
            main_tree_species, bs_class) %>%
     na.omit()
 
-
-
-
-  # Split the data into training and testing sets
-  set.seed(123)  # For reproducibility
-  train_idx <- sample(nrow(plot_c_stocks), nrow(plot_c_stocks) * 0.8)
-  train_data <- plot_c_stocks[train_idx, ] %>%
-    mutate_if(is.character, as.factor) %>%
-    mutate_if(is.factor, as.integer)
-  test_data <- plot_c_stocks[-train_idx, ] %>%
-    mutate_if(is.character, as.factor) %>%
-    mutate_if(is.factor, as.integer)
-
-
-  sparse_matrix <- Matrix::sparse.model.matrix(humus_form ~ ., data = test_data)[,-1]
-
-
-  # Target
-  y_train <- as.numeric(train_data$stock_topsoil)
-  y_test <- as.numeric(test_data$stock_topsoil)
-
-  # Features
-  x_train <- train_data %>% select(-stock_topsoil)
-  x_test <- test_data %>% select(-stock_topsoil)
-
-  xgb_train <- xgb.DMatrix(data = as.matrix(x_train), label = y_train)
-  xgb_test <- xgb.DMatrix(data = as.matrix(x_test), label = y_test)
-
-  xgb_params <- list(
-    booster = "gbtree",
-    eta = 0.01,
-    max_depth = 8,
-    gamma = 4,
-    subsample = 0.75,
-    colsample_bytree = 1,
-    objective = "multi:softprob",
-    eval_metric = "mlogloss",
-    num_class = length(levels(iris$Species))
-  )
-
-
-  xgb_model <- xgb.train(params = )
-
+# (...)
 
 
 
@@ -669,7 +603,7 @@ ggsave(filename = paste0("patchwork", ".png"),
 
 ### 8.3.1. Mean ----
 
-source("./src/functions/map_icpf.R")
+source("./src/functions/map_icpf2.R")
 source("./src/functions/as_sf.R")
 
 data_s1 <- s1_plot_c_stocks %>%
@@ -718,7 +652,7 @@ data_so <- so_plot_c_stocks %>%
 
 # Level I
 
-p1 <- map_icpf2(layers = "data_s1",
+map_icpf2(layers = "data_s1",
           title = paste0("**Forest soil carbon stock**",
                          " · ",
                          "Level I<br>",
@@ -737,8 +671,7 @@ p1 <- map_icpf2(layers = "data_s1",
           mode = "dark",
           inset_maps_offset_x = 1.5,
           export_name = "s1_mean_dark",
-          export_folder = paste0(dir, "graphs/"),
-          return = TRUE)
+          export_folder = paste0(dir, "graphs/"))
 
 map_icpf2(layers = "data_s1",
           title = paste0("**Forest soil carbon stock**",
@@ -781,8 +714,7 @@ map_icpf2(layers = "data_so",
          mode = "dark",
          inset_maps_offset_x = 1.5,
          export_name = "so_mean_dark",
-         export_folder = paste0(dir, "graphs/"),
-         return = TRUE)
+         export_folder = paste0(dir, "graphs/"))
 
 
 map_icpf2(layers = "data_so",
@@ -804,6 +736,10 @@ map_icpf2(layers = "data_so",
           inset_maps_offset_x = 1.5,
           export_name = "so_mean",
           export_folder = paste0(dir, "graphs/"))
+
+
+
+
 
 
 ### 8.3.2. Change ----
@@ -850,7 +786,7 @@ map_icpf2(layers = "data_change_so",
 
 
 
-p2 <- map_icpf2(layers = "data_change_so",
+map_icpf2(layers = "data_change_so",
           title = paste0("**Annual increase** in **forest soil carbon stock** ",
                          " · Level II<br>",
                          n_distinct(data_change_so$plot_id), " plots ",
@@ -868,23 +804,11 @@ p2 <- map_icpf2(layers = "data_change_so",
           mode = "dark",
           inset_maps_offset_x = 0.9,
           export_name = "so_change_dark",
-          export_folder = paste0(dir, "graphs/"),
-          return = TRUE)
+          export_folder = paste0(dir, "graphs/"))
 
 
 
 
-
-
-p <- p1 / p2
-
-
-ggsave(filename = paste0("patchwork_map", ".png"),
-       plot = p2,
-       path = paste0(dir, "graphs/"),
-       dpi = 500,
-       height = 14,
-       width = 5.5)
 
 
 
