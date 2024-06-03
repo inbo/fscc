@@ -114,15 +114,8 @@ harmonise_prf <- function(survey_form,
                                          "SO_PRF_ADDS.xlsx' ",
                                          "does not exist."))
 
-    df_humus <-
-      openxlsx::read.xlsx(paste0("./data/additional_data/",
-                                 "SO_PRF_ADDS 20231213.xlsx"),
-                          sheet = 1) %>%
-      mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
-      mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
-      select(key, unified_humus)
 
-    # This file was created by Nathalie on 17 Oct 2023
+    # This file was created by Nathalie on 15 May 2024
 
     so_prf_adds <-
       openxlsx::read.xlsx(paste0("./data/additional_data/",
@@ -144,10 +137,12 @@ harmonise_prf <- function(survey_form,
       rename(bs_class = "BS.(high/low)",
              plot_id = PLOT_ID) %>%
       filter(!is.na(plot_id)) %>%
-      mutate(key = paste0(plot_id, "_", profile_pit_id)) %>%
-      left_join(df_humus,
-                by = "key") %>%
-      select(-key)
+      # Some columns contain a "_" which is used as a separator below.
+      # Replace by a dot.
+      mutate_at(vars(c("RSGu", "QUALu", "SPECu", "METHOD_RSGu", "DEPTHSTOCK",
+                       "bs_class", "EFTC_harmonised", "Source_EFTC",
+                       "code_humus", "unified_humus", "remark")),
+                ~str_replace_all(., "_", "."))
 
 
     # Aggregate per plot_id
@@ -159,9 +154,12 @@ harmonise_prf <- function(survey_form,
                                METHOD_RSGu, "_",
                                DEPTHSTOCK, "_",
                                bs_class, "_",
-                               EFTC, "_",
-                               remark, "_",
-                               unified_humus)) %>%
+                               EFTC_harmonised, "_",
+                               Source_EFTC, "_",
+                               main.tree.species.code, "_",
+                               code_humus, "_",
+                               unified_humus, "_",
+                               remark)) %>%
       # Filter for the most recent survey_year
       group_by(plot_id) %>%
       filter(survey_year == max(survey_year)) %>%
@@ -180,9 +178,12 @@ harmonise_prf <- function(survey_form,
                         "method_wrb_harmonisation_fscc",
                         "eff_soil_depth",
                         "bs_class",
-                        "forest_type",
-                        "remark_harmonisation_fscc",
-                        "humus_type"),
+                        "code_forest_type",
+                        "eftc_source",
+                        "code_tree_species",
+                        "code_humus",
+                        "humus_type",
+                        "remark_harmonisation_fscc"),
                sep = "_") %>%
       mutate(eff_soil_depth = as.numeric(eff_soil_depth)) %>%
       mutate_all(function(x) ifelse((x) == "NA", NA, x)) %>%
