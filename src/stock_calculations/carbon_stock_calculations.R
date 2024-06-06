@@ -25,7 +25,10 @@ stopifnot(require("tidyverse"),
           require("ggplot2"),
           require("rempsyc"),
           require("patchwork"),
-          require("xgboost"))
+          require("xgboost"),
+          require("boot"),
+          require("bootstrap"),
+          require("triangle"))
 
 source("./src/functions/get_env.R")
 
@@ -140,7 +143,8 @@ if (level == "LII") {
 
 # Define a function to calculate slope of linear regression
 calculate_slope <- function(x, y) {
-  if(length(unique(x)) > 1 &
+  if (length(unique(x)) > 1 &&
+      length(x[!is.na(y)]) > 1 &&
      # Spanning more than eight years
      ((max(x) - min(x)) > 8)) {
     model <- lm(y ~ x)
@@ -152,7 +156,8 @@ calculate_slope <- function(x, y) {
 
 # Define a function to calculate intercept of linear regression
 calculate_intercept <- function(x, y) {
-  if(length(unique(x)) > 1 &
+  if (length(unique(x)) > 1 &&
+      length(x[!is.na(y)]) > 1 &&
      # Spanning more than eight years
      ((max(x) - min(x)) > 8)) {
     model <- lm(y ~ x)
@@ -219,7 +224,9 @@ plot_c_stocks_summ <-
     stock_change_rel_min = 100 * stock_change_min /
       (survey_year_earliest * stock_change_min + int_stock_min),
     stock_change_rel_max = 100 * stock_change_max /
-      (survey_year_earliest * stock_change_max + int_stock_max))
+      (survey_year_earliest * stock_change_max + int_stock_max)) %>%
+  # Since data from the '90s are often methodologically incomparible
+  filter(survey_year_last >= 2000)
 
 
 
@@ -245,6 +252,375 @@ national_carbon_stocks_harmonised <-
 
 
 # 6. Statistics ----
+
+# Bias-corrected and accelerated (BCa) confidence intervals, which adjust
+# for both bias and skewness in the bootstrapped samples
+
+boot_icpf <- function(data,
+                      column_name,
+                      stat = "mean_median",
+                      nboot = 5000,
+                      conf = 0.95) {
+
+  alpha <- c(0.5 * (1 - conf),
+             1 - 0.5 * (1 - conf))
+
+  if (grepl("mean", stat)) {
+
+    bca_ci <- bcanon(data %>%
+                       pull(.data[[column_name]]),
+                     nboot = nboot,
+                     function(x) {mean(x, na.rm = TRUE)},
+                     alpha = alpha)
+
+    output_mean <- c(
+      mean = round(mean(data[[column_name]]), 2),
+      n = round(length(na.omit(data[[column_name]]))),
+      mean_bca_ci_min = round(as.numeric(bca_ci$confpoints[1, 2]), 2),
+      mean_bca_ci_max = round(as.numeric(bca_ci$confpoints[2, 2]), 2))
+  }
+
+  if (grepl("median", stat)) {
+
+    bca_ci <- bcanon(data %>%
+                       pull(.data[[column_name]]),
+                     nboot = nboot,
+                     function(x) {median(x, na.rm = TRUE)},
+                     alpha = alpha)
+
+    output_median <- c(
+      median = round(median(data[[column_name]]), 2),
+      n = round(length(na.omit(data[[column_name]]))),
+      median_bca_ci_min = round(as.numeric(bca_ci$confpoints[1, 2]), 2),
+      median_bca_ci_max = round(as.numeric(bca_ci$confpoints[2, 2]), 2))
+
+  }
+
+  if (stat == "mean") {
+    output <- output_mean
+  } else if (stat == "median") {
+    output <- output_median
+  } else {
+    output <- c(output_mean, output_median)
+  }
+
+  return(output)
+
+}
+
+
+
+
+
+# Monte Carlo sampling function to estimate slope (sequestration rate)
+# with uncertainty using triangular distribution.
+# The triangular distribution is useful when you know the minimum, maximum,
+# and the most likely value but lack information about the full distribution
+# shape.
+
+monte_carlo_slope <- function(data, column_name,
+                              nsamples = 1000) {
+
+  slopes <- numeric(nsamples)
+  column_name_min <- paste0(column_name, "_min")
+  column_name_max <- paste0(column_name, "_max")
+
+  for (i in seq_len(nsamples)) {
+
+    sampled_stock <- mapply(rtriangle,
+                            # lower limit of triangle distribution
+                            a = data[[column_name_min]],
+                            # upper limit of triangle distribution
+                            b = data[[column_name_max]],
+                            # mode (maximum) of triangle distribution
+                            c = data[[column_name]])
+
+    slopes[i] <- calculate_slope(data$survey_year, sampled_stock)
+
+  }
+  return(slopes)
+}
+
+
+
+
+
+
+
+# Bias-corrected and accelerated (BCa) confidence intervals of sequestration
+# rates
+# This function bootstraps the entire set of Monte Carlo-sampled slopes
+# (sequestration rates) from all plots, this way directly reflecting
+# the propagated uncertainties in the final bootstrapping process.
+
+boot_mc_change <- function(data,
+                           column_name,
+                           stat = "mean_median",
+                           nsamples_mc = 50,
+                           nboot = 200,
+                           conf = 0.95) {
+
+  assertthat::assert_that(is_grouped_df(data))
+
+  stock_changes <- data %>%
+    # Combine direct slope calculation and Monte Carlo sampling
+    do({
+      # Direct slope calculation
+      direct_slope <- calculate_slope(.$survey_year,
+                                      .data[[column_name]])
+      # Monte Carlo slope sampling
+      mc_slopes <- monte_carlo_slope(.,
+                                     column_name = column_name,
+                                     nsamples = nsamples_mc)
+      # Create tibble with both results
+      tibble(
+        # plot_id = unique(.$plot_id),
+        stock_change = direct_slope,
+        mean_slope_mc = mean(mc_slopes, na.rm = TRUE),
+        median_slope_mc = median(mc_slopes, na.rm = TRUE),
+        slopes_mc = list(mc_slopes)
+      )
+    }) %>%
+    ungroup() %>%
+    filter(!is.na(stock_change))
+
+  # Unlist all slopes into a single vector for bootstrapping
+  all_slopes <- unlist(stock_changes$slopes_mc)
+
+  # Bootstrapping on all sampled slopes
+  slope_results <- boot_icpf(data.frame(all_slopes),
+                             column_name = "all_slopes",
+                             stat = stat,
+                             nboot = nboot,
+                             conf = conf)
+
+  slope_results[which(names(slope_results) == "n")] <-
+    nrow(stock_changes)
+
+  slope_results[which(names(slope_results) == "mean")] <-
+    round(mean(stock_changes$stock_change), 2)
+
+  slope_results[which(names(slope_results) == "median")] <-
+    round(median(stock_changes$stock_change), 2)
+
+  return(slope_results)
+}
+
+
+
+
+
+
+## Level II: mean ----
+
+# Total SOC stock (forest floor + soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  reframe(stock = mean(stock)) %>%
+  boot_icpf(column_name = "stock",
+            stat = "mean_median")
+
+# Total SOC stock (forest floor + topsoil)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  reframe(stock_topsoil = mean(stock_topsoil)) %>%
+  boot_icpf(column_name = "stock_topsoil",
+            stat = "mean_median")
+
+
+# Below-ground SOC stock (soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  reframe(stock_below_ground = mean(stock_below_ground)) %>%
+  boot_icpf(column_name = "stock_below_ground",
+            stat = "mean_median")
+
+# Below-ground SOC stock (topsoil)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  reframe(stock_below_ground_topsoil = mean(stock_below_ground_topsoil)) %>%
+  boot_icpf(column_name = "stock_below_ground_topsoil",
+            stat = "mean_median")
+
+# Forest floor SOC stock (forest floor)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  mutate(stock_forest_floor =
+           coalesce(stock_forest_floor, 0)) %>%
+  group_by(plot_id) %>%
+  reframe(stock_forest_floor = mean(stock_forest_floor)) %>%
+  boot_icpf(column_name = "stock_forest_floor",
+            stat = "mean_median")
+
+
+# Below-ground SOC stock (mineral soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  reframe(stock_below_ground = mean(stock_below_ground)) %>%
+  boot_icpf(column_name = "stock_below_ground",
+            stat = "mean_median")
+
+# Below-ground SOC stock (peat soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(contains_peat == TRUE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  reframe(stock_below_ground = mean(stock_below_ground)) %>%
+  boot_icpf(column_name = "stock_below_ground",
+            stat = "mean_median")
+
+
+
+## Level II: sequestration rate ----
+
+
+# Total SOC stock (forest floor + soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock")
+
+
+# Total SOC stock (forest floor + topsoil)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock_topsoil")
+
+
+
+
+# Below-ground SOC stock (soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock_below_ground")
+
+
+
+# Below-ground SOC stock (topsoil)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock_below_ground_topsoil")
+
+
+
+
+# Forest floor SOC stock (forest floor)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  mutate(stock_forest_floor =
+           coalesce(stock_forest_floor, 0)) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock_forest_floor")
+
+
+
+# Below-ground SOC stock (mineral soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock_below_ground")
+
+
+# Below-ground SOC stock (peat soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(contains_peat == TRUE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock_below_ground")
+
+
+
+
+
+
+
+
+
+## Level I & Level II ----
+
 
 # Below-ground mineral C stocks until 100
 
@@ -393,6 +769,10 @@ plot_c_stocks <-
     na.omit()
 
 # (...)
+
+
+
+
 
 
 
@@ -621,7 +1001,9 @@ data_s1 <- s1_plot_c_stocks %>%
     stock_min = min(stock_min),
     stock_max = max(stock_max),
     stock = mean(stock),
-    stock_topsoil = mean(stock_topsoil)) %>%
+    stock_topsoil = mean(stock_topsoil),
+    use_stock_topsoil =
+      any(use_stock_topsoil == TRUE)) %>%
   relocate(stock, .before = stock_min) %>%
   filter(!is.na(latitude_dec) &
            !is.na(longitude_dec)) %>%
@@ -644,7 +1026,9 @@ data_so <- so_plot_c_stocks %>%
     stock_min = min(stock_min),
     stock_max = max(stock_max),
     stock = mean(stock),
-    stock_topsoil = mean(stock_topsoil)) %>%
+    stock_topsoil = mean(stock_topsoil),
+    use_stock_topsoil =
+      any(use_stock_topsoil == TRUE)) %>%
   relocate(stock, .before = stock_min) %>%
   filter(!is.na(latitude_dec) &
            !is.na(longitude_dec)) %>%
@@ -738,6 +1122,47 @@ map_icpf2(layers = "data_so",
           export_folder = paste0(dir, "graphs/"))
 
 
+
+data_so_soil <- so_plot_c_stocks %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  group_by(plot_id,
+           survey_form, partner_short, partner_code,
+           code_country, code_plot,
+           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           wrb_ref_soil_group, eftc, humus_form, parent_material,
+           biogeographical_region, main_tree_species, bs_class) %>%
+  reframe(
+    stock_min = min(stock_min),
+    stock_max = max(stock_max),
+    stock = mean(stock)) %>%
+  relocate(stock, .before = stock_min) %>%
+  filter(!is.na(latitude_dec) &
+           !is.na(longitude_dec)) %>%
+  as_sf
+
+
+map_icpf2(layers = "data_so_soil",
+          title = paste0("**Forest soil carbon stock**",
+                         " · ",
+                         "Level II<br>",
+                         n_distinct(data_so_soil$plot_id), " plots ",
+                         "(forest floor + soil)<br>",
+                         "Mean over survey period (1990 - 2023)"
+          ),
+          legend_title = paste0("**Carbon stock**<br>",
+                                "t C ha<sup>-1</sup>"),
+          biogeo_palette = NULL,
+          legend_classes = NULL,
+          variable_continuous = "stock",
+          point_size = 0.8,
+          with_logo = FALSE,
+          count_plots_legend = FALSE,
+          inset_maps_offset_x = 1.5,
+          export_name = "so_soildepth_mean",
+          export_folder = paste0(dir, "graphs/"))
 
 
 
