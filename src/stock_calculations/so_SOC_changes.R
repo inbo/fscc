@@ -1,5 +1,7 @@
 ### so SOC stock changes & sequestration rates
 ### Bruno De Vos
+### May 2024
+
 
 #### Plotstocks
 
