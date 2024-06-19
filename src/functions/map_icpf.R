@@ -82,6 +82,7 @@ map_icpf <- function(layers,
                      legend_title,
                      legend_classes,
                      variable_continuous = NULL,
+                     variable_cat = NULL,
                      export_name,
                      export_folder,
                      point_size = 0.6,
@@ -89,7 +90,8 @@ map_icpf <- function(layers,
                      biogeo_palette = "biogeo_col",
                      with_logo = FALSE,
                      count_plots_legend = FALSE,
-                     inset_maps_offset_x = 0) {
+                     inset_maps_offset_x = 0,
+                     width = 6.81) {
 
   # Load packages ----
 
@@ -103,6 +105,10 @@ map_icpf <- function(layers,
             require("ggtext"))      # Markdown text
 
 
+  str_wrap_br <- function(text, width = 50) {
+    wrapped_text <- stringr::str_wrap(text, width = width, exdent = 10)
+    stringr::str_replace_all(wrapped_text, "\n", "<br>")
+  }
 
   # Import biogeographical regions layer ----
   # if this does not exist yet in the global environment, or if this exists
@@ -181,6 +187,68 @@ map_icpf <- function(layers,
                       "#F8C4B4",
                       "#780116",
                       "#FF0000")
+
+       point_col <- point_col[seq_len(length(layers))]
+
+
+    } else if (!is.null(variable_cat)) {
+
+      if (grepl("wrb", variable_cat)) {
+
+        # Based on worldwide WRB map:
+
+        point_col <- c( "#D8DAA6", # Cambisols
+                        "#B49FD7", # Podzols
+                        "#EDBF2B", # Arenosols
+                        "#9BCE95", # Regosols
+                        "#DCDCDD", # Leptosols
+                        "#FF995C", # Luvisols
+                        "#513568", # Histosols
+                        "#008F11", # Gleysols
+                        "#C37776", # Umbrisols
+                        "#84FED0", # Stagnosols
+                        "#7D6F7D") # Other
+
+        # Based on BioSoil map 2006:
+
+        point_col <- c( "#FF6600", # Cambisols
+                        "#00FF00", # Podzols
+                        "#FFF500", # Arenosols
+                        "#FFD37F", # Regosols
+                        "#808080", # Leptosols
+                        "#E69800", # Luvisols
+                        "#993300", # Histosols
+                        "#000099", # Gleysols
+                        "#006900", # Umbrisols
+                        "#73DFFF", # Stagnosols
+                        "#B7B7B7") # Other
+      } else {
+
+        # Define colour palette biogeographical regions
+        point_col <- c("green4",
+                        "dodgerblue2",
+                        "#E31A1C",
+                        "#6A3D9A",
+                        "#FF7F00",
+                        "#006e6a",
+                        "#91DA00",
+                        "gold1",
+                        "#c99800",
+                        "deeppink1",
+                        "blue1",
+                        "maroon",
+                        "steelblue4",
+                        "darkorange4",
+                        "#B7B7B7")
+
+      }
+
+      country_border_col <- "#3a494a"
+
+      point_col <-
+        point_col[seq_len(n_distinct(get_env(layers)[[variable_cat]]))]
+
+
     } else {
 
       point_col <- c("#77203B",
@@ -190,10 +258,11 @@ map_icpf <- function(layers,
 
       country_border_col <- "#3a494a"
 
+      point_col <- point_col[seq_len(length(layers))]
+
 
     }
 
-    point_col <- point_col[seq_len(length(layers))]
 
   }
 
@@ -203,20 +272,77 @@ map_icpf <- function(layers,
 
   if (!is.null(legend_classes)) {
 
+  n_plots <- NULL
+
+  if (identical(legend_classes, TRUE) &&
+      !is.null(variable_cat)) {
+
+    legend_classes_col <- bind_rows(
+      get_env(layers) %>%
+        filter(!.data[[variable_cat]] %in% c("Other", "Unknown")) %>%
+        group_by(.data[[variable_cat]]) %>%
+        reframe(count = n()) %>%
+        arrange(desc(count)),
+      get_env(layers) %>%
+        filter(.data[[variable_cat]] %in% c("Other", "Unknown")) %>%
+        group_by(.data[[variable_cat]]) %>%
+        reframe(count = n())) %>%
+      bind_cols(col = point_col) %>%
+      mutate(name = str_wrap_br(.data[[variable_cat]])) %>%
+      rowwise %>%
+      mutate(name = ifelse(
+        grepl("eftc", variable_cat),
+        paste0("<span style='color:black;'>",
+               name, " · </span>",
+               "<span style='color:", col, ";'>n = ",
+               count, "</span>"),
+        paste0("<span style='color:black;'>",
+               name, "</span>",
+               "<span style='color:", col, ";'><br>n = ",
+               count, "</span>")))
+
+    n_plots <- legend_classes_col %>%
+      pull(count)
+
+    legend_classes <- legend_classes_col %>%
+      pull(.data[[variable_cat]])
+
+    legend_classes <- str_wrap_br(legend_classes)
+
+  }
+
   if (count_plots_legend == TRUE) {
+
+    if (is.null(n_plots)) {
 
     # Get the number of plots for each layer
     n_plots <- c(nrow(get(layers[1], envir = .GlobalEnv)),
                  nrow(get(layers[2], envir = .GlobalEnv)),
                  nrow(get(layers[3], envir = .GlobalEnv)))
+    }
+
 
     # Generate adjusted Markdown classes with counts
-    legend_classes <- mapply(function(cls, col, count) {
-      paste0("<span style='color:black;'>",
-             cls, "</span>",
-             "<span style='color:", col, ";'><br>n = ", count, "</span>")
-    },
-    legend_classes, point_col, n_plots) %>% as.vector
+
+    if (grepl("eftc", variable_cat)) {
+
+      legend_classes <- mapply(function(cls, col, count) {
+        paste0("<span style='color:black;'>",
+               cls, " · </span>",
+               "<span style='color:", col, ";'>n = ", count, "</span>")
+      },
+      legend_classes, point_col, n_plots) %>% as.vector
+
+    } else {
+
+      legend_classes <- mapply(function(cls, col, count) {
+        paste0("<span style='color:black;'>",
+               cls, "</span>",
+               "<span style='color:", col, ";'><br>n = ", count, "</span>")
+      },
+      legend_classes, point_col, n_plots) %>% as.vector
+    }
+
   }
 
 
@@ -224,7 +350,7 @@ map_icpf <- function(layers,
 
   legend_values <- point_col
 
-  for (i in seq_along(layers)) {
+  for (i in seq_along(legend_classes)) {
     names(legend_values)[i] <- legend_classes[i]
   }
 
@@ -251,6 +377,7 @@ map_icpf <- function(layers,
 
   if (is.null(biogeo_palette)) {
     background_col <- "#222222"
+    background_col <- "white" # "#222222"
       #"black" # "#293333" #"#203233" #"#14293a"
     sea_col <- "#C2CECE"   #"#a1b3b3"
   }
@@ -287,6 +414,14 @@ map_icpf <- function(layers,
 
   # Retrieve the first spatial layer of the 'layers' argument
   spat_layer_1 <- get(layers[1], envir = .GlobalEnv)
+
+  if (!is.null(variable_cat)) {
+
+    spat_layer_1 <- spat_layer_1 %>%
+      left_join(legend_classes_col %>%
+                  select(-count),
+                by = variable_cat)
+  }
 
 
   ## Base map ----
@@ -362,7 +497,8 @@ map_icpf <- function(layers,
                   ymax = 5294329),
               fill = sea_col)
 
-  if (!is.null(legend_classes)) {
+  if (!is.null(legend_classes) &&
+      is.null(variable_cat)) {
 
     base_map <- base_map +
       theme(legend.text =
@@ -385,6 +521,39 @@ map_icpf <- function(layers,
                                   # Order of this legend relative to other
                                   # legends in the plot, i.e. first (from top)
                                   order = 1))
+
+  } else if (!is.null(legend_classes) &&
+             !is.null(variable_cat)) {
+
+    base_map <- base_map +
+      # theme(legend.text =
+      #         element_markdown(vjust = 0.5,
+      #                          lineheight = 1.1,
+      #                          size = 8,
+      #                          margin = margin(b = 0))) +
+      theme(legend.text =
+              element_markdown(vjust = 0.3,
+                               lineheight = 1.2,
+                               size = 6,
+                               margin = margin(b = 3, t = 3))) +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = name),
+              # Colour should refer to the legend class
+              size = point_size) + # Input argument
+      # Add a manual colour scale for each of the layers and legend classes
+      # in the input arguments
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values) +
+      guides(color = guide_legend(title = legend_title, # Input argument
+                                  # Size of legend symbols (points)
+                                  override.aes = list(size = 2),
+                                  # Order of this legend relative to other
+                                  # legends in the plot, i.e. first (from top)
+                                  order = 1,
+                                  keyheight = 1.1))
+
   } else {
 
     # Continuous variable
@@ -479,12 +648,28 @@ map_icpf <- function(layers,
     geom_sf(data = world_spat, color = country_border_col,
             fill = NA, linewidth = 0.5)
 
-  if (!is.null(legend_classes)) {
+  if (!is.null(legend_classes) &&
+      is.null(variable_cat)) {
 
     azores_map <- azores_map +
       geom_sf(data = spat_layer_1,
               aes(color = legend_classes[1]),
               size = point_size) +
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values)
+
+  } else if (!is.null(legend_classes) &&
+             !is.null(variable_cat)) {
+
+    azores_map <- azores_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = name),
+              # Colour should refer to the legend class
+              size = point_size) + # Input argument
+      # Add a manual colour scale for each of the layers and legend classes
+      # in the input arguments
       scale_color_manual(name = legend_title,
                          breaks = legend_classes,
                          values = legend_values)
@@ -556,12 +741,29 @@ map_icpf <- function(layers,
     geom_sf(data = world_spat, color = country_border_col,
             fill = NA, linewidth = 0.5)
 
-  if (!is.null(legend_classes)) {
+  if (!is.null(legend_classes) &&
+      is.null(variable_cat)) {
 
     canary_map <- canary_map +
       geom_sf(data = spat_layer_1,
               aes(color = legend_classes[1]),
               size = point_size) +
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values)
+
+
+  } else if (!is.null(legend_classes) &&
+             !is.null(variable_cat)) {
+
+    canary_map <- canary_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = name),
+              # Colour should refer to the legend class
+              size = point_size) + # Input argument
+      # Add a manual colour scale for each of the layers and legend classes
+      # in the input arguments
       scale_color_manual(name = legend_title,
                          breaks = legend_classes,
                          values = legend_values)
@@ -635,7 +837,8 @@ map_icpf <- function(layers,
     geom_sf(data = world_spat, color = country_border_col,
             fill = NA, linewidth = 0.5)
 
-  if (!is.null(legend_classes)) {
+  if (!is.null(legend_classes) &&
+      is.null(variable_cat)) {
 
     cyprus_map <- cyprus_map +
       geom_sf(data = spat_layer_1,
@@ -644,6 +847,22 @@ map_icpf <- function(layers,
       scale_color_manual(name = legend_title,
                          breaks = legend_classes,
                          values = legend_values)
+
+  } else if (!is.null(legend_classes) &&
+             !is.null(variable_cat)) {
+
+    cyprus_map <- cyprus_map +
+      # Map the points of the first sf layer
+      geom_sf(data = spat_layer_1,
+              aes(color = name),
+              # Colour should refer to the legend class
+              size = point_size) + # Input argument
+      # Add a manual colour scale for each of the layers and legend classes
+      # in the input arguments
+      scale_color_manual(name = legend_title,
+                         breaks = legend_classes,
+                         values = legend_values)
+
   } else {
 
     # Continuous variable
@@ -931,7 +1150,7 @@ map_icpf <- function(layers,
          plot = full_map,
          dpi = 500,
          # Set the width and height of the saved plot in inches
-         width = 6.81,
+         width = width,
          height = 5.3)
 
 
