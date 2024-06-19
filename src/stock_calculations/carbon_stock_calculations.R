@@ -510,7 +510,176 @@ so_plot_c_stocks %>%
 
 
 
-## Level II: sequestration rate ----
+
+## Level II: sequestration rate - mean method ----
+
+
+# Total SOC stock (forest floor + soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+# Total SOC stock (forest floor + topsoil)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock_topsoil),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+
+
+# Below-ground SOC stock (soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock_below_ground),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+# Below-ground SOC stock (topsoil)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock_below_ground_topsoil),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+
+# Forest floor SOC stock (forest floor)
+
+so_plot_c_stocks %>%
+  # filter(use_stock_topsoil == FALSE) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  filter(is.na(unknown_forest_floor) |
+           unknown_forest_floor == FALSE) %>%
+  mutate(stock_forest_floor =
+           coalesce(stock_forest_floor, 0)) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock_forest_floor),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+
+
+# Below-ground SOC stock (mineral soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock_below_ground),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+
+
+
+
+
+# Below-ground SOC stock (peat soil)
+
+so_plot_c_stocks %>%
+  filter(use_stock_topsoil == FALSE) %>%
+  filter(contains_peat == TRUE) %>%
+  filter(grepl("som", survey_form)) %>%
+  # filter(is.na(unknown_forest_floor) |
+  #          unknown_forest_floor == FALSE) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  reframe(
+    # Net C influx - absolute (t C ha-1 year-1)
+    stock_change = calculate_slope(survey_year, stock_below_ground),
+    contains_peat =
+      any(contains_peat == TRUE)) %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+
+
+
+
+
+
+
+## Level II: sequestration rate - MC method ----
 
 
 # Total SOC stock (forest floor + soil)
@@ -735,8 +904,7 @@ plot_c_stocks_summ %>%
 
 
 
-## Bootstrapping for confidence intervals
-#  (...)
+
 
 
 ## Boosted regression tree
