@@ -456,10 +456,40 @@ df <- df %>%
 
 
 
-# Spain ----
+## Spain ----
 
-# It may (?) be necessary to update some survey_years or
-# to remove (some) records for 1993, 1994, 1995
+# Correct Spanish survey years in so_som
+# This information is manually verified by comparison of the PCC data
+# with the data in the Spanish database (July 2024)
+
+  list_plots_esp <- df %>%
+    filter(code_country == 11) %>%
+    distinct(code_plot, survey_year) %>%
+    group_by(code_plot) %>%
+    reframe(count = n(),
+            all_90s = all(survey_year < 2000),
+            any_96 = any(1996 %in% survey_year)) %>%
+    filter(count == 2 &
+             all_90s == TRUE &
+             any_96 == TRUE) %>%
+    arrange(code_plot) %>%
+    pull(code_plot)
+
+  assertthat::assert_that(
+    identical(list_plots_esp,
+              as.integer(c(5, 6, 10, 11, 22, 25, 26, 30, 37))))
+
+  df <- df %>%
+    mutate(
+      survey_year = ifelse(
+        code_country == 11 &
+          code_plot %in% list_plots_esp &
+          survey_year == 1996,
+        2008,
+        survey_year))
+
+
+
 
 } # End of "if so_som"
 
