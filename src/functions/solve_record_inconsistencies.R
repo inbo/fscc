@@ -1371,16 +1371,30 @@ if (solve == TRUE) {
 
 
 
-
-
-
-
 # Save the survey form ----
 
 if (save_to_env == TRUE) {
   assign_env(survey_form, df)
 } else {
   return(df)
+}
+
+
+
+
+# Update data availability table ----
+# Since some survey years have been updated in this function
+
+source("./src/functions/get_data_availability.R")
+source("./src/functions/assign_env.R")
+
+data_availability <-
+  get_data_availability(code_survey = unlist(strsplit(survey_form, "_"))[1])
+
+if (save_to_env == TRUE) {
+  assign_env(paste0("data_availability_",
+                    unlist(strsplit(survey_form, "_"))[1]),
+             as_tibble(data_availability))
 }
 
 
