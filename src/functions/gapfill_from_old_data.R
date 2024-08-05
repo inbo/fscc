@@ -210,6 +210,28 @@ gapfill_from_old_data <- function(survey_form,
         }
       }
 
+
+      # Correct a small mistake in Austrian organic_layer_weight
+      # for plot 14_17 (copy paste error issue raised by Austrian partner
+      # on 2024-06-10)
+
+      so_som_afscdb <- so_som_afscdb %>%
+        mutate(
+          organic_layer_weight = ifelse(
+            code_country == 14 & code_plot == 17,
+            case_when(
+              code_layer == "OL" & repetition == 1 ~ 109 * 1E-3 * 8,
+              code_layer == "OFH" & repetition == 1 ~ 118 * 1E-3 * 8,
+              code_layer == "OL" & repetition == 2 ~ 105 * 1E-3 * 8,
+              code_layer == "OFH" & repetition == 2 ~ 305 * 1E-3 * 8,
+              code_layer == "OL" & repetition == 3 ~ 37 * 1E-3 * 8,
+              code_layer == "OFH" & repetition == 3 ~ 232 * 1E-3 * 8,
+              code_layer == "OL" & repetition == 4 ~ 80 * 1E-3 * 8,
+              code_layer == "OFH" & repetition == 4 ~ 218 * 1E-3 * 8,
+              .default = organic_layer_weight),
+            organic_layer_weight))
+
+
       # Replace Spanish records by the Spanish records from
       # their national database
 
