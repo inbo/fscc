@@ -30,81 +30,255 @@ gapfill_from_old_data <- function(survey_form,
 
     ## Prepare so_som_afscdb ----
 
-    # Column names in AFSCDB differ from those in so_som
+    file_path <- paste0("./data/additional_data/afscdb_LII_2_2/",
+                        "repetitions/",
+                        "so_afscdb_harmonised_r.csv")
 
-    # Corresponding column names
-    corresponding_cols <- data.frame(
-      so_som_afscdb =
-        c("SURVEYYEAR", "CODECOUNTRY", "CODEPLOT", "PLOTID",
-          "CODELAYER", "REPETITION", "LAYTOP", "LAYBOT",
-          "SUBSAMPLES", "DATEANAL", "MOISTURE", "CLAY",
-          "SILT", "SAND", "TEXCLASS", "BD",
-          "BDEST", "CFMASS", "CFVOL", "ORGLAY",
-          "PHCACL2", "PHH2O", "OC", "TON",
-          "CARBONATES", "EXCHACID", "EXCHAL", "EXCHCA",
-          "EXCHFE", "EXCHK", "EXCHMG", "EXCHMN",
-          "EXCHNA", "FREEH", "EXTRAL", "EXTRCA",
-          "EXTRCD", "EXTRCR", "EXTRCU", "EXTRFE",
-          "EXTRHG", "EXTRK", "EXTRMG", "EXTRMN",
-          "EXTRNA", "EXTRNI", "EXTRP", "EXTRPB",
-          "EXTRS", "EXTRZN", "TOTAL", "TOTCA",
-          "TOTFE", "TOTK", "TOTMG", "TOTMN",
-          "TOTNA", "REACAL", "REACFE", "OBSERVATION"),
-      so_som =
-        c("survey_year", "code_country", "code_plot", "plot_id",
-          "code_layer", "repetition",
-          "layer_limit_superior", "layer_limit_inferior",
-          "subsamples", "date_labor_analyses", "moisture_content",
+    if (file.exists(file_path)) {
+
+      so_som_afscdb <- read.csv(file_path, sep = ";") %>%
+        mutate_all(~ifelse((.) == "", NA, .)) %>%
+        mutate(
+          no_data = rowSums(!is.na(across(code_texture_class:extrac_al)))) %>%
+        filter(no_data > 0)
+
+    } else {
+
+      # Create the file
+
+      ## Prepare Spanish data
+
+      so_som_esp <-
+        # Physical data
+        read_excel(paste0(
+          "data/additional_data/partner_comm/so_spain_correct/",
+          "1401 ANF SUELOS 1993-1996 + 2008.xlsx")) %>%
+        select(-SEC) %>%
+        # Chemical data
+        left_join(
+          read_excel(paste0(
+            "data/additional_data/partner_comm/so_spain_correct/",
+            "1402 ANQ SUELOS 1993-1996 + 2008.xlsx")) %>%
+            select(-SEC),
+          by = c("PARC", "AÑO", "CALIC", "HORIZ_AN")) %>%
+        mutate(
+          OBS = case_when(
+            !is.na(OBS.x) & !is.na(OBS.y) ~ paste(OBS.x, OBS.y, sep = ". "),
+            !is.na(OBS.x) ~ OBS.x,
+            !is.na(OBS.y) ~ OBS.y,
+            TRUE ~ NA_character_)) %>%
+        select(-OBS.x, -OBS.y) %>%
+        mutate(CALIC = ifelse(CALIC == "1 a 4",
+                              1,
+                              CALIC))
+
+
+      corresponding_cols_esp <- data.frame(
+        so_som_esp = c(
+          "AÑO", "PARC", "CALIC", "HORIZ_AN",
+          "LIM_SUP", "LIM_INF", "HUM",
+          "ARCILLA", "LIMO", "ARENA",
+          "TEXTURA", "DENSIDAD", "GRUESOS",
+          "CAPA_ORG", "pH_H2O", "pH_CaCl2", "C_Org",
+          "C_Total", "N", "CaCO3", "Ac",
+          "BCE", "ACE", "CEC",
+          "Sat_Bas", "Al interc", "Ca interc", "Fe interc",
+          "K interc", "Mg interc", "Mn inter", "Na inter",
+          "H+ libre",
+          "Al extrai", "Ca extrai", "Cd extrai", "Cr extrai",
+          "Cu extrai", "Fe extrai", "K extrai", "Mg extrai",
+          "Mn extrai", "Ni extrai", "P extrai",
+          "Pb extrai", "Zn extrai", "OBS"),
+        so_som = c(
+          "survey_year", "code_plot", "repetition", "code_layer",
+          "layer_limit_superior", "layer_limit_inferior", "moisture_content",
           "part_size_clay", "part_size_silt", "part_size_sand",
-          "code_texture_class", "bulk_density",
-          "bulk_density_est", "coarse_fragment_mass",
-          "coarse_fragment_vol", "organic_layer_weight",
-          "ph_cacl2", "ph_h2o", "organic_carbon_total", "n_total",
-          "carbonates", "exch_acidiy", "exch_al", "exch_ca",
-          "exch_fe", "exch_k", "exch_mg", "exch_mn",
-          "exch_na", "free_h", "extrac_al", "extrac_ca",
-          "extrac_cd", "extrac_cr", "extrac_cu", "extrac_fe",
-          "extrac_hg", "extrac_k", "extrac_mg", "extrac_mn",
-          "extrac_na", "extrac_ni", "extrac_p", "extrac_pb",
-          "extrac_s", "extrac_zn", "tot_al", "tot_ca",
-          "tot_fe", "tot_k", "tot_mg", "tot_mn",
-          "tot_na", "rea_al", "rea_fe", "other_obs"))
+          "code_texture_class", "bulk_density", "coarse_fragment_vol",
+          "organic_layer_weight", "ph_h2o", "ph_cacl2", "organic_carbon_total",
+          NA, "n_total", "carbonates", "exch_acidiy",
+          "exch_bce", "exch_ace", "exch_cec",
+          "base_saturation", "exch_al", "exch_ca", "exch_fe",
+          "exch_k", "exch_mg", "exch_mn", "exch_na",
+          "free_h",
+          "extrac_al", "extrac_ca", "extrac_cd", "extrac_cr",
+          "extrac_cu", "extrac_fe", "extrac_k", "extrac_mg",
+          "extrac_mn", "extrac_ni", "extrac_p",
+          "extrac_pb", "extrac_zn", "other_obs"))
 
-    # Import afscdb so_som data
+      # Update the column names
 
-    file_path <- paste0("./data/additional_data/afscdb_LII_2_2/repetitions/",
-                        "FSCDB_LII_2_2012_SOM.xlsx")
+      # Iterate over columns of so_som_afscdb
+      for (col_name in names(so_som_esp)) {
 
-    assertthat::assert_that(file.exists(file_path),
-                            msg = paste0("'", file_path, "' ",
-                                         "does not exist."))
+        # Find corresponding column name in corresponding_cols
+        corresponding_name <-
+          corresponding_cols_esp$so_som[which(
+            corresponding_cols_esp$so_som_esp == col_name)]
 
-    so_som_afscdb <- openxlsx::read.xlsx(file_path)
+        # If corresponding name is not NA, rename the column
+        if (!is.na(corresponding_name)) {
 
+          names(so_som_esp)[names(so_som_esp) == col_name] <-
+            corresponding_name
 
+        } else {
 
-    # Update the column names
-
-    # Iterate over columns of so_som_afscdb
-    for (col_name in names(so_som_afscdb)) {
-
-      # Find corresponding column name in corresponding_cols
-      corresponding_name <-
-        corresponding_cols$so_som[which(
-          corresponding_cols$so_som_afscdb == col_name)]
-
-      # If corresponding name is not NA, rename the column
-      if (!is.na(corresponding_name)) {
-
-        names(so_som_afscdb)[names(so_som_afscdb) == col_name] <-
-          corresponding_name
-
-      } else {
-
-        # If corresponding name is NA, remove the column
-        so_som_afscdb[[col_name]] <- NULL
+          # If corresponding name is NA, remove the column
+          so_som_esp[[col_name]] <- NULL
+        }
       }
-    }
+
+      so_som_esp$code_country <- 11
+
+
+      ## Prepare so_som_afscdb
+
+      # Column names in AFSCDB differ from those in so_som
+
+      # Corresponding column names
+      corresponding_cols <- data.frame(
+        so_som_afscdb =
+          c("SURVEYYEAR", "CODECOUNTRY", "CODEPLOT", "PLOTID",
+            "CODELAYER", "REPETITION", "LAYTOP", "LAYBOT",
+            "SUBSAMPLES", "DATEANAL", "MOISTURE", "CLAY",
+            "SILT", "SAND", "TEXCLASS", "BD",
+            "BDEST", "CFMASS", "CFVOL", "ORGLAY",
+            "PHCACL2", "PHH2O", "OC", "TON",
+            "CARBONATES", "EXCHACID", "EXCHAL", "EXCHCA",
+            "EXCHFE", "EXCHK", "EXCHMG", "EXCHMN",
+            "EXCHNA", "FREEH", "EXTRAL", "EXTRCA",
+            "EXTRCD", "EXTRCR", "EXTRCU", "EXTRFE",
+            "EXTRHG", "EXTRK", "EXTRMG", "EXTRMN",
+            "EXTRNA", "EXTRNI", "EXTRP", "EXTRPB",
+            "EXTRS", "EXTRZN", "TOTAL", "TOTCA",
+            "TOTFE", "TOTK", "TOTMG", "TOTMN",
+            "TOTNA", "REACAL", "REACFE", "OBSERVATION"),
+        so_som =
+          c("survey_year", "code_country", "code_plot", "plot_id",
+            "code_layer", "repetition",
+            "layer_limit_superior", "layer_limit_inferior",
+            "subsamples", "date_labor_analyses", "moisture_content",
+            "part_size_clay", "part_size_silt", "part_size_sand",
+            "code_texture_class", "bulk_density",
+            "bulk_density_est", "coarse_fragment_mass",
+            "coarse_fragment_vol", "organic_layer_weight",
+            "ph_cacl2", "ph_h2o", "organic_carbon_total", "n_total",
+            "carbonates", "exch_acidiy", "exch_al", "exch_ca",
+            "exch_fe", "exch_k", "exch_mg", "exch_mn",
+            "exch_na", "free_h", "extrac_al", "extrac_ca",
+            "extrac_cd", "extrac_cr", "extrac_cu", "extrac_fe",
+            "extrac_hg", "extrac_k", "extrac_mg", "extrac_mn",
+            "extrac_na", "extrac_ni", "extrac_p", "extrac_pb",
+            "extrac_s", "extrac_zn", "tot_al", "tot_ca",
+            "tot_fe", "tot_k", "tot_mg", "tot_mn",
+            "tot_na", "rea_al", "rea_fe", "other_obs"))
+
+      # Import afscdb so_som data
+
+      assertthat::assert_that(file.exists(
+        paste0("./data/additional_data/afscdb_LII_2_2/repetitions/",
+               "FSCDB_LII_2_2012_SOM.xlsx")),
+        msg = paste0("'", file_path, "' ",
+                     "does not exist."))
+
+      so_som_afscdb <-
+        openxlsx::read.xlsx(paste0("./data/additional_data/afscdb_LII_2_2/",
+                                   "repetitions/FSCDB_LII_2_2012_SOM.xlsx"))
+
+
+
+      # Update the column names
+
+      # Iterate over columns of so_som_afscdb
+      for (col_name in names(so_som_afscdb)) {
+
+        # Find corresponding column name in corresponding_cols
+        corresponding_name <-
+          corresponding_cols$so_som[which(
+            corresponding_cols$so_som_afscdb == col_name)]
+
+        # If corresponding name is not NA, rename the column
+        if (!is.na(corresponding_name)) {
+
+          names(so_som_afscdb)[names(so_som_afscdb) == col_name] <-
+            corresponding_name
+
+        } else {
+
+          # If corresponding name is NA, remove the column
+          so_som_afscdb[[col_name]] <- NULL
+        }
+      }
+
+      # Replace Spanish records by the Spanish records from
+      # their national database
+
+      so_som_afscdb <- so_som_afscdb %>%
+        filter(code_country != 11)
+
+      # Add missing columns to so_som_esp and fill them with NA
+      for (col in names(so_som_afscdb)) {
+        if (!(col %in% names(so_som_esp))) {
+          so_som_esp[[col]] <- NA
+        }
+      }
+
+      # Reorder the columns of so_som_esp to match the order of so_som_afscdb
+      so_som_esp <- so_som_esp[names(so_som_afscdb)]
+
+      # Function to convert the class of a column
+      convert_class <- function(column, target_class) {
+        if (target_class == "character") {
+          return(as.character(column))
+        } else if (target_class == "numeric") {
+          if (is.character(column)) {
+            # Convert commas to dots before converting to numeric
+            column <- gsub(",", ".", column)
+            # Convert "<0" to "0" before converting to numeric
+            column <- gsub("<0", "0", column)
+          }
+          return(as.numeric(column))
+        } else if (target_class == "integer") {
+          return(as.integer(column))
+        } else if (target_class == "factor") {
+          return(as.factor(column))
+        } else if (target_class == "logical") {
+          return(as.logical(column))
+        } else if (target_class == "Date") {
+          return(as.Date(column))
+        } else {
+          return(column)  # If the target class is unknown, return the column as is
+        }
+      }
+
+      # Check and convert the data types of each column in so_som_esp
+      # to match so_som_afscdb
+      for (col in names(so_som_afscdb)) {
+        target_class <- class(so_som_afscdb[[col]])
+        so_som_esp[[col]] <- convert_class(so_som_esp[[col]], target_class)
+      }
+
+
+      # Combine the two data frames
+      so_som_afscdb <- bind_rows(so_som_afscdb, so_som_esp)
+
+
+      write.table(so_som_afscdb,
+                  file = file_path,
+                  row.names = FALSE,
+                  na = "",
+                  sep = ";",
+                  dec = ".")
+
+
+
+    } # End of "create the so_som_afscdb file"
+
+
+
+
+
+
 
 
 
@@ -135,7 +309,7 @@ gapfill_from_old_data <- function(survey_form,
       }
 
       survey_match_i <- surveys_i[which(
-        surveys_i %in% unique(so_som$unique_survey))]
+        surveys_i %in% unique(df$unique_survey))]
 
       if (all(!identical(survey_match_i, character(0))) &&
           length(survey_match_i) > 1) {
