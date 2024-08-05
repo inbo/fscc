@@ -614,6 +614,218 @@ get_derived_variable_inconsistencies <- function(survey_form,
                    download_date = rep(download_date_pir, length(i))))
       }
     }
+
+    # Solve problems with texture ----
+
+    # If sum textures is between 85 and 115, it may be justifiable to
+    # normalise the particle size fractions to 100
+    # Any potential errors in assuming they are reported proportionally
+    # would have minimal impact.
+    # Else, replace all of them by NAs
+
+    if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+
+      df <- df %>%
+        rowwise() %>%
+        mutate(
+          # Check conditions and normalise if needed
+          part_size_clay = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            round(part_size_clay / sum_texture * 100, 1),
+            part_size_clay),
+          part_size_silt = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            round(part_size_silt / sum_texture * 100, 1),
+            part_size_silt),
+          part_size_sand = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            round(part_size_sand / sum_texture * 100, 1),
+            part_size_sand)) %>%
+        mutate(
+          # Check conditions and replace by NA if needed
+          part_size_clay = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_real_,
+            part_size_clay),
+          part_size_silt = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_real_,
+            part_size_silt),
+          part_size_sand = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_real_,
+            part_size_sand)) %>%
+        ungroup()
+
+    } else if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
+
+      df <- df %>%
+        rowwise() %>%
+        mutate(
+          # Check conditions and normalise if needed
+          horizon_clay = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            round(horizon_clay / sum_texture * 100, 1),
+            horizon_clay),
+          horizon_silt = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            round(horizon_silt / sum_texture * 100, 1),
+            horizon_silt),
+          horizon_sand = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            round(horizon_sand / sum_texture * 100, 1),
+            horizon_sand)) %>%
+        mutate(
+          # Check conditions and replace by NA if needed
+          horizon_clay = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_real_,
+            horizon_clay),
+          horizon_silt = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_real_,
+            horizon_silt),
+          horizon_sand = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_real_,
+            horizon_sand)) %>%
+        ungroup()
+
+    }
+
+
+    # If two out of three particle size fractions are known,
+    # assume that the third one can be calculated by the difference with 100
+
+    if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+
+      df <- df %>%
+        rowwise() %>%
+        mutate(
+          part_size_clay = ifelse(
+            is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (part_size_silt + part_size_sand < 100),
+            100 - (part_size_silt + part_size_sand),
+            part_size_clay),
+          part_size_silt = ifelse(
+            is.na(part_size_silt) & !is.na(part_size_clay) &
+              !is.na(part_size_sand) &
+              (part_size_clay + part_size_sand < 100),
+            100 - (part_size_clay + part_size_sand),
+            part_size_silt),
+          part_size_sand = ifelse(
+            is.na(part_size_sand) & !is.na(part_size_silt) &
+              !is.na(part_size_clay) &
+              (part_size_silt + part_size_clay < 100),
+            100 - (part_size_silt + part_size_clay),
+            part_size_sand)) %>%
+        ungroup()
+
+    } else if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
+
+      df <- df %>%
+        rowwise() %>%
+        mutate(
+          horizon_clay = ifelse(
+            is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (horizon_silt + horizon_sand < 100),
+            100 - (horizon_silt + horizon_sand),
+            horizon_clay),
+          horizon_silt = ifelse(
+            is.na(horizon_silt) & !is.na(horizon_clay) &
+              !is.na(horizon_sand) &
+              (horizon_clay + horizon_sand < 100),
+            100 - (horizon_clay + horizon_sand),
+            horizon_silt),
+          horizon_sand = ifelse(
+            is.na(horizon_sand) & !is.na(horizon_silt) &
+              !is.na(horizon_clay) &
+              (horizon_silt + horizon_clay < 100),
+            100 - (horizon_silt + horizon_clay),
+            horizon_sand)) %>%
+        ungroup()
+    }
+
+    # If any particle size fraction is still unknown, replace everything by NA
+
+    if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+
+      df <- df %>%
+        rowwise() %>%
+        mutate(
+          part_size_clay = ifelse(
+            is.na(part_size_silt) | is.na(part_size_sand),
+            NA_real_,
+            part_size_clay),
+          part_size_silt = ifelse(
+            is.na(part_size_clay) | is.na(part_size_sand),
+            NA_real_,
+            part_size_silt),
+          part_size_sand = ifelse(
+            is.na(part_size_silt) | is.na(part_size_clay),
+            NA_real_,
+            part_size_sand)) %>%
+        ungroup()
+
+    } else if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
+
+      df <- df %>%
+        rowwise() %>%
+        mutate(
+          horizon_clay = ifelse(
+            is.na(horizon_silt) | is.na(horizon_sand),
+            NA_real_,
+            horizon_clay),
+          horizon_silt = ifelse(
+            is.na(horizon_clay) | is.na(horizon_sand),
+            NA_real_,
+            horizon_silt),
+          horizon_sand = ifelse(
+            is.na(horizon_silt) | is.na(horizon_clay),
+            NA_real_,
+            horizon_sand)) %>%
+        ungroup()
+
+    }
+
     }
 
 
