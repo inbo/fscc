@@ -204,20 +204,20 @@ distance_join <- function(sf1,
 
   summary_stat <- match.arg(summary_stat)
 
-    # If "summary_stat" is "mean" or "median" and join_column is NULL
-    if ((summary_stat %in% c("mean", "median")) &&
-        (!is.null(join_column))) {
+  # If "summary_stat" is "mean" or "median" and join_column is NULL
+  if ((summary_stat %in% c("mean", "median")) &&
+      (!is.null(join_column))) {
 
-      # Assert that the column to join is numeric
-      assertthat::assert_that(is.numeric(sf2[, join_column]),
-        msg = paste0("The provided 'join_column' of '",
-                     sf2_input,
-                     "', i.e. '",
-                     join_column,
-                     "', should be numeric since 'summary_stat' is set to '",
-                     summary_stat,
-                     "' in the input arguments."))
-    }
+    # Assert that the column to join is numeric
+    assertthat::assert_that(is.numeric(sf2[, join_column]),
+      msg = paste0("The provided 'join_column' of '",
+                   sf2_input,
+                   "', i.e. '",
+                   join_column,
+                   "', should be numeric since 'summary_stat' is set to '",
+                   summary_stat,
+                   "' in the input arguments."))
+  }
 
 
   # Search for distance matches for each of the plots (records) in sf1 ----

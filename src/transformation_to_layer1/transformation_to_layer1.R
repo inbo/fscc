@@ -111,19 +111,17 @@ if (level == "LI") {
 
 if (level == "LII") {
 
-so_som <- solve_record_inconsistencies(survey_form = "so_som",
-                                     data_frame = so_som,
-                                     solve = TRUE,
-                                     save_to_env = FALSE)
-
-so_pfh <- solve_record_inconsistencies(survey_form = "so_pfh",
-                                       data_frame = so_pfh,
+  so_som <- solve_record_inconsistencies(survey_form = "so_som",
+                                       data_frame = so_som,
                                        solve = TRUE,
                                        save_to_env = FALSE)
 
+  so_pfh <- solve_record_inconsistencies(survey_form = "so_pfh",
+                                         data_frame = so_pfh,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+
 }
-
-
 
 
 

@@ -117,7 +117,7 @@ compare_ranks <- function(df, additional_info) {
 
   # Calculate maximum values for each comparison column
   max_values <- reframe(df, across(all_of(comparison_cols), max))
-  focus_row_values <- select(focus_row, comparison_cols)
+  focus_row_values <- select(focus_row, any_of(comparison_cols))
 
   selected_coord_advantages <- names(max_values)[max_values > focus_row_values]
 
@@ -144,13 +144,13 @@ level <- "LI"
 if (level == "LI") {
 
   # # s1
-  # source("./src/functions/read_raw.R")
-  # read_raw("s1", save_to_env = TRUE)
-  #
-  #
+  source("./src/functions/read_raw.R")
+  read_raw("s1", save_to_env = TRUE)
+
+
   # # y1
-  # source("./src/functions/read_raw.R")
-  # read_raw("y1", save_to_env = TRUE)
+  source("./src/functions/read_raw.R")
+  read_raw("y1", save_to_env = TRUE)
 
 
   # LI plots to ignore in external sources
@@ -1159,8 +1159,8 @@ for (i in seq_along(plot_ids)) {
         # Show dataframe
 
         print(coord_sources_i %>%
-                select(source, survey_year, longitude, latitude, change_date,
-                       remark))
+                select(source, survey_year, longitude, latitude,
+                              change_date, remark))
 
         cat(paste0(" \nCountry: ", unique(coord_sources_i$country), "\n"))
         cat(paste0("Plot: ", plot_ids[i], "\n"))
@@ -1169,7 +1169,7 @@ for (i in seq_along(plot_ids)) {
 
         print(coord_summ_i %>%
                 select(-longitude_dec, -latitude_dec,
-                       -label, -colour, -rank) %>%
+                              -label, -colour, -rank) %>%
                 select(-rank_change_date_recent,
                        -survey_recent, -rank_survey_recent,
                        -rank_minus,
