@@ -460,11 +460,12 @@ for (i in seq_along(survey_forms)) {
      list_data_tables[[
        which(names(list_data_tables) == code_survey)]][i] == "som") {
 
-    layer_type_levels <- list(peat = c("H", "H05", "H12", "H24", "H51", "Hxx",
-                                        "H1", "H2", "HFH", "HH", "HL", "H01",
-                                        "H48", "HFS", "HS", "HF"),
+    layer_type_levels <- list(peat = c("H05", "H12", "H24", "H51", "Hxx",
+                                        "H1", "H2", "H01", "H48"),
                           forest_floor = c("O", "O1", "O2", "O3", "OF", "OFH",
-                                           "OH", "OL", "OLF"),
+                                           "OH", "OL", "OLF",
+                                           "H", "HFH", "HH", "HL",
+                                           "HFS", "HS", "HF"),
                           mineral = c("M01", "M02", "M03", "M05", "M12", "M13",
                                        "M23", "M24", "M25", "M26", "M34",
                                        "M35", "M36", "M38", "M41", "M45",
@@ -1148,9 +1149,13 @@ for (i in seq_along(survey_forms)) {
 
 # Create data_availability table ----
 
-source("./src/functions/get_data_availability.R")
+if (code_survey %in% c("s1", "so")) {
 
-data_availability <- get_data_availability(code_survey = code_survey)
+  source("./src/functions/get_data_availability.R")
+
+  data_availability <- get_data_availability(code_survey = code_survey)
+
+}
 
 
 
