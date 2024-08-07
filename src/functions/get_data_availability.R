@@ -9,6 +9,8 @@ get_data_availability <- function(code_survey) {
 
   # Create a list with names of the different survey forms per survey
 
+  assertthat::assert_that(code_survey %in% c("s1", "so"))
+
   survey_forms <- paste0(code_survey, "_",
                          c("pfh", "som", "prf", "pls", "lqa"))
 
