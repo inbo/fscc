@@ -20,6 +20,8 @@ harmonise_prf <- function(survey_form,
 
     cat("Gap-fill 's1_prf' using manually harmonised profile data\n")
 
+    # This file was manually harmonised by Nathalie on 20 June 2024
+
     dir <- "./data/additional_data/S1_PRF_ADDS.csv"
 
     assertthat::assert_that(file.exists(dir),
@@ -115,7 +117,7 @@ harmonise_prf <- function(survey_form,
                                          "does not exist."))
 
 
-    # This file was created by Nathalie on 15 May 2024
+    # This file was manually harmonised by Nathalie on 15 May 2024
 
     so_prf_adds <-
       openxlsx::read.xlsx(paste0("./data/additional_data/",
