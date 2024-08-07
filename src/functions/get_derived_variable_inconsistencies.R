@@ -629,6 +629,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
         rowwise() %>%
         mutate(
           # Check conditions and normalise if needed
+          part_size_clay_source = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            paste0(part_size_clay_source, " (normalised)"),
+            part_size_clay_source),
           part_size_clay = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
@@ -636,6 +643,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  (sum_texture < range_min & sum_texture >= 85)),
             round(part_size_clay / sum_texture * 100, 1),
             part_size_clay),
+          part_size_silt_source = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            paste0(part_size_silt_source, " (normalised)"),
+            part_size_silt_source),
           part_size_silt = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
@@ -643,6 +657,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  (sum_texture < range_min & sum_texture >= 85)),
             round(part_size_silt / sum_texture * 100, 1),
             part_size_silt),
+          part_size_sand_source = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            paste0(part_size_sand_source, " (normalised)"),
+            part_size_sand_source),
           part_size_sand = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
@@ -652,6 +673,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
             part_size_sand)) %>%
         mutate(
           # Check conditions and replace by NA if needed
+          part_size_clay_source = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_character_,
+            part_size_clay_source),
           part_size_clay = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
@@ -659,6 +687,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  sum_texture > 115),
             NA_real_,
             part_size_clay),
+          part_size_silt_source = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_character_,
+            part_size_silt_source),
           part_size_silt = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
@@ -666,6 +701,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  sum_texture > 115),
             NA_real_,
             part_size_silt),
+          part_size_sand_source = ifelse(
+            !is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_character_,
+            part_size_sand_source),
           part_size_sand = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
@@ -681,6 +723,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
         rowwise() %>%
         mutate(
           # Check conditions and normalise if needed
+          horizon_clay_source = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            paste0(horizon_clay_source, " (normalised)"),
+            horizon_clay_source),
           horizon_clay = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
@@ -688,6 +737,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  (sum_texture < range_min & sum_texture >= 85)),
             round(horizon_clay / sum_texture * 100, 1),
             horizon_clay),
+          horizon_silt_source = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            paste0(horizon_silt_source, " (normalised)"),
+            horizon_silt_source),
           horizon_silt = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
@@ -695,6 +751,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  (sum_texture < range_min & sum_texture >= 85)),
             round(horizon_silt / sum_texture * 100, 1),
             horizon_silt),
+          horizon_sand_source = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              ((sum_texture > range_max & sum_texture <= 115) |
+                 (sum_texture < range_min & sum_texture >= 85)),
+            paste0(horizon_sand_source, " (normalised)"),
+            horizon_sand_source),
           horizon_sand = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
@@ -704,6 +767,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
             horizon_sand)) %>%
         mutate(
           # Check conditions and replace by NA if needed
+          horizon_clay_source = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_character_,
+            horizon_clay_source),
           horizon_clay = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
@@ -711,6 +781,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  sum_texture > 115),
             NA_real_,
             horizon_clay),
+          horizon_silt_source = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_character_,
+            horizon_silt_source),
           horizon_silt = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
@@ -718,6 +795,13 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  sum_texture > 115),
             NA_real_,
             horizon_silt),
+          horizon_sand_source = ifelse(
+            !is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (sum_texture < 85 |
+                 sum_texture > 115),
+            NA_character_,
+            horizon_sand_source),
           horizon_sand = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
@@ -738,18 +822,36 @@ get_derived_variable_inconsistencies <- function(survey_form,
       df <- df %>%
         rowwise() %>%
         mutate(
+          part_size_clay_source = ifelse(
+            is.na(part_size_clay) & !is.na(part_size_silt) &
+              !is.na(part_size_sand) &
+              (part_size_silt + part_size_sand < 100),
+            "Estimated as remaining fraction",
+            part_size_clay_source),
           part_size_clay = ifelse(
             is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
               (part_size_silt + part_size_sand < 100),
             100 - (part_size_silt + part_size_sand),
             part_size_clay),
+          part_size_silt_source = ifelse(
+            is.na(part_size_silt) & !is.na(part_size_clay) &
+              !is.na(part_size_sand) &
+              (part_size_clay + part_size_sand < 100),
+            "Estimated as remaining fraction",
+            part_size_silt_source),
           part_size_silt = ifelse(
             is.na(part_size_silt) & !is.na(part_size_clay) &
               !is.na(part_size_sand) &
               (part_size_clay + part_size_sand < 100),
             100 - (part_size_clay + part_size_sand),
             part_size_silt),
+          part_size_sand_source = ifelse(
+            is.na(part_size_sand) & !is.na(part_size_silt) &
+              !is.na(part_size_clay) &
+              (part_size_silt + part_size_clay < 100),
+            "Estimated as remaining fraction",
+            part_size_sand_source),
           part_size_sand = ifelse(
             is.na(part_size_sand) & !is.na(part_size_silt) &
               !is.na(part_size_clay) &
@@ -763,18 +865,36 @@ get_derived_variable_inconsistencies <- function(survey_form,
       df <- df %>%
         rowwise() %>%
         mutate(
+          horizon_clay_source = ifelse(
+            is.na(horizon_clay) & !is.na(horizon_silt) &
+              !is.na(horizon_sand) &
+              (horizon_silt + horizon_sand < 100),
+            "Estimated as remaining fraction",
+            horizon_clay_source),
           horizon_clay = ifelse(
             is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
               (horizon_silt + horizon_sand < 100),
             100 - (horizon_silt + horizon_sand),
             horizon_clay),
+          horizon_silt_source = ifelse(
+            is.na(horizon_silt) & !is.na(horizon_clay) &
+              !is.na(horizon_sand) &
+              (horizon_clay + horizon_sand < 100),
+            "Estimated as remaining fraction",
+            horizon_silt_source),
           horizon_silt = ifelse(
             is.na(horizon_silt) & !is.na(horizon_clay) &
               !is.na(horizon_sand) &
               (horizon_clay + horizon_sand < 100),
             100 - (horizon_clay + horizon_sand),
             horizon_silt),
+          horizon_sand_source = ifelse(
+            is.na(horizon_sand) & !is.na(horizon_silt) &
+              !is.na(horizon_clay) &
+              (horizon_silt + horizon_clay < 100),
+            "Estimated as remaining fraction",
+            horizon_sand_source),
           horizon_sand = ifelse(
             is.na(horizon_sand) & !is.na(horizon_silt) &
               !is.na(horizon_clay) &
@@ -791,14 +911,26 @@ get_derived_variable_inconsistencies <- function(survey_form,
       df <- df %>%
         rowwise() %>%
         mutate(
+          part_size_clay_source = ifelse(
+            is.na(part_size_silt) | is.na(part_size_sand),
+            NA_character_,
+            part_size_clay_source),
           part_size_clay = ifelse(
             is.na(part_size_silt) | is.na(part_size_sand),
             NA_real_,
             part_size_clay),
+          part_size_silt_source = ifelse(
+            is.na(part_size_clay) | is.na(part_size_sand),
+            NA_character_,
+            part_size_silt_source),
           part_size_silt = ifelse(
             is.na(part_size_clay) | is.na(part_size_sand),
             NA_real_,
             part_size_silt),
+          part_size_sand_source = ifelse(
+            is.na(part_size_silt) | is.na(part_size_clay),
+            NA_character_,
+            part_size_sand_source),
           part_size_sand = ifelse(
             is.na(part_size_silt) | is.na(part_size_clay),
             NA_real_,
@@ -810,14 +942,26 @@ get_derived_variable_inconsistencies <- function(survey_form,
       df <- df %>%
         rowwise() %>%
         mutate(
+          horizon_clay_source = ifelse(
+            is.na(horizon_silt) | is.na(horizon_sand),
+            NA_character_,
+            horizon_clay_source),
           horizon_clay = ifelse(
             is.na(horizon_silt) | is.na(horizon_sand),
             NA_real_,
             horizon_clay),
+          horizon_silt_source = ifelse(
+            is.na(horizon_clay) | is.na(horizon_sand),
+            NA_character_,
+            horizon_silt_source),
           horizon_silt = ifelse(
             is.na(horizon_clay) | is.na(horizon_sand),
             NA_real_,
             horizon_silt),
+          horizon_sand_source = ifelse(
+            is.na(horizon_silt) | is.na(horizon_clay),
+            NA_character_,
+            horizon_sand_source),
           horizon_sand = ifelse(
             is.na(horizon_silt) | is.na(horizon_clay),
             NA_real_,
