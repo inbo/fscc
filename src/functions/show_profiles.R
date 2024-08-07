@@ -51,7 +51,7 @@ show_profiles <- function(code_survey,
     "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
     "extrac_fe", "tot_ca", "p_ox", "exch_acidiy", "tot_na",
     "tot_mn", "tot_fe", "tot_al",
-    "bulk_density"),
+    "bulk_density", "organic_layer_weight"),
   pfh_parameter = c(
     NA, NA, "horizon_clay", "horizon_silt", NA,
     "horizon_caco3_total", NA, "horizon_exch_mg", NA, NA,
@@ -62,7 +62,7 @@ show_profiles <- function(code_survey,
     NA, NA, NA, NA, NA,
     NA, NA, NA, NA, NA,
     NA, NA, NA,
-    "bulk_density")) #"horizon_bulk_dens_measure"))
+    "bulk_density", NA))
 
   assertthat::assert_that(
     parameter %in% corresponding_parameters$som_parameter ||
@@ -117,13 +117,49 @@ show_profiles <- function(code_survey,
   pfh <- pfh %>%
     mutate(bulk_density = round(bulk_density)) %>%
     filter(!is.na(.data$layer_number)) %>%
-    rename(profile_id = unique_survey_profile) %>%
     rename(depth_top = horizon_limit_up) %>%
     rename(depth_bottom = horizon_limit_low) %>%
     rename(code_layer = horizon_master) %>%
     rename(repetition = profile_pit_id) %>%
     mutate(repetition = as.character(.data$repetition),
            code_layer = as.character(.data$code_layer))
+
+  if ("unique_survey_profile" %in% names(pfh) &&
+      !"profile_id" %in% names(pfh)) {
+
+    pfh <- pfh %>%
+      rename(profile_id = unique_survey_profile)
+  }
+
+  if (!"unique_survey" %in% names(pfh)) {
+
+    pfh <- pfh %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot))
+  }
+
+  if (!"layer_number_ff" %in% names(pfh) &&
+      !"layer_number_bg" %in% names(pfh)) {
+
+    pfh <- pfh %>%
+      group_by(profile_id) %>%
+      mutate(
+        layer_number_bg_only = ifelse(.data$depth_top >= 0 &
+                                        .data$depth_bottom >= 0,
+                                      layer_number,
+                                      NA),
+        layer_number_bg_min = suppressWarnings(min(layer_number_bg_only,
+                                                   na.rm = TRUE)),
+        layer_number_bg = layer_number_bg_only - (layer_number_bg_min - 1),
+        layer_number_ff = ifelse(layer_type %in% c("forest_floor") &
+                                   .data$depth_top <= 0 &
+                                   .data$depth_bottom <= 0,
+                                 layer_number,
+                                 NA)) %>%
+      ungroup()
+
+  }
 
   if (not_in_pfh) {
 
@@ -178,12 +214,50 @@ show_profiles <- function(code_survey,
     mutate(colour_moist_hex = NA) %>%
     mutate(survey_form = paste0(code_survey, "_som")) %>%
     filter(!is.na(.data$layer_number)) %>%
-    rename(profile_id = unique_survey_repetition) %>%
     rename(depth_top = layer_limit_superior) %>%
     rename(depth_bottom = layer_limit_inferior) %>%
     mutate(repetition = as.character(.data$repetition),
            code_layer = as.character(.data$code_layer)) %>%
-    mutate(bulk_density = round(bulk_density)) %>%
+    mutate(bulk_density = round(bulk_density))
+
+  if ("unique_survey_repetition" %in% names(som) &&
+      !"profile_id" %in% names(som)) {
+
+    som <- som %>%
+      rename(profile_id = unique_survey_repetition)
+  }
+
+  if (!"unique_survey" %in% names(som)) {
+
+    som <- som %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot))
+  }
+
+  if (!"layer_number_ff" %in% names(som) &&
+      !"layer_number_bg" %in% names(som)) {
+
+    som <- som %>%
+      group_by(profile_id) %>%
+      mutate(
+        layer_number_bg_only = ifelse(.data$depth_top >= 0 &
+                                        .data$depth_bottom >= 0,
+                                      layer_number,
+                                      NA),
+        layer_number_bg_min = suppressWarnings(min(layer_number_bg_only,
+                                                   na.rm = TRUE)),
+        layer_number_bg = layer_number_bg_only - (layer_number_bg_min - 1),
+        layer_number_ff = ifelse(.data$layer_type %in% c("forest_floor") &
+                                   .data$depth_top <= 0 &
+                                   .data$depth_bottom <= 0,
+                                 layer_number,
+                                 NA)) %>%
+      ungroup()
+
+  }
+
+  som <- som %>%
     select(survey_form,
            plot_id,
            survey_year,
