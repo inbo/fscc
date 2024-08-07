@@ -577,6 +577,103 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
 
 
+  ## Manually add layer_limit_superior for thick peat layers ----
+
+  # In so_som, some Irish profiles from the '90s have a very heavy H layer.
+  # As it appears from comparison of plot 7_10 in 1996 versus 2007,
+  # this H layer probably corresponds with peat. If we estimate this peat
+  # to be thicker than 40 cm, we will exceptionally estimate its upper layer
+  # limit and convert it to "peat" (instead of "forest_floor")
+
+  if (unlist(strsplit(survey_form, "_"))[1] == "so") {
+
+    source("./src/functions/get_parameter_stats.R")
+
+    bd_peat <- get_parameter_stats(parameter = "bulk_density",
+                                   mode = "stat",
+                                   layer_type = "peat")
+
+    bd_peat <- bd_peat[which(names(bd_peat) == "Mean")]
+
+    assertthat::assert_that(
+      bd_peat > 100 && bd_peat < 150)
+
+    layers_to_check <- NULL
+
+    for (i in seq_along(unique(df$plot_id))) {
+
+      plot_id_i <- unique(df$plot_id)[i]
+
+      df_i <- df %>%
+        filter(plot_id == plot_id_i)
+
+      df_summ_i <- df_i %>%
+        group_by(survey_year) %>%
+        reframe(contains_peat = any(layer_type == "peat"),
+                unknown_ff_limits = any(layer_type == "forest_floor") &
+                  all(is.na(layer_limit_superior[layer_type ==
+                                                   "forest_floor"]) |
+                        layer_limit_superior[layer_type == "forest_floor"] <
+                        -200),
+                olw_max = any(layer_type == "forest_floor" &
+                                !is.na(organic_layer_weight) &
+                                # Estimated to be thicker than 40 cm
+                                organic_layer_weight > (bd_peat * 0.40) &
+                                code_layer == "H" &
+                                (layer_limit_inferior == 0 |
+                                   layer_limit_inferior < -200)))
+
+      if (any(df_summ_i$olw_max == TRUE &
+              df_summ_i$contains_peat == FALSE &
+              df_summ_i$unknown_ff_limits == TRUE)) {
+
+        layers_to_check <- bind_rows(
+          layers_to_check,
+          df_i %>%
+            filter(layer_type == "forest_floor" &
+                     (is.na(layer_limit_superior) |
+                        layer_limit_superior < -200) &
+                     layer_limit_inferior == 0 &
+                     code_layer == "H" &
+                     organic_layer_weight > (bd_peat * 0.40)))
+
+      }
+
+      } # End of "for" loop along plots
+
+      assertthat::assert_that(
+        all(layers_to_check$plot_id %in% c("7_7", "7_9", "7_10", "7_12")))
+
+      ind_to_correct <- which(df$unique_layer_repetition %in%
+                                layers_to_check$unique_layer_repetition)
+
+      for (i in ind_to_correct) {
+
+        # Adjust layer_limit_inferior
+
+        if (df$layer_limit_inferior[i] < -200) {
+
+          df$layer_limit_inferior[i] <- 0
+
+        }
+
+        # Adjust layer_limit_superior
+
+        df$layer_limit_superior[i] <- round(
+          df$layer_limit_inferior[i] -
+                  ((df$organic_layer_weight[i] / as.numeric(bd_peat)) * 1E2),
+          1)
+
+        # Adjust layer_type
+
+        df$layer_type[i] <- "peat"
+
+      }
+
+  }
+
+
+
   ## Manually correct switched layer limits ----
 
   # Irish s1 plot 7_704:
@@ -2630,7 +2727,8 @@ if (any(df$layer_type[vec] == "mineral")) {
     so_som_dont_convert <- c("1_2011_92", "5_1995_17", "5_1997_2",
                              "60_2004_2", "50_1997_2", "52_2019_10",
                              "14_2006_4", "14_2006_11", "14_2006_12",
-                             "14_2006_18", "14_2006_19", "50_2010_6")
+                             "14_2006_18", "14_2006_19", "50_2010_6",
+                             "11_2008_26")
     s1_som_dont_convert <- c("58_1995_285", "7_2007_208", "6_2008_62",
                              "6_2008_124", "6_2008_135", "6_2008_156",
                              "6_2008_158")
@@ -3907,51 +4005,6 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
     if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
-      # For one of the Hungarian profiles, all of the horizon_master
-      # values are missing,
-      # but it is clear that they should be mineral layers
-
-      # layers_to_check <- df %>%
-      #   filter(code_country == 51) %>%
-      #   filter(code_plot == 1) %>%
-      #   filter(horizon_master == "" |
-      #            is.na(horizon_master)) %>%
-      #   pull(code_line)
-      #
-      # if (!identical(layers_to_check, character(0))) {
-      #
-      #   df <- df %>%
-      #     mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
-      #                                "mineral",
-      #                                .data$layer_type))
-      #
-      # }
-
-      # Several of the Hungarian profiles also have just one horizon_master
-      # but the horizon limits are usually known.
-      # Assumption: if negative, layer type if forest floor,
-      # else mineral
-
-      # layers_to_check <- df %>%
-      #   filter(code_country == 51) %>%
-      #   filter(code_plot != 1) %>%
-      #   filter(horizon_master == "" |
-      #            is.na(horizon_master)) %>%
-      #   pull(code_line)
-      #
-      # if (!identical(layers_to_check, character(0))) {
-      #
-      #   df <- df %>%
-      #     mutate(layer_type = ifelse(.data$code_line %in% layers_to_check,
-      #                                ifelse((.data$horizon_limit_up <= 0) &
-      #                                         (.data$horizon_limit_low <= 0),
-      #                                       "forest_floor",
-      #                                       "mineral"),
-      #                                .data$layer_type))
-      #
-      # }
-
-
       ## Manually correct switched horizon numbers ----
 
       # Swedish horizon numbers are switched:
@@ -4041,6 +4094,49 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
                                .data$horizon_number)))
 
 
+    }
+
+    ## Manually correct layer type based on other profiles of plot ----
+
+    if ((unlist(strsplit(survey_form, "_"))[1] == "so")) {
+
+      df <- df %>%
+        mutate(
+          layer_type = ifelse(
+            plot_id == "7_16" & survey_year == 2006 &
+              layer_type == "forest_floor" & horizon_master == "OA" &
+              horizon_limit_up == -18,
+            "mineral",
+            layer_type),
+          horizon_master = ifelse(
+            plot_id == "7_16" & survey_year == 2006 & horizon_master == "OA" &
+              horizon_limit_up == -18,
+            "A",
+            horizon_master),
+          unique_survey_layer = ifelse(
+            plot_id == "7_16" & survey_year == 2006 &
+              horizon_limit_up == -18,
+            paste0(code_country, "_",
+                   survey_year, "_",
+                   code_plot, "_",
+                   horizon_master),
+            unique_survey_layer),
+          unique_layer_repetition = ifelse(
+            plot_id == "7_16" & survey_year == 2006 &
+              horizon_limit_up == -18,
+            paste0(code_country, "_",
+                   survey_year, "_",
+                   code_plot, "_",
+                   horizon_master, "_",
+                   profile_pit_id),
+            unique_layer_repetition),
+          unique_layer = ifelse(
+            plot_id == "7_16" & survey_year == 2006 &
+              horizon_limit_up == -18,
+            paste0(code_country, "_",
+                   code_plot, "_",
+                   horizon_master),
+            unique_layer))
     }
 
 
