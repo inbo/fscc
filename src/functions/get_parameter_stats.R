@@ -6,12 +6,12 @@
 #' @param parameter A character string specifying the variable that needs
 #'                  to be summarised
 #' @param mode A character string specifying the type of stat.
-#'             Possible values are "median" (default), "mean", "quantile" and
-#'             "vec". If
+#'             Possible values are "quantile", "vec" and "stat". If
 #'             "quantile", the upper and lower quantile values of the whole
-#'             range is returned. If "median" or "mean", the median or mean
-#'              of the plausible values (i.e. those within the quantile range)
-#'              is returned. If "vec", the total vector is returned.
+#'             range is returned. If "stat", some statistics such as
+#'             the median or mean of the plausible values (i.e. those within
+#'             the quantile range) is returned. If "vec", the total vector
+#'             is returned.
 #' @param layer_type A character string specifying the type of layer.
 #'                   Possible values are "organic" (default), "forest_floor",
 #'                   "forest_floor_excl_ol", "peat" and "mineral",
