@@ -80,6 +80,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
 
+  stopifnot(require("soiltexture"))
+
   cat(paste0(" \nSolve inconsistencies in derived variables in '",
              survey_form, "'\n"))
 
@@ -632,44 +634,44 @@ get_derived_variable_inconsistencies <- function(survey_form,
           part_size_clay_source = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
             paste0(part_size_clay_source, " (normalised)"),
             part_size_clay_source),
           part_size_clay = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
-            round(part_size_clay / sum_texture * 100, 1),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
+            part_size_clay / sum_texture * 100,
             part_size_clay),
           part_size_silt_source = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
             paste0(part_size_silt_source, " (normalised)"),
             part_size_silt_source),
           part_size_silt = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
-            round(part_size_silt / sum_texture * 100, 1),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
+            part_size_silt / sum_texture * 100,
             part_size_silt),
           part_size_sand_source = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
             paste0(part_size_sand_source, " (normalised)"),
             part_size_sand_source),
           part_size_sand = ifelse(
             !is.na(part_size_clay) & !is.na(part_size_silt) &
               !is.na(part_size_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
-            round(part_size_sand / sum_texture * 100, 1),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
+            part_size_sand / sum_texture * 100,
             part_size_sand)) %>%
         mutate(
           # Check conditions and replace by NA if needed
@@ -726,44 +728,44 @@ get_derived_variable_inconsistencies <- function(survey_form,
           horizon_clay_source = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
             paste0(horizon_clay_source, " (normalised)"),
             horizon_clay_source),
           horizon_clay = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
-            round(horizon_clay / sum_texture * 100, 1),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
+            horizon_clay / sum_texture * 100,
             horizon_clay),
           horizon_silt_source = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
             paste0(horizon_silt_source, " (normalised)"),
             horizon_silt_source),
           horizon_silt = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
-            round(horizon_silt / sum_texture * 100, 1),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
+            horizon_silt / sum_texture * 100,
             horizon_silt),
           horizon_sand_source = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
             paste0(horizon_sand_source, " (normalised)"),
             horizon_sand_source),
           horizon_sand = ifelse(
             !is.na(horizon_clay) & !is.na(horizon_silt) &
               !is.na(horizon_sand) &
-              ((sum_texture > range_max & sum_texture <= 115) |
-                 (sum_texture < range_min & sum_texture >= 85)),
-            round(horizon_sand / sum_texture * 100, 1),
+              ((sum_texture > 100 & sum_texture <= 115) |
+                 (sum_texture < 100 & sum_texture >= 85)),
+            horizon_sand / sum_texture * 100,
             horizon_sand)) %>%
         mutate(
           # Check conditions and replace by NA if needed
@@ -970,7 +972,104 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
     }
 
+
+
+    # Wallonia confirmed that they accidentally reported their particle
+    # size fractions with 50 µm instead of 63 µm as boundary between
+    # silt and sand.
+
+    if (unlist(strsplit(survey_form, "_"))[2] == "som") {
+
+      ind_wal <- which(df$partner_code == 202 &
+                         df$survey_year <= 2022 &
+                         !is.na(df$part_size_sand))
+
+      if (!identical(ind_wal, integer(0))) {
+
+        for (i in ind_wal) {
+
+          fractions_i <-
+            TT.text.transf(tri.data = df[i, ] %>%
+                             select(part_size_clay,
+                                    part_size_silt,
+                                    part_size_sand),
+                           # Original limits
+                           base.css.ps.lim = c(0, 2, 50, 2000),
+                           # Target limits (sand fraction should increase)
+                           dat.css.ps.lim = c(0, 2, 63, 2000),
+                           css.names = c("part_size_clay",
+                                         "part_size_silt",
+                                         "part_size_sand"))
+
+          # Clay remains the same
+          df$part_size_silt[i] <- fractions_i$part_size_silt
+          df$part_size_sand[i] <- fractions_i$part_size_sand
+          df$part_size_silt_source[i] <-
+            paste0(df$part_size_silt_source[i],
+                   " (corrected to 63 µm silt-sand)")
+          df$part_size_sand_source[i] <-
+            paste0(df$part_size_sand_source[i],
+                   " (corrected to 63 µm silt-sand)")
+
+        }
+      }
+
+      df <- df %>%
+        mutate(
+          part_size_clay = round(part_size_clay, 1),
+          part_size_silt = round(part_size_silt, 1),
+          part_size_sand = round(part_size_sand, 1))
+
+
+
+
+    } else if (unlist(strsplit(survey_form, "_"))[2] == "pfh") {
+
+      ind_wal <- which(df$partner_code == 202 &
+                         df$survey_year <= 2022 &
+                         !is.na(df$horizon_sand))
+
+      if (!identical(ind_wal, integer(0))) {
+
+        for (i in ind_wal) {
+
+          fractions_i <-
+            TT.text.transf(tri.data = df[i, ] %>%
+                             select(horizon_clay,
+                                    horizon_silt,
+                                    horizon_sand),
+                           # Original limits
+                           base.css.ps.lim = c(0, 2, 50, 2000),
+                           # Target limits (sand fraction should increase)
+                           dat.css.ps.lim = c(0, 2, 63, 2000),
+                           css.names = c("horizon_clay",
+                                         "horizon_silt",
+                                         "horizon_sand"))
+
+          # Clay remains the same
+          df$horizon_silt[i] <- fractions_i$horizon_silt
+          df$horizon_sand[i] <- fractions_i$horizon_sand
+          df$horizon_silt_source[i] <-
+            paste0(df$horizon_silt_source[i],
+                   " (corrected to 63 µm silt-sand)")
+          df$horizon_sand_source[i] <-
+            paste0(df$horizon_sand_source[i],
+                   " (corrected to 63 µm silt-sand)")
+
+
+        }
+
+      }
+
+      df <- df %>%
+        mutate(
+          horizon_clay = round(horizon_clay, 1),
+          horizon_silt = round(horizon_silt, 1),
+          horizon_sand = round(horizon_sand, 1))
+
     }
+
+    } # End of "sum_texture" in names(df)
 
 
 
