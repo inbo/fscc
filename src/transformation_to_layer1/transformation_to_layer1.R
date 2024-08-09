@@ -18,10 +18,10 @@
 # These can be requested from FSCC.
 
 # Status:
-# - Almost complete for Level II (so) (complete for variables required
-#   for carbon stock calculations)
-# - Almost complete for Level I (s1) (complete for variables required
-#   for carbon stock calculations)
+# - Complete for Level II (so) (complete for variables required
+#   for carbon stock calculations and soil texture)
+# - Complete for Level I (s1) (complete for variables required
+#   for carbon stock calculations and soil texture)
 
 
 
@@ -155,8 +155,7 @@ gapfill_from_pir(code_survey = "sw",
                  save_to_env = TRUE)
 }
 
-# TO DO: initiate a column for each parameter to indicate the sources of the
-# data (e.g. "layer 0", "partner communication", ...)
+
 
 # In the previous step, "pir_applied" objects are generated for each survey
 # form, which contains the new data from the pirs, and the action that was
@@ -192,8 +191,7 @@ openxlsx::saveWorkbook(wb,
 
 ## 4.2. Gap-fill using old database sources (e.g. AFSCDB.LII) ----
 # Note: only focussing on parameters for C stock calculations
-# To do: expand for other parameters
-# To do: expand for LI
+# To do: expand for other parameters and for "pfh"
 
 source("./src/functions/gapfill_from_old_data.R")
 
@@ -240,7 +238,8 @@ if (level == "LII") {
 # 5. Automated data corrections using inconsistency-generating functions ----
 
 # Note: at the moment, these functions also generate PIRs, but this is not
-# relevant to the current aim of this script, i.e. data processing to layer 1.
+# relevant to the current aim of this script,
+# i.e. data pre-processing to layer 1.
 
 
 
@@ -348,11 +347,6 @@ if (level == "LII") {
 
 
 ## 5.3. Inconsistencies in soil layers ----
-# "solve" indicates whether the obvious mistakes can be solved
-
-# Attention: make sure that "pfh" survey forms are processed first
-# to facilitate gap-filling of "som" based on "pfh"
-# (e.g. layer limits forest floor)
 
 source("./src/functions/get_layer_inconsistencies.R")
 
@@ -388,16 +382,6 @@ so_som3 <- so_som
 
 
 
-# At this stage, link forest floor layers in "som" with those of "pfh"
-# in the same survey.
-# This can be used to gap-fill forest floor layer limits as well as bulk
-# densities
-
-
-
-
-
-
 
 
 
@@ -405,7 +389,6 @@ so_som3 <- so_som
 
 
 ## 5.4. Inconsistencies in derived variables ----
-# TO DO: update to integrate LOQs better
 
 source("./src/functions/get_derived_variable_inconsistencies.R")
 
@@ -425,8 +408,6 @@ if (level == "LII") {
 
 }
 
-# source("./src/functions/bind_objects_starting_with.R")
-# bind_objects_starting_with("list_derived_inconsistencies", save_to_env = TRUE)
 
 
 
