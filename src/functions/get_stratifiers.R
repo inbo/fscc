@@ -112,9 +112,7 @@ get_stratifiers <- function(level) {
                                ".tif")
 
     clim_sf <- overlay_tif(sf1 = clim_sf,
-                           path_tif = path_worldclim_i,
-                           name_col = paste0("wc2.1_30s_tavg_",
-                                             sprintf("%02d", i)))
+                           path_tif = path_worldclim_i)
 
   }
 
@@ -143,9 +141,7 @@ get_stratifiers <- function(level) {
                                ".tif")
 
     clim_sf <- overlay_tif(sf1 = clim_sf,
-                           path_tif = path_worldclim_i,
-                           name_col = paste0("wc2.1_30s_prec_",
-                                             sprintf("%02d", i)))
+                           path_tif = path_worldclim_i)
 
   }
 
@@ -168,8 +164,7 @@ get_stratifiers <- function(level) {
 
   clim_sf <- overlay_tif(sf1 = clim_sf,
                          path_tif = paste0(path_worldclim,
-                                           "elev/wc2.1_30s_elev.tif"),
-                         name_col = "wc2.1_30s_elev") %>%
+                                           "elev/wc2.1_30s_elev.tif")) %>%
     st_drop_geometry() %>%
     rename(elev = "wc2.1_30s_elev") %>%
     as_sf
@@ -187,8 +182,7 @@ get_stratifiers <- function(level) {
   clim_sf <- overlay_tif(sf1 = clim_sf,
                       path_tif = paste0("./data/additional_data/shapefiles/",
                                         "European Soil Database/",
-                                        "SoilDB_rasters/parmado1.tif"),
-                      name_col = "parmado1") %>%
+                                        "SoilDB_rasters/parmado1.tif")) %>%
     st_drop_geometry() %>%
     left_join(par_mat_dom1_dictionary %>%
                 rename(parmado1 = PAR.MAT.DOM1) %>%
