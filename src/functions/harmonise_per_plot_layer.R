@@ -405,8 +405,6 @@ harmonise_per_plot_layer <- function(survey_form_input,
       profiles_to_be_removed <- df_i %>%
         group_by(unique_survey_repetition) %>%
         reframe(all_unknown_limits = all(is.na(layer_limit_superior))) %>%
-                                           # (layer_type == "forest_floor") &
-                                           # (layer_number <= 3))) %>%
         filter(all_unknown_limits == TRUE) %>%
         pull(unique_survey_repetition)
 
@@ -540,12 +538,41 @@ harmonise_per_plot_layer <- function(survey_form_input,
           mutate(weights = case_when(
             grepl("(clay|silt|sand)", parameter_j) ~
               .data$bulk_density_total_soil,
-            .default = NA)) %>%
-          select(survey_year, unique_survey_repetition,
-                 code_layer, layer_number, layer_type,
-                 layer_limit_superior, layer_limit_inferior, weights,
-                 organic_carbon_total,
-                 {{ parameter_j }}) %>%
+            .default = NA))
+
+        if (grepl("(clay|silt|sand)", parameter_j)) {
+
+          if (survey_form_type == "som") {
+
+            df_summ_i <- df_summ_i %>%
+              select(survey_year, unique_survey_repetition,
+                     code_layer, layer_number, layer_type,
+                     layer_limit_superior, layer_limit_inferior, weights,
+                     organic_carbon_total,
+                     part_size_clay, part_size_silt, part_size_sand)
+          }
+
+          if (survey_form_type == "pfh") {
+
+            df_summ_i <- df_summ_i %>%
+              select(survey_year, unique_survey_repetition,
+                     code_layer, layer_number, layer_type,
+                     layer_limit_superior, layer_limit_inferior, weights,
+                     organic_carbon_total,
+                     horizon_clay, horizon_silt, horizon_sand)
+          }
+
+        } else {
+
+          df_summ_i <- df_summ_i %>%
+            select(survey_year, unique_survey_repetition,
+                   code_layer, layer_number, layer_type,
+                   layer_limit_superior, layer_limit_inferior, weights,
+                   organic_carbon_total,
+                   {{ parameter_j }})
+        }
+
+        df_summ_i <- df_summ_i %>%
           filter(.data[[parameter_j]] >= range_min_j &
                    .data[[parameter_j]] <= range_max_j)
 
@@ -585,11 +612,43 @@ harmonise_per_plot_layer <- function(survey_form_input,
         # Else, if no data after 2000,
         # Take the most recent survey year
 
+        # Make sure that texture data are based on the same year.
+        # Therefore, select the texture parameter with the highest average
+        # content, and select the year based on this
+
+        parameter_for_year_j <- parameter_j
+
+        if (grepl("(clay|silt|sand)", parameter_j)) {
+
+          if (survey_form_type == "som") {
+
+           means_for_year_texture <- df_summ_i %>%
+              reframe(part_size_clay = mean(part_size_clay, na.rm = TRUE),
+                      part_size_silt = mean(part_size_silt, na.rm = TRUE),
+                      part_size_sand = mean(part_size_sand, na.rm = TRUE))
+
+          }
+
+          if (survey_form_type == "pfh") {
+
+            means_for_year_texture <- df_summ_i %>%
+              reframe(horizon_clay = mean(horizon_clay, na.rm = TRUE),
+                      horizon_silt = mean(horizon_silt, na.rm = TRUE),
+                      horizon_sand = mean(horizon_sand, na.rm = TRUE))
+          }
+
+          parameter_for_year_j <- names(means_for_year_texture[
+            which(means_for_year_texture == max(means_for_year_texture))])
+
+        }
+
+
         selection_crit_i <- df_summ_i %>%
           mutate(year_layer = paste0(survey_year, "_", code_layer)) %>%
           group_by(year_layer, layer_limit_superior, layer_limit_inferior,
                    survey_year) %>%
-          reframe(count_unique = n_distinct(round(!!sym(parameter_j)))) %>%
+          reframe(count_unique =
+                    n_distinct(round(!!sym(parameter_for_year_j)))) %>%
           ungroup() %>%
           group_by(survey_year) %>%
           reframe(top = min(layer_limit_superior, na.rm = TRUE),
