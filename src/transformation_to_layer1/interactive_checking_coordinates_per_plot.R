@@ -133,7 +133,7 @@ compare_ranks <- function(df, additional_info) {
 
 # 1. Input level ----
 
-level <- "LI"
+level <- "LII"
 
 
 
@@ -429,7 +429,7 @@ if (level == "LII") {
   read_raw("si", save_to_env = TRUE)
 
   # LII plots to ignore in external sources
-  # because we are sure that the coordinates in s1 are correct
+  # because we are sure that the coordinates in so are correct
 
   plots_to_ignore_lii <- unique(c(
     # Poland LII
@@ -503,8 +503,8 @@ if (level == "LII") {
 
   # AFSCDB_LII_2_2
 
-  dir <- paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
-                "AFSCDB_LII_2_2_080515_som.csv")
+  dir <- paste0("./data/additional_data/afscdb_LII_2_2/repetitions/",
+                "so_afscdb_harmonised_r.csv")
 
   plot_ids_afscdb <- read.csv(dir,
                               sep = ";", na.strings = "") %>%
@@ -512,24 +512,49 @@ if (level == "LII") {
     distinct(plot_id) %>%
     pull(plot_id)
 
-  dir <- paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
+  dir1 <- paste0("./data/additional_data/afscdb_LII_2_2/plot-aggregated/",
                       "AFSCDB_LII_2_2_080515_pls.csv")
 
-  assertthat::assert_that(file.exists(dir),
-                          msg = paste0("'", dir, "' ",
+  assertthat::assert_that(file.exists(dir1),
+                          msg = paste0("'", dir1, "' ",
                                        "does not exist."))
 
-  coord_afscdb <- read.csv(dir,
-                           sep = ";", na.strings = "") %>%
-    mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
-    filter(plot_id %in% plot_ids_afscdb) %>%
-    mutate(survey_year = NA_integer_,
-           remark = NA,
-           change_date = NA_character_) %>%
-    filter(!is.na(longitude) &
-             !is.na(latitude)) %>%
-    select(code_country, plot_id, survey_year, longitude, latitude, remark,
-           change_date)
+  dir2 <- paste0("./data/additional_data/partner_comm/so_spain_correct/",
+                 "0100 PARCELAS.xlsx")
+
+  assertthat::assert_that(file.exists(dir2),
+                          msg = paste0("'", dir2, "' ",
+                                       "does not exist."))
+
+  coord_afscdb <- bind_rows(
+    # AFSCDB
+    read.csv(dir1,
+             sep = ";", na.strings = "") %>%
+      mutate(plot_id = paste0(code_country, "_", code_plot)) %>%
+      filter(plot_id %in% plot_ids_afscdb) %>%
+      mutate(survey_year = NA_integer_,
+             remark = NA,
+             change_date = NA_character_) %>%
+      filter(!is.na(longitude) &
+               !is.na(latitude)) %>%
+      select(code_country, plot_id, survey_year, longitude, latitude, remark,
+             change_date),
+    # Spanish database
+    read_excel(dir2) %>%
+      mutate(
+        code_country = "11",
+        plot_id = paste0(code_country, "_", PARC),
+        survey_year = as.integer(format(as.Date(REPL, format = "%Y-%m-%d"),
+                                        "%Y")),
+        remark = NA,
+        change_date = NA_character_,
+        latitude = as.integer(gsub("\\+", "", LAT_WGS84)),
+        longitude = as.integer(gsub("\\+", "", LON_WGS84))) %>%
+      filter(plot_id %in% plot_ids_afscdb) %>%
+      select(code_country, plot_id, survey_year, longitude, latitude, remark,
+             change_date))
+
+
 
 
 
