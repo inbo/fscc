@@ -119,6 +119,7 @@ if (level == "LII") {
 # 5. Get stratifiers ----
 
 source("./src/functions/get_stratifiers.R")
+source("./src/functions/create_attribute_catalogue.R")
 
 if (level == "LI") {
 
@@ -130,6 +131,9 @@ if (level == "LI") {
               na = "",
               sep = ";",
               dec = ".")
+
+  create_attribute_catalogue(data_frame = "s1_strat",
+                             path_to_save = "./data/additional_data/s1_strat_")
 }
 
 if (level == "LII") {
@@ -142,6 +146,9 @@ if (level == "LII") {
               na = "",
               sep = ";",
               dec = ".")
+
+  create_attribute_catalogue(data_frame = "so_strat",
+                             path_to_save = "./data/additional_data/so_strat_")
 }
 
 
