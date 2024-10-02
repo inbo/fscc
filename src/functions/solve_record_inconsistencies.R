@@ -950,7 +950,7 @@ if (survey_form == "s1_som") {
 
     assertthat::assert_that(all(unique_surveys_to_check$code_country == 4))
 
-    for (i in seq_along(unique_surveys_to_check)) {
+    for (i in seq_len(nrow(unique_surveys_to_check))) {
 
       years_i <- unlist(strsplit(unique_surveys_to_check$years_min_diff[i],
                                  "_"))

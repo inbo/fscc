@@ -638,7 +638,7 @@ harmonise_per_plot_layer <- function(survey_form_input,
           }
 
           parameter_for_year_j <- names(means_for_year_texture[
-            which(means_for_year_texture == max(means_for_year_texture))])
+            which(means_for_year_texture == max(means_for_year_texture))])[1]
 
         }
 
