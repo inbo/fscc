@@ -110,10 +110,11 @@ tidy <- function(survey_form,
     "q_flag",
     "line_nr",
     "qif_key",
-    "unique_survey",
-    "unique_survey_repetition",
-    "unique_survey_layer",
-    "unique_layer_repetition",
+    # "unique_survey",
+    # "unique_survey_repetition",
+    # "unique_survey_layer",
+    # "unique_layer_repetition",
+    # "unique_survey_profile",
     "unique_layer",
     "origin_merged",
     "origin_merge_info",
@@ -123,7 +124,6 @@ tidy <- function(survey_form,
     "sum_texture",
     "bulk_density_layer_weight",
     "horizon_number",
-    "unique_survey_profile",
     "colour_moist_hex")
 
 
@@ -166,7 +166,13 @@ tidy <- function(survey_form,
         starts_with("organic_carbon_total"),
         starts_with("n_total"),
         # horizon_caco3_total:sum_base_cations,
-        everything())
+        everything()) %>%
+       # Move "unique" columns to the end
+       select(which(!grepl("unique_|date", names(.))),
+              contains("date"),
+              contains("unique_")) %>%
+       relocate(other_obs, .before = date_labor_analyses) %>%
+       relocate(code_line, .before = unique_survey)
 
   }
 
@@ -207,7 +213,17 @@ tidy <- function(survey_form,
         starts_with("horizon_c_organic_total"),
         starts_with("horizon_n_total"),
         horizon_caco3_total:sum_base_cations,
-        everything())
+        everything()) %>%
+      # Move "unique" columns to the end
+      select(-starts_with("unique"),
+             starts_with("unique")) %>%
+      # Move "unique" columns to the end
+      select(which(!grepl("unique_|date", names(.))),
+             contains("date"),
+             contains("unique_")) %>%
+      relocate(other_obs, .before = date_labor_analyses) %>%
+      relocate(code_line, .before = unique_survey)
+
   }
 
 
