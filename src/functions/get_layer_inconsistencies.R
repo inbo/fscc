@@ -368,7 +368,7 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
   s1_som_dont_move <- c(
     # Ireland
-    "7_2007_702",
+    "7_2007_702", "7_2007_196",
     # Latvia
     "64_2008_739",
     # Poland
