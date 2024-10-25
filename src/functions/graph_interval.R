@@ -3,10 +3,13 @@
 graph_interval <- function(data,
                            response,
                            group,
+                           shorter_var_name = "c",
+                           src_survey = "s1_so",
                            aspect.ratio = NULL,
                            width = 6.81,
                            mode = "light",
                            version = "",
+                           x_min = 0,
                            x_max = 100,
                            number_of_groups = NULL,
                            x_title = NULL,
@@ -25,6 +28,32 @@ graph_interval <- function(data,
     col_front <- "black"
   }
 
+  if (shorter_var_name == "c") {
+    var_name <- "Carbon"
+    unit_pre <- "t"
+  } else if (shorter_var_name == "n") {
+    var_name <- "Nitrogen"
+    unit_pre <- "t"
+  } else if (shorter_var_name == "extrac_p") {
+    var_name <- "Extractable phosphorus"
+    unit_pre <- "kg"
+  }
+
+  if (shorter_var_name == "c") {
+    var_letter <- "C"
+  } else if (shorter_var_name == "n") {
+    var_letter <- "N"
+  } else if (shorter_var_name == "extrac_p") {
+    var_letter <- "P"
+  }
+
+  if (src_survey == "s1_so") {
+    src_survey_name <- "Level I and Level II"
+  } else if (src_survey == "s1") {
+    src_survey_name <- "Level I"
+  } else if (src_survey == "so") {
+    src_survey_name <- "Level II"
+  }
 
   if (is.null(path_export)) {
     path_export <- "./output/stocks/"
@@ -102,9 +131,22 @@ graph_interval <- function(data,
                                                   decreasing = FALSE)])
 
   response_name <- case_when(
-    response == "stock_forest_floor" ~ "(forest floor)",
-    response == "stock" ~ "(forest floor + soil)",
-    response == "stock_topsoil" ~ "(forest floor + topsoil)",
+    response == "stock_forest_floor" ~
+      paste0("**", var_name, " stock** (forest floor)"),
+    response == "stock" ~
+      paste0("**", var_name, " stock** (forest floor + soil)"),
+    response == "stock_topsoil" ~
+      paste0("**", var_name, " stock** (forest floor + topsoil)"),
+    response == "di_ff_top" ~
+      paste0("**", var_letter,
+             "DI** (*forest floor* / *below-ground topsoil* ",
+             str_to_lower(var_name),
+             " stock)"),
+    response == "di_top_soil" ~
+      paste0("**", var_letter,
+             "DI** (*below-ground topsoil* / *below-ground* ",
+             str_to_lower(var_name),
+             " stock)"),
     .default = "")
 
   group_name <- case_when(
@@ -150,7 +192,7 @@ p <- ggplot() +
                    x = Mean,
                    shape = type),
                color = "white", size = 1.2) +
-    coord_cartesian(xlim = c(0, x_max),
+    coord_cartesian(xlim = c(x_min, x_max),
                     expand = FALSE) +
     scale_color_viridis_d(option = "viridis",
                           direction = -1,
@@ -165,15 +207,14 @@ p <- ggplot() +
     scale_shape_manual(values = c("Mean + 95 % CI\n(bootstrapped)" = 16),
                        name = "") +
     labs(
-      title = paste0("**Carbon stock** ",
-                     response_name,
+      title = paste0(response_name,
                      "<br>",
                      "as a function of **",
                      group_name, "**"),
-      subtitle = paste0("(ICP Forests Level I and Level II)"),
-      x = paste0("**Carbon stock** ",
+      subtitle = paste0("(ICP Forests ", src_survey_name, ")"),
+      x = paste0("**", var_name, " stock** ",
                  "(mean over time)", " ", #"<br>",
-                 "(t C ha<sup>-1</sup>)"),
+                 "(", unit_pre, " ", var_letter, " ha<sup>-1</sup>)"),
       y = NULL,
       # "Mean + 95 % conf. int. mean (bootstrapped)"
       caption = caption) +

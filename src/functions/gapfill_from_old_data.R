@@ -4,6 +4,7 @@ gapfill_from_old_data <- function(survey_form,
                                   save_to_env = FALSE,
                                   parameters = c("bulk_density",
                                                  "organic_carbon_total",
+                                                 "n_total",
                                                  "organic_layer_weight",
                                                  "coarse_fragment_vol",
                                                  "part_size_clay",
@@ -408,6 +409,7 @@ gapfill_from_old_data <- function(survey_form,
     assertthat::assert_that(
       identical(parameters, c("bulk_density",
                               "organic_carbon_total",
+                              "n_total",
                               "organic_layer_weight",
                               "coarse_fragment_vol",
                               "part_size_clay",
@@ -460,6 +462,7 @@ gapfill_from_old_data <- function(survey_form,
                   select(unique_layer_repetition,
                          bulk_density,
                          organic_carbon_total,
+                         n_total,
                          organic_layer_weight,
                          coarse_fragment_vol,
                          part_size_clay,
@@ -467,6 +470,7 @@ gapfill_from_old_data <- function(survey_form,
                          part_size_sand) %>%
                   rename(bulk_density_afscdb = bulk_density,
                          organic_carbon_total_afscdb = organic_carbon_total,
+                         n_total_afscdb = n_total,
                          organic_layer_weight_afscdb = organic_layer_weight,
                          coarse_fragment_vol_afscdb = coarse_fragment_vol,
                          part_size_clay_afscdb = part_size_clay,
@@ -504,6 +508,16 @@ gapfill_from_old_data <- function(survey_form,
         organic_carbon_total = coalesce(
           .data$organic_carbon_total,
           .data$organic_carbon_total_afscdb)) %>%
+      # N total
+      mutate(
+        n_total_source = case_when(
+          !is.na(n_total_source) ~ n_total_source,
+          !is.na(.data$n_total) ~ "som (same year)",
+          !is.na(.data$n_total_afscdb) ~ "FSCDB.LII (2012)",
+          TRUE ~ NA_character_),
+        n_total = coalesce(
+          .data$n_total,
+          .data$n_total_afscdb)) %>%
       # Organic layer weight
       mutate(
         organic_layer_weight_source = case_when(
@@ -569,6 +583,27 @@ gapfill_from_old_data <- function(survey_form,
     so_som_missing_records <- so_som_afscdb %>%
       filter(is.na(.data$unique_survey_so_som)) %>%
       select(-unique_survey_so_som, -unique_layer_repetition)
+
+    # Some Romanian records were missing in both databases,
+    # but the partner confirmed that they should be inserted.
+
+    layers_to_check <- c("52_2009_13_M12_3",
+                         "52_2009_13_M24_3",
+                         "52_2009_13_M48_3")
+
+    if (all(!layers_to_check %in% df$unique_layer_repetition)) {
+
+      assertthat::assert_that(
+        all(layers_to_check %in% so_som_afscdb$unique_layer_repetition))
+
+      so_som_missing_records <- rbind(
+        so_som_missing_records,
+        so_som_afscdb %>%
+          filter(unique_layer_repetition %in% layers_to_check) %>%
+          select(-unique_survey_so_som, -unique_layer_repetition)
+      )
+    }
+
 
     # If there are any unique surveys in afscdb which are missing in so_som
 
@@ -656,6 +691,7 @@ gapfill_from_old_data <- function(survey_form,
                                   "Record inserted from FSCDB.LII."),
                bulk_density_afscdb = bulk_density,
                organic_carbon_total_afscdb = organic_carbon_total,
+               n_total_afscdb = n_total,
                organic_layer_weight_afscdb = organic_layer_weight,
                coarse_fragment_vol_afscdb = coarse_fragment_vol,
                part_size_clay_afscdb = part_size_clay,
@@ -747,7 +783,7 @@ gapfill_from_old_data <- function(survey_form,
           n_total_orig,
           origin_merged, origin_merge_info,
 
-          bulk_density_afscdb, organic_carbon_total_afscdb,
+          bulk_density_afscdb, organic_carbon_total_afscdb, n_total_afscdb,
           organic_layer_weight_afscdb, coarse_fragment_vol_afscdb,
           part_size_clay_afscdb, part_size_silt_afscdb,
           part_size_sand_afscdb)
@@ -789,15 +825,17 @@ gapfill_from_old_data <- function(survey_form,
                code_plot = ifelse(code_country == 58 & code_plot == 2255,
                                   255,
                                   code_plot)) %>%
-        mutate(repetition = ifelse(code_country == 58 & code_plot == 2188,
-                                2,
-                                plot_id),
-               plot_id = ifelse(code_country == 58 & code_plot == 2188,
-                                "58_188",
-                                plot_id),
-               code_plot = ifelse(code_country == 58 & code_plot == 2188,
-                                  188,
-                                  code_plot)) %>%
+        # do not apply this because then, there seem to be two profiles
+        # with 58_188 as plot_id
+        # mutate(repetition = ifelse(code_country == 58 & code_plot == 2188,
+        #                         2,
+        #                         repetition),
+        #        plot_id = ifelse(code_country == 58 & code_plot == 2188,
+        #                         "58_188",
+        #                         plot_id),
+        #        code_plot = ifelse(code_country == 58 & code_plot == 2188,
+        #                           188,
+        #                           code_plot)) %>%
         mutate(
           unique_survey = paste0(code_country, "_",
                                  survey_year, "_",
@@ -1173,6 +1211,7 @@ gapfill_from_old_data <- function(survey_form,
     assertthat::assert_that(
       identical(parameters, c("bulk_density",
                               "organic_carbon_total",
+                              "n_total",
                               "organic_layer_weight",
                               "coarse_fragment_vol",
                               "part_size_clay",
@@ -1223,10 +1262,12 @@ gapfill_from_old_data <- function(survey_form,
                   select(unique_layer_repetition_s1_som,
                          bulk_density,
                          organic_carbon_total,
+                         n_total,
                          organic_layer_weight,
                          coarse_fragment_vol) %>%
                   rename(bulk_density_fscdb = bulk_density,
                          organic_carbon_total_fscdb = organic_carbon_total,
+                         n_total_fscdb = n_total,
                          organic_layer_weight_fscdb = organic_layer_weight,
                          coarse_fragment_vol_fscdb = coarse_fragment_vol),
                 by = join_by("unique_layer_repetition" ==
@@ -1262,6 +1303,16 @@ gapfill_from_old_data <- function(survey_form,
         organic_carbon_total = coalesce(
           .data$organic_carbon_total,
           .data$organic_carbon_total_fscdb)) %>%
+      # N total
+      mutate(
+        n_total_source = case_when(
+          !is.na(n_total_source) ~ n_total_source,
+          !is.na(.data$n_total) ~ "som (same year)",
+          !is.na(.data$n_total_fscdb) ~ "FSCDB.LI (2002)",
+          TRUE ~ NA_character_),
+        n_total = coalesce(
+          .data$n_total,
+          .data$n_total_fscdb)) %>%
       # Organic layer weight
       mutate(
         organic_layer_weight_source = case_when(
@@ -1365,6 +1416,7 @@ gapfill_from_old_data <- function(survey_form,
                other_obs = "Record inserted from FSCDB.LI.",
                bulk_density_fscdb = bulk_density,
                organic_carbon_total_fscdb = organic_carbon_total,
+               n_total_fscdb = n_total,
                organic_layer_weight_fscdb = organic_layer_weight,
                coarse_fragment_vol_fscdb = coarse_fragment_vol,
                part_size_clay_fscdb = part_size_clay,
@@ -1428,6 +1480,7 @@ gapfill_from_old_data <- function(survey_form,
             coarse_fragment_vol_orig, organic_layer_weight_orig,
             organic_carbon_total_orig,
             n_total_orig, bulk_density_fscdb, organic_carbon_total_fscdb,
+            n_total_fscdb,
             organic_layer_weight_fscdb, coarse_fragment_vol_fscdb)
 
       assertthat::assert_that(all(names(df) == names(s1_som_fscdb_to_add)))

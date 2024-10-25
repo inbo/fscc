@@ -125,7 +125,10 @@ depth_join <- function(df1,
     }
 
     if (mode == "time_specific_ff_concentrations") {
-      possible_parameters <- "organic_carbon_total"
+      possible_parameters <- c("organic_carbon_total",
+                               "n_total",
+                               "extrac_p",
+                               "extrac_s")
     }
 
     parameters <- unique(
