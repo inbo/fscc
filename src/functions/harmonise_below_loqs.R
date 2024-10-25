@@ -3,19 +3,7 @@
 
 harmonise_below_loqs <- function(survey_form,
                                  data_frame = NULL,
-                                 parameters = c("part_size_clay",
-                                                "part_size_silt",
-                                                "part_size_sand",
-                                                "organic_carbon_total",
-                                                "n_total",
-                                                "exch_ca",
-                                                "exch_mg",
-                                                "exch_k",
-                                                "exch_na",
-                                                "exch_al",
-                                                "exch_fe",
-                                                "exch_mn",
-                                                "free_h"),
+                                 parameters = NULL,
                                  solve = TRUE,
                                  save_to_env = FALSE) {
 
@@ -25,24 +13,46 @@ harmonise_below_loqs <- function(survey_form,
   cat(paste0(" \nHarmonise data below LOQ in '", survey_form, "'\n"))
 
 
-  # Replace default parameters if pfh
+  # Define parameters
 
-  if (unlist(str_split(survey_form, "_"))[2] == "pfh") {
+  if (is.null(parameters)) {
 
-    if (identical(parameters,
-                  c("part_size_clay",
-                    "part_size_silt",
-                    "part_size_sand",
-                    "organic_carbon_total",
-                    "n_total",
-                    "exch_ca",
-                    "exch_mg",
-                    "exch_k",
-                    "exch_na",
-                    "exch_al",
-                    "exch_fe",
-                    "exch_mn",
-                    "free_h"))) {
+    if (unlist(str_split(survey_form, "_"))[2] == "som") {
+
+     parameters <- c("part_size_clay",
+                     "part_size_silt",
+                     "part_size_sand",
+                     "organic_carbon_total",
+                     "n_total",
+                     "exch_ca",
+                     "exch_mg",
+                     "exch_k",
+                     "exch_na",
+                     "exch_al",
+                     "exch_fe",
+                     "exch_mn",
+                     "free_h",
+
+                     "extrac_pb", "extrac_zn",
+                     "carbonates", "extrac_al",
+                     "extrac_k", "tot_mg",
+                     "extrac_s", "extrac_cr",
+                     "extrac_fe", "tot_k",
+                     "extrac_cu", "extrac_cd",
+                     "extrac_hg", "extrac_ca",
+                     "extrac_mg", "extrac_na",
+                     "extrac_ni",
+                     "extrac_p", "extrac_al",
+                     "extrac_mn", "extrac_fe",
+                     "tot_ca", # "p_ox",
+                     "tot_na", "tot_mn",
+                     "tot_fe", "tot_al")
+
+      }
+
+    # Replace default parameters if pfh
+
+    if (unlist(str_split(survey_form, "_"))[2] == "pfh") {
 
       parameters <-
         c("horizon_clay",
@@ -53,11 +63,14 @@ harmonise_below_loqs <- function(survey_form,
           "horizon_exch_ca",
           "horizon_exch_mg",
           "horizon_exch_k",
-          "horizon_exch_na")
+          "horizon_exch_na",
+
+          "horizon_caco3_total")
 
     }
 
   }
+
 
 
 
@@ -209,21 +222,39 @@ harmonise_below_loqs <- function(survey_form,
 
     if (unlist(str_split(survey_form, "_"))[2] == "som") {
 
-    loq_qaqc_i <- data.frame(
-      layer_type = c("mineral", "forest_floor", "peat"),
-      loq_qaqc = c(
-        # mineral
-        ranges_qaqc$LOQ_mineral[
-          which(ranges_qaqc$parameter_som == parameter_i)],
-        # forest_floor: organic
-        ranges_qaqc$LOQ_org[
-          which(ranges_qaqc$parameter_som == parameter_i)],
-        # peat: organic
-        ranges_qaqc$LOQ_org[
-          which(ranges_qaqc$parameter_som == parameter_i)]))
+      if (!parameter_i %in% ranges_qaqc$parameter_som) {
+
+        loq_qaqc_i <- data.frame(
+          layer_type = c("mineral", "forest_floor", "peat"),
+          loq_qaqc = c(NA_real_, NA_real_, NA_real_))
+
+      } else {
+
+        loq_qaqc_i <- data.frame(
+          layer_type = c("mineral", "forest_floor", "peat"),
+          loq_qaqc = c(
+            # mineral
+            ranges_qaqc$LOQ_mineral[
+              which(ranges_qaqc$parameter_som == parameter_i)],
+            # forest_floor: organic
+            ranges_qaqc$LOQ_org[
+              which(ranges_qaqc$parameter_som == parameter_i)],
+            # peat: organic
+            ranges_qaqc$LOQ_org[
+              which(ranges_qaqc$parameter_som == parameter_i)]))
+
+      }
     }
 
     if (unlist(str_split(survey_form, "_"))[2] == "pfh") {
+
+      if (!parameter_i %in% ranges_qaqc$parameter_pfh) {
+
+        loq_qaqc_i <- data.frame(
+          layer_type = c("mineral", "forest_floor", "peat"),
+          loq_qaqc = c(NA_real_, NA_real_, NA_real_))
+
+      } else {
 
       loq_qaqc_i <- data.frame(
         layer_type = c("mineral", "forest_floor", "peat"),
@@ -237,6 +268,7 @@ harmonise_below_loqs <- function(survey_form,
           # peat: organic
           ranges_qaqc$LOQ_org[
             which(ranges_qaqc$parameter_pfh == parameter_i)]))
+      }
     }
 
     # Derive maximum loqs per partner
@@ -297,6 +329,21 @@ harmonise_below_loqs <- function(survey_form,
                              # Priority 3: loq from qaqc
                              .data$loq_qaqc))) %>%
       mutate(loq_col_to_be_gapfilled = as.numeric(loq_col_to_be_gapfilled))
+
+    if (any(is.na(df$loq_col_to_be_gapfilled))) {
+
+      assertthat::assert_that(
+        any(!is.na(df$loq_col_to_be_gapfilled)),
+        msg = paste0("No LOQ found for parameter '", parameter_i, "'."))
+
+      value_i_gf <- max(df$loq_col_to_be_gapfilled, na.rm = TRUE)
+
+      df <- df %>%
+        mutate(
+          loq_col_to_be_gapfilled = coalesce(
+            loq_col_to_be_gapfilled,
+            value_i_gf))
+    }
 
     # Rename the column to the original name and remove the other columns
 
