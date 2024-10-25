@@ -186,13 +186,27 @@ source("./src/functions/create_attribute_catalogue.R")
 
 create_attribute_catalogue(data_frame = c("so_som", "so_pfh",
                                           "so_strat"),
-                           path_to_save = "./data/layer1_data/so/")
+                           path_to_save = "./data/layer1_data/so/so_layer1_")
 
 create_attribute_catalogue(data_frame = c("s1_som", "s1_pfh",
                                           "s1_strat"),
-                           path_to_save = "./data/layer1_data/s1/")
+                           path_to_save = "./data/layer1_data/s1/s1_layer1_")
 
 
+# Save stratifiers in same folders of layer1
 
+write.table(s1_strat,
+            file = paste0("./data/layer1_data/s1/s1_strat.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
+write.table(so_strat,
+            file = paste0("./data/layer1_data/so/so_strat.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
 
 
