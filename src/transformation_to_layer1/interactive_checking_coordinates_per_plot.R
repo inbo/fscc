@@ -145,12 +145,14 @@ if (level == "LI") {
 
   # # s1
   source("./src/functions/read_raw.R")
-  read_raw("s1", save_to_env = TRUE)
+  read_raw("s1", save_to_env = TRUE,
+           generate_coords = FALSE)
 
 
   # # y1
   source("./src/functions/read_raw.R")
-  read_raw("y1", save_to_env = TRUE)
+  read_raw("y1", save_to_env = TRUE,
+           generate_coords = FALSE)
 
 
   # LI plots to ignore in external sources
@@ -421,12 +423,14 @@ if (level == "LII") {
 
   # so
   source("./src/functions/read_raw.R")
-  read_raw("so", save_to_env = TRUE)
+  read_raw("so", save_to_env = TRUE,
+           generate_coords = FALSE)
 
 
   # si
   source("./src/functions/read_raw.R")
-  read_raw("si", save_to_env = TRUE)
+  read_raw("si", save_to_env = TRUE,
+           generate_coords = FALSE)
 
   # LII plots to ignore in external sources
   # because we are sure that the coordinates in so are correct
