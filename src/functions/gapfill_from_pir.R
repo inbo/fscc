@@ -160,6 +160,11 @@ gapfill_from_pir <- function(code_survey,
 
   }
 
+  # Rename rule_id if needed
+  if ("rule_ID" %in% colnames(pir_checked)) {
+    pir_checked <- rename(pir_checked,
+                          rule_id = rule_ID)
+  }
 
 
 
