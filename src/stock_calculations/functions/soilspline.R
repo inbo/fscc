@@ -10,7 +10,7 @@
 #' @param depth_top Vector with layer top (in cm) for each horizon
 #' @param depth_bottom Vector with layer bottom (in cm) for each horizon
 #' @param variab Vector with data of variable to spline
-#' @param max_soil_depth Maximum soil depth until which spline should be
+#' @param max_depth_stock Maximum soil depth until which spline should be
 #' extrapolated
 #' @param graph Logical indicating whether a graph of the spline fitting
 #' should be made for the given depth profile
@@ -32,7 +32,8 @@ soilspline <- function(id,
                        variab_min = NULL,
                        variab_max = NULL,
                        variab_source = NULL,
-                       max_soil_depth,
+                       max_depth_stock,
+                       parameter_name,
                        survey_form = NULL,
                        graph = TRUE) {
 
@@ -44,38 +45,43 @@ soilspline <- function(id,
             require("ggtext"),
             require("mpspline2"))
 
-  # Set directory where graphs should be saved
+  if (graph == TRUE) {
 
-  path <- paste0("./output/stocks/",
-                 as.character(format(Sys.Date(), "%Y%m%d")), "_",
-                 as.character(format(as.Date(
-                   get_date_local(path = "./data/raw_data/")),
-                   format = "%Y%m%d")),
-                 "_carbon_stocks/", survey_form,
-                 "_splines_per_profile/")
+    # Set directory where graphs should be saved
 
-  assertthat::assert_that(
-    dir.exists(path))
+    path <- paste0("./output/stocks/",
+                   as.character(format(Sys.Date(), "%Y%m%d")), "_",
+                   as.character(format(as.Date(
+                     get_date_local(path = "./data/raw_data/")),
+                     format = "%Y%m%d")),
+                   "_", shorter_var_name, "_stocks/", survey_form,
+                   "_splines_per_profile/")
 
-  # Create directory if it doesn't exist
+    assertthat::assert_that(
+      dir.exists(path))
 
-  if (!dir.exists(path)) {
-    dir.create(path, recursive = TRUE)
+    # Create directory if it doesn't exist
+
+    if (!dir.exists(path)) {
+      dir.create(path, recursive = TRUE)
+    }
+
   }
+
 
   # Assert that input data are in the correct format ----
 
   assertthat::assert_that(all(!is.na(depth_top)) &&
                             all(!is.na(depth_bottom)) &&
                             all(!is.na(variab)) &&
-                            !is.na(max_soil_depth))
+                            !is.na(max_depth_stock))
 
   assertthat::assert_that(length(depth_top) == length(depth_bottom) &&
                             length(depth_top) == length(variab) &&
                             (length(depth_top) >= 2 ||
                                (length(depth_top) == 1 &&
-                                  max(depth_bottom) >= 0.8 *
-                                  max_soil_depth)))
+                                  max(depth_bottom) >= 0.7 *
+                                  max_depth_stock)))
 
   assertthat::assert_that(min(depth_top) == 0)
 
@@ -121,6 +127,12 @@ soilspline <- function(id,
 
   # Prepare input for mpspline_one
 
+  if (length(variab) == 1) {
+
+    depth_bottom <- round(depth_bottom)
+
+  }
+
   prof_input <-
     data.frame(id,
                depth_top,
@@ -154,7 +166,7 @@ soilspline <- function(id,
 
 
 
-  # Extrapolate the mass-preserving spline output to depth max_soil_depth ----
+  # Extrapolate the mass-preserving spline output to depth max_depth_stock ----
   # (i.e. effective soil depth; max 100 cm)
   # using the spline function (stats package)
 
@@ -170,7 +182,7 @@ soilspline <- function(id,
            # interpolation is to take place
            # This enables extrapolation beyond the lower boundary of
            # the observations
-           xout = seq_len(max_soil_depth))
+           xout = seq_len(max_depth_stock))
 
   # Predicted and extrapolated variab
   spline_output <- spline_output$y
@@ -216,7 +228,7 @@ soilspline <- function(id,
       spline(x = mpspline_output_min$est_1cm[seq_len(max(depth_bottom))],
              y = NULL,
              method = "natural",
-             xout = seq_len(max_soil_depth))$y
+             xout = seq_len(max_depth_stock))$y
 
     spline_output_min <- ifelse(spline_output_min < 0,
                                 0,
@@ -252,7 +264,7 @@ soilspline <- function(id,
       spline(x = mpspline_output_max$est_1cm[seq_len(max(depth_bottom))],
              y = NULL,
              method = "natural",
-             xout = seq_len(max_soil_depth))$y
+             xout = seq_len(max_depth_stock))$y
 
     spline_output_max <- ifelse(spline_output_max < 0,
                                 0,
@@ -280,6 +292,20 @@ soilspline <- function(id,
 
   # Make a graph ----
 
+  # Retrieve information about the parameter
+
+  parameter_table <- get_env("parameter_table")
+
+  ind <- which(parameter_name == parameter_table$som_parameter)
+
+  assertthat::assert_that(!identical(ind, integer(0)))
+
+  unit_density_per_cm_markdown <-
+    parameter_table$unit_density_per_cm_markdown[ind]
+  shorter_var_name <- parameter_table$shorter_name[ind]
+
+
+
   if (graph == TRUE) {
 
     if (!is.null(variab_min) &&
@@ -287,14 +313,14 @@ soilspline <- function(id,
         !is.null(variab_max) &&
         all(!is.na(variab_max))) {
 
-      splines <- data.frame(depth = seq_len(max_soil_depth),
+      splines <- data.frame(depth = seq_len(max_depth_stock),
                             spline_avg = spline_output,
                             spline_min = spline_output_min,
                             spline_max = spline_output_max)
       } else {
 
         # No max and min
-        splines <- data.frame(depth = seq_len(max_soil_depth),
+        splines <- data.frame(depth = seq_len(max_depth_stock),
                               spline_avg = spline_output)
       }
 
@@ -321,12 +347,12 @@ soilspline <- function(id,
           variab_source == "rule: fixed value below 80 cm" ~
             "Gap-filled\n(fixed value > 80 cm)",
           variab_source == "rule: constant below 40 cm" ~
-            "Gap-filled\n(constant C > 40 cm)",
+            "Gap-filled\n(constant > 40 cm)",
           TRUE ~ "Layer 1+")) %>%
         mutate(variab_source =
                  factor(variab_source,
                         levels = c("Layer 1+",
-                                   "Gap-filled\n(constant C > 40 cm)",
+                                   "Gap-filled\n(constant > 40 cm)",
                                    "Gap-filled\n(fixed value > 80 cm)")))
 
       # Create the plot
@@ -334,8 +360,8 @@ soilspline <- function(id,
         geom_rect(data = prof_data,
                   aes(ymin = 0,
                       ymax = variab,
-                      xmin = (-1) * depth_bottom,
-                      xmax = (-1) * depth_top,
+                      xmin = (1) * depth_bottom,
+                      xmax = (1) * depth_top,
                       fill = variab_source),
                   color = NA,
                   linewidth = 1)
@@ -349,7 +375,7 @@ soilspline <- function(id,
         geom_ribbon(data = splines,
                     aes(ymin = spline_min,
                         ymax = spline_max,
-                        x = (-1) * depth),
+                        x = (1) * depth),
                     color = NA,
                     fill = "#843860",
                     alpha = 0.4)
@@ -359,22 +385,24 @@ soilspline <- function(id,
       p <- p +
         geom_line(data = splines,
                   aes(y = spline_avg,
-                      x = (-1) * depth),
+                      x = (1) * depth),
                   color = "#843860",
                   linewidth = 1) +
         scale_fill_manual(
           values = c("Layer 1+" = "#AAAAAA",
-                     "Gap-filled\n(constant C > 40 cm)" = "#BEBEBE",
+                     "Gap-filled\n(constant > 40 cm)" = "#BEBEBE",
                      "Gap-filled\n(fixed value > 80 cm)" = "#D2D2D2")) +
-        labs(y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
+        labs(y = paste0("**", shorter_var_name, " density**<br>(",
+                        unit_density_per_cm_markdown, ")"),
+          # y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
              x = "**Depth**<br>(cm)",
              fill = NULL,
              title = unique(prof$profile_id)) +
         coord_flip() +
         scale_y_continuous(expand = c(0, 0)) +
-        scale_x_continuous(breaks = unique(c(seq(0, (-1) * max(splines$depth),
-                                                 by = -20),
-                                             (-1) * max_soil_depth)),
+        scale_x_reverse(breaks = unique(c(seq(0, (1) * max(splines$depth),
+                                                 by = 20),
+                                             (1) * max_depth_stock)),
                            expand = c(0, 0)) +
         theme(text = element_text(color = "black",
                                   size = 10),
@@ -423,7 +451,7 @@ soilspline <- function(id,
     ggsave(filename = paste0(id, ".png"),
            path = path,
            plot = p,
-           dpi = 500,
+           dpi = 150,
            height = 4,
            width = 6.81)
 
