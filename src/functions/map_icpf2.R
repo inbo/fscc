@@ -93,7 +93,10 @@ map_icpf2 <- function(layers,
                      with_logo = FALSE,
                      count_plots_legend = FALSE,
                      return = FALSE,
-                     inset_maps_offset_x = 0) {
+                     inset_maps_offset_x = 0,
+                     y_max = 500,
+                     y_change_max = 5,
+                     sigma = 40) {
 
   # Note:
   # This is an updated version of the map_icpf function specific for the
@@ -112,9 +115,7 @@ map_icpf2 <- function(layers,
     col_background_plot <- col_background
     col_front <- "white"
 
-  } else {
-
-    # Light mode
+  } else if (mode == "dark_light") {
 
     col_panel <- "white"
     col_sea <- "#D8E0E0"
@@ -122,8 +123,25 @@ map_icpf2 <- function(layers,
     col_background_plot <- "white"
     col_front <- "black"
 
+  } else {
+
+    # Light mode
+
+    col_panel <- "white"
+    col_sea <- "#D8E0E0"
+    col_background <- "white"
+    col_background_plot <- "white"
+    col_front <- "black"
   }
 
+
+  breaks_y <- c(0,
+                round(1/5 * y_max),
+                round(2/5 * y_max),
+                round(3/5 * y_max),
+                y_max)
+
+  labels_y <- breaks_y
 
 
 
@@ -132,6 +150,7 @@ map_icpf2 <- function(layers,
   stopifnot(require("sf"),
             require("tidyverse"),
             require("grid"),
+            require("scico"),
             require("magick"),      # To place a logo on top
             require("cowplot"),     # To put maps together
             require("ggspatial"),   # For scale bar and north arrow
@@ -145,23 +164,41 @@ map_icpf2 <- function(layers,
       palette = "vik",
       direction = -1,
       # trans = scales::pseudo_log_trans(sigma = 10),
-      limit = c(-30, 30),
+      limit = c(-y_change_max, y_change_max),
       guide = guide_colorbar(title = legend_title, order = 1)
     )
 
   } else {
 
-    # Store the scale object as a variable
-    scale_function <- scale_color_viridis_c(
-      name = legend_title,
-      breaks = c(0, 100, 200, 300, 500),
-      labels = c(0, 100, 200, 300, 500),
-      limits = c(0, 500),
-      trans = scales::pseudo_log_trans(sigma = 20),
-      option = "viridis",
-      direction = 1,
-      guide = guide_colorbar(title = legend_title, order = 1)
-    )
+    if (mode == "dark" || mode == "dark_light") {
+
+      # Store the scale object as a variable
+      scale_function <- scale_color_viridis_c(
+        name = legend_title,
+        breaks = breaks_y,
+        labels = labels_y,
+        limits = c(0, y_max),
+        trans = scales::pseudo_log_trans(sigma = sigma),#20
+        option = "viridis",
+        direction = 1,
+        guide = guide_colorbar(title = legend_title, order = 1)
+      )
+
+    } else {
+
+      # Store the scale object as a variable
+      scale_function <- scale_color_viridis_c(
+        name = legend_title,
+        breaks = breaks_y,
+        labels = labels_y,
+        limits = c(0, y_max),
+        trans = scales::pseudo_log_trans(sigma = sigma),#20
+        option = "magma",
+        direction = -1,
+        guide = guide_colorbar(title = legend_title, order = 1)
+      )
+    }
+
 
   }
 
@@ -362,7 +399,7 @@ map_icpf2 <- function(layers,
   base_map <-
     ggplot() +
     # Map the fill colour of the countries (outside of Europe)
-    geom_sf(data = world_spat, color = NA, fill = background_col) +
+    geom_sf(data = world_spat, color = NA, fill = col_background) +
     # Give title to plot (input argument)
     ggtitle(title)
 
@@ -522,7 +559,7 @@ map_icpf2 <- function(layers,
 
   azores_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col)
+    geom_sf(data = world_spat, color = NA, fill = col_background)
 
   if (!is.null(biogeo_palette)) {
 
@@ -605,7 +642,7 @@ map_icpf2 <- function(layers,
 
   canary_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col)
+    geom_sf(data = world_spat, color = NA, fill = col_background)
 
   if (!is.null(biogeo_palette)) {
 
@@ -680,7 +717,7 @@ map_icpf2 <- function(layers,
 
   cyprus_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col)
+    geom_sf(data = world_spat, color = NA, fill = col_background)
 
   if (!is.null(biogeo_palette)) {
 
