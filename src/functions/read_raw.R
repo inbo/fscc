@@ -122,6 +122,7 @@
 
 
 read_raw <- function(code_survey,
+                     generate_coords = TRUE,
                      download_date = NULL,
                      save_to_env = FALSE) {
 
@@ -1162,6 +1163,7 @@ if (code_survey %in% c("s1", "so")) {
 
 # Create a dataframe with harmonised coordinates for each plot ----
 
+if (generate_coords == TRUE) {
 
 if (code_survey %in% c("s1", "so")) {
 
@@ -1212,7 +1214,17 @@ if (code_survey %in% c("s1", "so")) {
   coordinate_list <- select(data_availability, plot_id) %>%
     left_join(coord_harmonised %>%
                 select(plot_id, longitude_dec, latitude_dec),
-              by = "plot_id")
+              by = "plot_id") %>%
+    as_sf # EPSG 3035 (ETRS89 / LAEA Europe)
+
+    # Extract the transformed coordinates
+    coords_epsg3035 <- st_coordinates(coordinate_list)
+
+    # Add the ETRS89 coordinates as new columns to the original dataframe
+    coordinate_list <- coordinate_list %>%
+      mutate(x_etrs89 = coords_epsg3035[, 1],
+             y_etrs89 = coords_epsg3035[, 2]) %>%
+      st_drop_geometry()
 
   updated_coords <- NULL
   updated_coords_overview <- NULL
@@ -1319,7 +1331,7 @@ if (code_survey %in% c("s1", "so")) {
     assign_env(paste0("coordinates_", code_survey), as_tibble(coordinate_list))
   }
 }
-
+}
 
 
 
