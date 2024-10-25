@@ -35,7 +35,8 @@ stopifnot(require("sf"),
           require("googlesheets4"),
           require("googledrive"),
           require("assertthat"),
-          require("aqp"))
+          require("aqp"),
+          require("soiltexture"))
 
 
 
@@ -328,19 +329,23 @@ source("./src/functions/harmonise_below_loqs.R")
 if (level == "LI") {
 
   s1_som <- harmonise_below_loqs(survey_form = "s1_som",
-                                 data_frame = s1_som)
+                                 data_frame = s1_som,
+                                 parameters = NULL)
 
   s1_pfh <- harmonise_below_loqs(survey_form = "s1_pfh",
-                                 data_frame = s1_pfh)
+                                 data_frame = s1_pfh,
+                                 parameters = NULL,)
 }
 
 if (level == "LII") {
 
   so_som <- harmonise_below_loqs(survey_form = "so_som",
-                                 data_frame = so_som)
+                                 data_frame = so_som,
+                                 parameters = NULL)
 
   so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
-                                 data_frame = so_pfh)
+                                 data_frame = so_pfh,
+                                 parameters = NULL)
 }
 
 
