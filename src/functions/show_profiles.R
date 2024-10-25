@@ -51,7 +51,7 @@ show_profiles <- function(code_survey,
     "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
     "extrac_fe", "tot_ca", "p_ox", "exch_acidiy", "tot_na",
     "tot_mn", "tot_fe", "tot_al",
-    "bulk_density", "organic_layer_weight"),
+    "bulk_density", "organic_layer_weight", "coarse_fragment_vol"),
   pfh_parameter = c(
     NA, NA, "horizon_clay", "horizon_silt", NA,
     "horizon_caco3_total", NA, "horizon_exch_mg", NA, NA,
@@ -62,7 +62,7 @@ show_profiles <- function(code_survey,
     NA, NA, NA, NA, NA,
     NA, NA, NA, NA, NA,
     NA, NA, NA,
-    "bulk_density", NA))
+    "bulk_density", NA, "coarse_fragment_vol"))
 
   assertthat::assert_that(
     parameter %in% corresponding_parameters$som_parameter ||
