@@ -72,6 +72,13 @@ get_stratifiers <- function(level) {
     arrange(code) %>%
     select(code, description)
 
+  # Specify theoretical eff_soil_depth for certain WRB soil types
+
+  depth_leptosols <- 75 # Reported data shallower than this are retained
+  depth_leptosols_default <- 25 # Default value for gap-filling
+  depth_leptic <- 100 # Also for Rendzic leptosols
+  depth_lithic_lept <- 10
+
   # Import the shapefile with biogeographical regions
 
   biogeo_sf <-
@@ -221,6 +228,45 @@ get_stratifiers <- function(level) {
       .default = NA))
 
 
+  # Only for Level II:
+  # There are some additional French profile data which have never been
+  # submitted. This includes data on the "depth of the soil that can be
+  # explored by roots", the "maximally observed depth of the profile",and the
+  # "maximal depth explored by the soil auger". Usually, this data source
+  # includes two profiles per plot.
+  # Import and harmonise the data.
+
+  france_so_prf <-
+    read_excel("data/additional_data/France_PRF_1994-1995.xlsx") %>%
+    rename(depth_roots = "DS profpros",
+           depth_obs = "DS profobs",
+           depth_auger = "DS proftar") %>%
+    mutate(plot_id = paste0(code_country, "_",
+                            code_plot)) %>%
+    # One column contains values above 1000 which seem to be a type, and
+    # should be divided by 10
+    mutate(depth_roots = ifelse(
+      !is.na(depth_roots) & depth_roots > 1000,
+      depth_roots / 10,
+      depth_roots)) %>%
+    rowwise() %>%
+    mutate(max_depth =
+             ifelse(any(!is.na(c(.data$depth_roots,
+                                 .data$depth_obs,
+                                 .data$depth_obs))),
+                    # Maximum of these three depths
+                    max(c(.data$depth_roots,
+                          .data$depth_obs,
+                          .data$depth_obs),
+                        na.rm = TRUE),
+                    NA_real_)) %>%
+    ungroup() %>%
+    group_by(plot_id) %>%
+    reframe(max_depth = round(mean(max_depth, na.rm = TRUE))) %>%
+    ungroup()
+
+
+
 
   # Import data from Copernicus World-DEM30 (Europe incl. Cyprus and Canaries)
   # (compiled within ESB WBM analyses)
@@ -349,17 +395,19 @@ get_stratifiers <- function(level) {
     # Using the harmonised soil depths reported in so_prf_adds ("depth_stock")
     # The depths in this file are limited to a maximum of 100 cm and
     # the plausibility of these depths has been manually cross-checked.
-    # For example, WRB soil classification information was taken into account
-    # as follows:
-    # - If soil is classified as "Leptosol" without other information available
-    #   → depth is set to 25 cm;
-    # - If soil is classified as "Lithic leptosol" without other information
-    #   available → depth is set to 10 cm;
-    # - If soil has "lithic" as qualifier → depth should be shallower than
-    #   100 cm.
+    # For example, WRB soil classification information was taken into account.
     # These harmonised depths are compared to alternative options.
     left_join(so_prf_adds_agg %>%
-                select(plot_id, depth_stock),
+                left_join(d_soil_group,
+                          by = join_by(code_wrb_soil_group == code)) %>%
+                rename(wrb_ref_soil_group = description) %>%
+                left_join(d_soil_adjective %>%
+                            select(code, description) %>%
+                            rename(code_wrb_qualifier_1 = code) %>%
+                            rename(wrb_qualifier_1 = description),
+                          by = "code_wrb_qualifier_1") %>%
+                select(plot_id, depth_stock, wrb_ref_soil_group,
+                       wrb_qualifier_1),
               by = "plot_id") %>%
     # eff_soil_depth_orig
     # Add originally reported effective soil depths aggregated per plot_id
@@ -497,6 +545,14 @@ get_stratifiers <- function(level) {
         ungroup() %>%
         select(plot_id, max_alternative_depth),
       by = "plot_id") %>%
+    # Add depths from French data source and consider them as
+    # max_alternative_depth
+    left_join(france_so_prf,
+              by = "plot_id") %>%
+    mutate(
+      max_alternative_depth = coalesce(max_alternative_depth,
+                                       max_depth)) %>%
+    select(-max_depth) %>%
     # depth_top_stones
     # Add the upper depth limit of any zone with consecutive high stone content
     # (>= 80 %) at the bottom of the profile in so_som and so_pfh,
@@ -608,83 +664,222 @@ get_stratifiers <- function(level) {
         group_by(plot_id) %>%
         reframe(depth_bottom_pfh = max(depth_bottom, na.rm = TRUE)),
       by = "plot_id") %>%
+    # Create an auxiliary column with plausible depths based on WRB
+    # only for certain WRB types
+    mutate(
+      aux_depth_source = case_when(
+        # Lithic leptosols
+        wrb_ref_soil_group == "Leptosols" &
+          (wrb_qualifier_1 == "Lithic" | wrb_qualifier_1 == "Nudilithic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_lithic_lept,
+                   "Top of parent material layers at bottom", NA_character_),
+            ifelse(eff_soil_depth_orig <= depth_lithic_lept,
+                   "Original eff_soil_depth", NA_character_),
+            ifelse(max_alternative_depth <= depth_lithic_lept,
+                   "Maximum of rooting, rock and obstacle depth",
+                   NA_character_),
+            ifelse(depth_bottom_pfh <= depth_lithic_lept,
+                   "Bottom of profile ('pfh')", NA_character_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   "Top of stony zone at bottom", NA_character_),
+            "Default depth based on WRB"),
+        # Leptic or Rendzic leptosols
+        wrb_qualifier_1 == "Leptic" |
+          (wrb_ref_soil_group == "Leptosols" & wrb_qualifier_1 == "Rendzic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptic,
+                   "Top of parent material layers at bottom", NA_character_),
+            ifelse(eff_soil_depth_orig <= depth_leptic,
+                   "Original eff_soil_depth", NA_character_),
+            ifelse(max_alternative_depth <= depth_leptic,
+                   "Maximum of rooting, rock and obstacle depth",
+                   NA_character_),
+            ifelse(depth_bottom_pfh <= depth_leptic,
+                   "Bottom of profile ('pfh')", NA_character_),
+            ifelse(depth_top_stones <= depth_leptic &
+                     depth_top_stones > 0,
+                   "Top of stony zone at bottom", NA_character_),
+            "Default depth based on WRB"),
+        # Leptosols
+        wrb_ref_soil_group == "Leptosols" ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptosols,
+                   "Top of parent material layers at bottom", NA_character_),
+            ifelse(eff_soil_depth_orig <= depth_leptosols,
+                   "Original eff_soil_depth", NA_character_),
+            ifelse(max_alternative_depth <= depth_leptosols,
+                   "Maximum of rooting, rock and obstacle depth",
+                   NA_character_),
+            ifelse(depth_bottom_pfh <= depth_leptosols,
+                   "Bottom of profile ('pfh')", NA_character_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   "Top of stony zone at bottom", NA_character_),
+            "Default depth based on WRB"),
+        TRUE ~ NA_character_),
+      aux_depth = case_when(
+        # Lithic leptosols
+        wrb_ref_soil_group == "Leptosols" &
+          (wrb_qualifier_1 == "Lithic" | wrb_qualifier_1 == "Nudilithic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_lithic_lept,
+                   depth_top_r, NA_real_),
+            ifelse(eff_soil_depth_orig <= depth_lithic_lept,
+                   eff_soil_depth_orig, NA_real_),
+            ifelse(max_alternative_depth <= depth_lithic_lept,
+                   max_alternative_depth, NA_real_),
+            ifelse(depth_bottom_pfh <= depth_lithic_lept,
+                   depth_bottom_pfh, NA_real_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   depth_top_stones, NA_real_),
+            depth_lithic_lept),
+        # Leptic or Rendzic leptosols
+        wrb_qualifier_1 == "Leptic" |
+          (wrb_ref_soil_group == "Leptosols" & wrb_qualifier_1 == "Rendzic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptic,
+                   depth_top_r, NA_real_),
+            ifelse(eff_soil_depth_orig <= depth_leptic,
+                   eff_soil_depth_orig, NA_real_),
+            ifelse(max_alternative_depth <= depth_leptic,
+                   max_alternative_depth, NA_real_),
+            ifelse(depth_bottom_pfh <= depth_leptic,
+                   depth_bottom_pfh, NA_real_),
+            ifelse(depth_top_stones <= depth_leptic &
+                     depth_top_stones > 0,
+                   depth_top_stones, NA_real_),
+            depth_leptic),
+        # Leptosols
+        wrb_ref_soil_group == "Leptosols" ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptosols,
+                   depth_top_r, NA_real_),
+            ifelse(eff_soil_depth_orig <= depth_leptosols,
+                   eff_soil_depth_orig, NA_real_),
+            ifelse(max_alternative_depth <= depth_leptosols,
+                   max_alternative_depth, NA_real_),
+            ifelse(depth_bottom_pfh <= depth_leptosols,
+                   depth_bottom_pfh, NA_real_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   depth_top_stones, NA_real_),
+            depth_leptosols_default),
+        TRUE ~ NA_real_)) %>%
     # Combine the different data sources into one harmonised value for
     # eff_soil_depth
     mutate(
       # Record the data source for the final value
       eff_soil_depth_source = case_when(
-        !is.na(depth_top_stones) ~ "Top of stony zone at bottom",
+        !is.na(aux_depth) ~ aux_depth_source,
         !is.na(depth_top_r) ~ "Top of parent material layers at bottom",
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig > 0 &
           eff_soil_depth_orig < 500 &
           eff_soil_depth_orig != 100 ~ "Original non-default eff_soil_depth",
-        !is.na(depth_stock) &
-          depth_stock < 100 ~ "Harmonised shallow (< 100) depth for stocks",
         !is.na(max_alternative_depth) &
           max_alternative_depth > 100 ~
           "Maximum of rooting, rock and obstacle depth",
         !is.na(depth_bottom_pfh) & depth_bottom_pfh > 100 ~
           "Bottom of deep (> 100) profile ('pfh')",
+        !is.na(depth_top_stones) &
+          depth_top_stones > 0 ~ "Top of stony zone at bottom",
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig == 100 ~ "Original eff_soil_depth reporting 100",
+        !is.na(max_alternative_depth) &
+          max_alternative_depth <= 100 ~
+          "Maximum of rooting, rock and obstacle depth",
+        !is.na(depth_stock) & depth_stock < 100 ~
+          "Harmonised shallow (< 100) depth for stocks",
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig >= 500 ~ "Original eff_soil_depth reporting 999",
         TRUE ~ "No info (default 999)"),
       eff_soil_depth = case_when(
         # Priority 1:
-        # If there is a consecutive zone with >= 80 % coarse fragments
-        # at the bottom of the profile (so_som or so_pfh), use its upper depth.
-        # This information usually seems reliable and convincing, and consistent
-        # with the definition of the upper limit of continuous rock.
-        # (Note: this can be 0! Also note that any intermediate zones with
-        #  >= 80 % coarse fragments, i.e. with a zone with lower stone content
-        #  below, are ignored)
-        !is.na(depth_top_stones) ~ depth_top_stones,
+        # Use reported depths that are plausible based on WRB for certain
+        # WRB soil types (Leptosols; (Nudi)lithic leptosols; Rendzic leptosols;
+        # Leptic).
+        # From those reported plausible depths, follow the priorities listed
+        # below (i.e. in order of decreasing priority: depth_top_r,
+        # eff_soil_depth_orig, max_alternative_depth, depth_bottom_pfh,
+        # depth_top_stones)
+        # "Plausible" means <= 10 for (Nudi)lithic leptosols;
+        # <= 100 for Rendzic leptosols / Leptic; <= 75 for Leptosols.
+        # If none of the reported depths are plausible, use a default depths
+        # for each WRB soil type: 10 for (Nudi)lithic leptosols;
+        # 100 for Rendzic leptosols / Leptic; 25 for Leptosols.
+        !is.na(aux_depth) ~ aux_depth,
         # Priority 2:
         # If there is a consecutive zone with "R" in its horizon_master in
         # so_pfh at the bottom of the profile, use its upper depth.
-        # This information usually seems reliable and convincing, although
-        # there is sometimes a zone with >= 80 % coarse fragments on top
-        # (which then receives the priority).
+        # This information usually seems reliable and convincing. If we know
+        # that there is consolidated rock at a certain depth, we know by
+        # definition that eff_soil_depth should be its upper depth limit,
+        # even if partners report another eff_soil_depth.
         !is.na(depth_top_r) ~ depth_top_r,
         # Priority 3:
         # If the originally reported eff_soil_depth is > 0 and < 500
         # and != 100, use this, since its quality seems quite reliable if
-        # no default value is given.
+        # no default value is given and we assume we should trust what
+        # the partners report.
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig > 0 &
           eff_soil_depth_orig < 500 &
           eff_soil_depth_orig != 100 ~ eff_soil_depth_orig,
         # Priority 4:
-        # If the manually harmonised depth (which is supposed to be used for
-        # stock calculations and which is limited to a maximum of 100 cm) is
-        # shallower than 100 cm, use this.
-        !is.na(depth_stock) & depth_stock < 100 ~ depth_stock,
-        # Priority 5:
         # If the maximum of the alternative depths (rooting_depth, rock_depth,
         # obstacle_depth) is > 100 cm, use this.
+        # → Level II: Includes depths in French additional profile dataset
         !is.na(max_alternative_depth) &
           max_alternative_depth > 100 ~ max_alternative_depth,
-        # Priority 6:
+        # Priority 5:
         # If the depth of the bottom of the so_pfh profile is > 100 cm,
         # use this.
         !is.na(depth_bottom_pfh) & depth_bottom_pfh > 100 ~ depth_bottom_pfh,
+        # Priority 6:
+        # If there is a consecutive zone with >= 80 % coarse fragments
+        # at the bottom of the profile (so_som or so_pfh), use its upper depth.
+        # According to its definition, coarse fragments >= 80 vol % cannot
+        # really be considered as continuous rock, because continuous rock is
+        # rock with maximum 20 % cracks (i.e. 80 % coarse fragments) which
+        # cannot be moved, while coarse fragments can be moved (since
+        # field surveyors have been able to assess them).
+        # However, if there is no other information available, the upper limit
+        # of this zone can be used as the eff_soil_depth.
+        !is.na(depth_top_stones) &
+          depth_top_stones > 0 ~ depth_top_stones,
         # Priority 7:
         # If the originally reported eff_soil_depth is equal to 100,
         # use this.
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig == 100 ~ eff_soil_depth_orig,
         # Priority 8:
+        # If the maximum of the alternative depths (rooting_depth, rock_depth,
+        # obstacle_depth) is <= 100 cm, use this.
+        !is.na(max_alternative_depth) &
+          max_alternative_depth <= 100 ~ max_alternative_depth,
+        # Priority 9:
+        # If the manually harmonised depth (which is supposed to be used for
+        # stock calculations and which is limited to a maximum of 100 cm) is
+        # shallower than 100 cm, use this. Some external data sources were
+        # used for this.
+        !is.na(depth_stock) & depth_stock < 100 ~ depth_stock,
+        # Priority 10:
         # If the originally reported eff_soil_depth is >= 500,
         # use this.
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig >= 500 ~ eff_soil_depth_orig,
-        # Priority 9:
+        # Priority 11:
         # If none of those conditions are met (i.e. default), report 999.
         TRUE ~ 999)) %>%
-    mutate(eff_soil_depth = round(eff_soil_depth, 1)) %>%
-    select(plot_id, eff_soil_depth)
+    select(-starts_with("aux")) %>%
+    relocate(eff_soil_depth, .after = plot_id) %>%
+    relocate(eff_soil_depth_source, .after = eff_soil_depth) %>%
+    relocate(depth_stock, starts_with("wrb"), .after = depth_bottom_pfh) %>%
+    mutate(eff_soil_depth = round(eff_soil_depth)) %>%
+    select(plot_id, eff_soil_depth, eff_soil_depth_source)
 
 
 
@@ -979,6 +1174,8 @@ get_stratifiers <- function(level) {
            plot_id,
            longitude_dec,
            latitude_dec,
+           x_etrs89,
+           y_etrs89,
            tavg,
            prec,
            altitude,
@@ -993,7 +1190,8 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
-           wrb_qualifier_1) %>%
+           wrb_qualifier_1,
+           eff_soil_depth_source) %>%
     rename(mat = tavg,
            map = prec,
            wrb_ref_soil_group = wrb_soil_group,
@@ -1121,17 +1319,19 @@ get_stratifiers <- function(level) {
     # Using the harmonised soil depths reported in s1_prf_adds ("depth_stock")
     # The depths in this file are limited to a maximum of 100 cm and
     # the plausibility of these depths has been manually cross-checked.
-    # For example, WRB soil classification information was taken into account
-    # as follows:
-    # - If soil is classified as "Leptosol" without other information available
-    #   → depth is set to 25 cm;
-    # - If soil is classified as "Lithic leptosol" without other information
-    #   available → depth is set to 10 cm;
-    # - If soil has "lithic" as qualifier → depth should be shallower than
-    #   100 cm.
+    # For example, WRB soil classification information was taken into account.
     # These harmonised depths are compared to alternative options.
     left_join(s1_prf_adds_agg %>%
-                select(plot_id, depth_stock),
+                left_join(d_soil_group,
+                          by = join_by(code_wrb_soil_group == code)) %>%
+                rename(wrb_ref_soil_group = description) %>%
+                left_join(d_soil_adjective %>%
+                            select(code, description) %>%
+                            rename(code_wrb_qualifier_1 = code) %>%
+                            rename(wrb_qualifier_1 = description),
+                          by = "code_wrb_qualifier_1") %>%
+                select(plot_id, depth_stock, wrb_ref_soil_group,
+                       wrb_qualifier_1),
               by = "plot_id") %>%
     # eff_soil_depth_orig
     # Add originally reported effective soil depths aggregated per plot_id
@@ -1380,83 +1580,221 @@ get_stratifiers <- function(level) {
         group_by(plot_id) %>%
         reframe(depth_bottom_pfh = max(depth_bottom, na.rm = TRUE)),
       by = "plot_id") %>%
+    # Create an auxiliary column with plausible depths based on WRB
+    # only for certain WRB types
+    mutate(
+      aux_depth_source = case_when(
+        # Lithic leptosols
+        wrb_ref_soil_group == "Leptosols" &
+          (wrb_qualifier_1 == "Lithic" | wrb_qualifier_1 == "Nudilithic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_lithic_lept,
+                   "Top of parent material layers at bottom", NA_character_),
+            ifelse(eff_soil_depth_orig <= depth_lithic_lept,
+                   "Original eff_soil_depth", NA_character_),
+            ifelse(max_alternative_depth <= depth_lithic_lept,
+                   "Maximum of rooting, rock and obstacle depth",
+                   NA_character_),
+            ifelse(depth_bottom_pfh <= depth_lithic_lept,
+                   "Bottom of profile ('pfh')", NA_character_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   "Top of stony zone at bottom", NA_character_),
+            "Default depth based on WRB"),
+        # Leptic or Rendzic leptosols
+        wrb_qualifier_1 == "Leptic" |
+          (wrb_ref_soil_group == "Leptosols" & wrb_qualifier_1 == "Rendzic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptic,
+                   "Top of parent material layers at bottom", NA_character_),
+            ifelse(eff_soil_depth_orig <= depth_leptic,
+                   "Original eff_soil_depth", NA_character_),
+            ifelse(max_alternative_depth <= depth_leptic,
+                   "Maximum of rooting, rock and obstacle depth",
+                   NA_character_),
+            ifelse(depth_bottom_pfh <= depth_leptic,
+                   "Bottom of profile ('pfh')", NA_character_),
+            ifelse(depth_top_stones <= depth_leptic &
+                     depth_top_stones > 0,
+                   "Top of stony zone at bottom", NA_character_),
+            "Default depth based on WRB"),
+        # Leptosols
+        wrb_ref_soil_group == "Leptosols" ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptosols,
+                   "Top of parent material layers at bottom", NA_character_),
+            ifelse(eff_soil_depth_orig <= depth_leptosols,
+                   "Original eff_soil_depth", NA_character_),
+            ifelse(max_alternative_depth <= depth_leptosols,
+                   "Maximum of rooting, rock and obstacle depth",
+                   NA_character_),
+            ifelse(depth_bottom_pfh <= depth_leptosols,
+                   "Bottom of profile ('pfh')", NA_character_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   "Top of stony zone at bottom", NA_character_),
+            "Default depth based on WRB"),
+        TRUE ~ NA_character_),
+      aux_depth = case_when(
+        # Lithic leptosols
+        wrb_ref_soil_group == "Leptosols" &
+          (wrb_qualifier_1 == "Lithic" | wrb_qualifier_1 == "Nudilithic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_lithic_lept,
+                   depth_top_r, NA_real_),
+            ifelse(eff_soil_depth_orig <= depth_lithic_lept,
+                   eff_soil_depth_orig, NA_real_),
+            ifelse(max_alternative_depth <= depth_lithic_lept,
+                   max_alternative_depth, NA_real_),
+            ifelse(depth_bottom_pfh <= depth_lithic_lept,
+                   depth_bottom_pfh, NA_real_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   depth_top_stones, NA_real_),
+            depth_lithic_lept),
+        # Leptic or Rendzic leptosols
+        wrb_qualifier_1 == "Leptic" |
+          (wrb_ref_soil_group == "Leptosols" & wrb_qualifier_1 == "Rendzic") ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptic,
+                   depth_top_r, NA_real_),
+            ifelse(eff_soil_depth_orig <= depth_leptic,
+                   eff_soil_depth_orig, NA_real_),
+            ifelse(max_alternative_depth <= depth_leptic,
+                   max_alternative_depth, NA_real_),
+            ifelse(depth_bottom_pfh <= depth_leptic,
+                   depth_bottom_pfh, NA_real_),
+            ifelse(depth_top_stones <= depth_leptic &
+                     depth_top_stones > 0,
+                   depth_top_stones, NA_real_),
+            depth_leptic),
+        # Leptosols
+        wrb_ref_soil_group == "Leptosols" ~
+          coalesce(
+            ifelse(depth_top_r <= depth_leptosols,
+                   depth_top_r, NA_real_),
+            ifelse(eff_soil_depth_orig <= depth_leptosols,
+                   eff_soil_depth_orig, NA_real_),
+            ifelse(max_alternative_depth <= depth_leptosols,
+                   max_alternative_depth, NA_real_),
+            ifelse(depth_bottom_pfh <= depth_leptosols,
+                   depth_bottom_pfh, NA_real_),
+            ifelse(depth_top_stones <= depth_lithic_lept &
+                     depth_top_stones > 0,
+                   depth_top_stones, NA_real_),
+            depth_leptosols_default),
+        TRUE ~ NA_real_)) %>%
     # Combine the different data sources into one harmonised value for
     # eff_soil_depth
     mutate(
       # Record the data source for the final value
       eff_soil_depth_source = case_when(
-        !is.na(depth_top_stones) ~ "Top of stony zone at bottom",
+        !is.na(aux_depth) ~ aux_depth_source,
         !is.na(depth_top_r) ~ "Top of parent material layers at bottom",
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig > 0 &
           eff_soil_depth_orig < 500 &
           eff_soil_depth_orig != 100 ~ "Original non-default eff_soil_depth",
-        !is.na(depth_stock) &
-          depth_stock < 100 ~ "Harmonised shallow (< 100) depth for stocks",
         !is.na(max_alternative_depth) &
           max_alternative_depth > 100 ~
           "Maximum of rooting, rock and obstacle depth",
         !is.na(depth_bottom_pfh) & depth_bottom_pfh > 100 ~
           "Bottom of deep (> 100) profile ('pfh')",
+        !is.na(depth_top_stones) &
+          depth_top_stones > 0 ~ "Top of stony zone at bottom",
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig == 100 ~ "Original eff_soil_depth reporting 100",
+        !is.na(max_alternative_depth) &
+          max_alternative_depth <= 100 ~
+          "Maximum of rooting, rock and obstacle depth",
+        !is.na(depth_stock) & depth_stock < 100 ~
+          "Harmonised shallow (< 100) depth for stocks",
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig >= 500 ~ "Original eff_soil_depth reporting 999",
         TRUE ~ "No info (default 999)"),
       eff_soil_depth = case_when(
         # Priority 1:
-        # If there is a consecutive zone with >= 80 % coarse fragments
-        # at the bottom of the profile (s1_som or s1_pfh), use its upper depth.
-        # This information usually seems reliable and convincing, and consistent
-        # with the definition of the upper limit of continuous rock.
-        # (Note: this can be 0! Also note that any intermediate zones with
-        #  >= 80 % coarse fragments, i.e. with a zone with lower stone content
-        #  below, are ignored)
-        !is.na(depth_top_stones) ~ depth_top_stones,
+        # Use reported depths that are plausible based on WRB for certain
+        # WRB soil types (Leptosols; (Nudi)lithic leptosols; Rendzic leptosols;
+        # Leptic).
+        # From those reported plausible depths, follow the priorities listed
+        # below (i.e. in order of decreasing priority: depth_top_r,
+        # eff_soil_depth_orig, max_alternative_depth, depth_bottom_pfh,
+        # depth_top_stones)
+        # "Plausible" means <= 10 for (Nudi)lithic leptosols;
+        # <= 100 for Rendzic leptosols / Leptic; <= 75 for Leptosols.
+        # If none of the reported depths are plausible, use a default depths
+        # for each WRB soil type: 10 for (Nudi)lithic leptosols;
+        # 100 for Rendzic leptosols / Leptic; 25 for Leptosols.
+        !is.na(aux_depth) ~ aux_depth,
         # Priority 2:
         # If there is a consecutive zone with "R" in its horizon_master in
-        # s1_pfh at the bottom of the profile, use its upper depth.
-        # This information usually seems reliable and convincing, although
-        # there is sometimes a zone with >= 80 % coarse fragments on top
-        # (which then receives the priority).
+        # so_pfh at the bottom of the profile, use its upper depth.
+        # This information usually seems reliable and convincing. If we know
+        # that there is parent material at a certain depth, we know by
+        # definition that eff_soil_depth should be its upper depth limit,
+        # even if partners report another eff_soil_depth.
         !is.na(depth_top_r) ~ depth_top_r,
         # Priority 3:
         # If the originally reported eff_soil_depth is > 0 and < 500
         # and != 100, use this, since its quality seems quite reliable if
-        # no default value is given.
+        # no default value is given and we assume we should trust what
+        # the partners report.
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig > 0 &
           eff_soil_depth_orig < 500 &
           eff_soil_depth_orig != 100 ~ eff_soil_depth_orig,
         # Priority 4:
-        # If the manually harmonised depth (which is supposed to be used for
-        # stock calculations and which is limited to a maximum of 100 cm) is
-        # shallower than 100 cm, use this.
-        !is.na(depth_stock) & depth_stock < 100 ~ depth_stock,
-        # Priority 5:
         # If the maximum of the alternative depths (rooting_depth, rock_depth,
         # obstacle_depth) is > 100 cm, use this.
         !is.na(max_alternative_depth) &
           max_alternative_depth > 100 ~ max_alternative_depth,
-        # Priority 6:
-        # If the depth of the bottom of the s1_pfh profile is > 100 cm,
+        # Priority 5:
+        # If the depth of the bottom of the so_pfh profile is > 100 cm,
         # use this.
         !is.na(depth_bottom_pfh) & depth_bottom_pfh > 100 ~ depth_bottom_pfh,
+        # Priority 6:
+        # If there is a consecutive zone with >= 80 % coarse fragments
+        # at the bottom of the profile (so_som or so_pfh), use its upper depth.
+        # According to its definition, coarse fragments >= 80 vol % cannot
+        # really be considered as continuous rock, because continuous rock is
+        # rock with maximum 20 % cracks (i.e. 80 % coarse fragments) which
+        # cannot be moved, while coarse fragments can be moved (since
+        # field surveyors have been able to assess them).
+        # However, if there is no other information available, the upper limit
+        # of this zone can be used as the eff_soil_depth.
+        !is.na(depth_top_stones) &
+          depth_top_stones > 0 ~ depth_top_stones,
         # Priority 7:
         # If the originally reported eff_soil_depth is equal to 100,
         # use this.
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig == 100 ~ eff_soil_depth_orig,
         # Priority 8:
+        # If the maximum of the alternative depths (rooting_depth, rock_depth,
+        # obstacle_depth) is <= 100 cm, use this.
+        !is.na(max_alternative_depth) &
+          max_alternative_depth <= 100 ~ max_alternative_depth,
+        # Priority 9:
+        # If the manually harmonised depth (which is supposed to be used for
+        # stock calculations and which is limited to a maximum of 100 cm) is
+        # shallower than 100 cm, use this. Some external data sources were
+        # used for this.
+        !is.na(depth_stock) & depth_stock < 100 ~ depth_stock,
+        # Priority 10:
         # If the originally reported eff_soil_depth is >= 500,
         # use this.
         !is.na(eff_soil_depth_orig) &
           eff_soil_depth_orig >= 500 ~ eff_soil_depth_orig,
-        # Priority 9:
+        # Priority 11:
         # If none of those conditions are met (i.e. default), report 999.
         TRUE ~ 999)) %>%
-    mutate(eff_soil_depth = round(eff_soil_depth, 1)) %>%
-    select(plot_id, eff_soil_depth)
+    select(-starts_with("aux")) %>%
+    relocate(eff_soil_depth, .after = plot_id) %>%
+    relocate(eff_soil_depth_source, .after = eff_soil_depth) %>%
+    relocate(depth_stock, starts_with("wrb"), .after = depth_bottom_pfh) %>%
+    mutate(eff_soil_depth = round(eff_soil_depth)) %>%
+    select(plot_id, eff_soil_depth, eff_soil_depth_source)
 
 
 
@@ -1719,6 +2057,8 @@ get_stratifiers <- function(level) {
            plot_id,
            longitude_dec,
            latitude_dec,
+           x_etrs89,
+           y_etrs89,
            tavg,
            prec,
            altitude,
@@ -1732,7 +2072,8 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
-           wrb_qualifier_1) %>%
+           wrb_qualifier_1,
+           eff_soil_depth_source) %>%
     rename(mat = tavg,
            map = prec,
            wrb_ref_soil_group = wrb_soil_group,
