@@ -38,6 +38,7 @@ get_stocks <- function(survey_form,
                        graph = FALSE,
                        density_per_three_cm = FALSE,
                        add_stratifiers = TRUE,
+                       add_plausible_fscc = TRUE,
                        save_to_env = TRUE,
                        save_to_gdrive = TRUE) {
 
@@ -50,7 +51,9 @@ get_stocks <- function(survey_form,
             require("mpspline2"),
             require("patchwork"),
             require("ggtext"),
-            require("grid"))
+            require("grid"),
+            require("broom"),
+            require("readxl"))
 
   source("./src/stock_calculations/functions/soilspline.R")
   source("./src/stock_calculations/functions/spline2stock.R")
@@ -63,6 +66,7 @@ get_stocks <- function(survey_form,
   source("./src/functions/summarise_per_group.R")
   source("./src/functions/get_parameter_stats.R")
   source("./src/functions/get_date_local.R")
+  source("./src/stock_calculations/functions/check_stock_plausibility.R")
 
 
   # Define data ----
@@ -104,13 +108,15 @@ get_stocks <- function(survey_form,
     }
 
     df_strat <- df_strat %>%
-      select(plot_id, longitude_dec, latitude_dec, mat, map, slope, altitude,
-             wrb_ref_soil_group, eftc, humus_form,
+      select(plot_id, longitude_dec, latitude_dec, x_etrs89, y_etrs89,
+             mat, map, altitude,
+             slope, aspect, wrb_ref_soil_group, eftc, humus_form,
              parent_material, biogeographical_region,
              main_tree_species, bs_class)
   }
 
 
+  # Specify parameter ----
 
   parameter_table <- data.frame(
     som_parameter = c(
@@ -180,17 +186,52 @@ get_stocks <- function(survey_form,
       "tot_mn", "tot_fe", "tot_al",
       NA, NA, "rea_al", "rea_fe",
       NA
-    ))
+    )) %>%
+    mutate(
+      unit_markdown = gsub("1E4", "10<sup>4</sup>",
+                           gsub("-1", "<sup>-1</sup>",
+                                gsub("-2", "<sup>-2</sup>",
+                                     gsub("-3", "<sup>-3</sup>", unit)))),
+      unit_density_per_cm_markdown =
+        gsub("1E4", "10<sup>4</sup>",
+             gsub("-1", "<sup>-1</sup>",
+                  gsub("-2", "<sup>-2</sup>",
+                       gsub("-3", "<sup>-3</sup>", unit_density_per_cm)))))
 
 
-  # Create dir to save data
+  assign_env("parameter_table", parameter_table)
+
+  ind_som <- which(parameter == parameter_table$som_parameter)
+  ind_pfh <- which(parameter == parameter_table$pfh_parameter)
+  ind <- unique(c(ind_som, ind_pfh))
+
+  assertthat::assert_that(!identical(ind, integer(0)))
+
+  unit <- parameter_table$unit[ind]
+  unit_markdown <- parameter_table$unit_markdown[ind]
+  unit_density_per_cm <- parameter_table$unit_density_per_cm[ind]
+  unit_density_per_cm_markdown <-
+    parameter_table$unit_density_per_cm_markdown[ind]
+  shorter_var_name <- parameter_table$shorter_name[ind]
+
+  assertthat::assert_that(!is.na(shorter_var_name))
+
+  parameter_orig <- parameter
+  parameter <- parameter_table$som_parameter[ind]
+
+
+
+
+
+
+  # Create dir to save data ----
 
   dir <- paste0("./output/stocks/",
                 as.character(format(Sys.Date(), "%Y%m%d")), "_",
                 as.character(format(as.Date(
                   get_date_local(path = "./data/raw_data/")),
                   format = "%Y%m%d")),
-                "_carbon_stocks/")
+                "_", shorter_var_name, "_stocks/")
 
   if (!dir.exists(dir)) {
     dir.create(dir, recursive = TRUE)
@@ -302,24 +343,9 @@ get_stocks <- function(survey_form,
   # Rename the variable to a harmonised name
   # and retrieve its unit
 
-  ind_som <- which(parameter == parameter_table$som_parameter)
-  ind_pfh <- which(parameter == parameter_table$pfh_parameter)
-  ind <- unique(c(ind_som, ind_pfh))
-
-  assertthat::assert_that(!identical(ind, integer(0)))
-
-  unit <- parameter_table$unit[ind]
-  unit_density_per_cm <- parameter_table$unit_density_per_cm[ind]
-  shorter_var_name <- parameter_table$shorter_name[ind]
-
-  assertthat::assert_that(!is.na(shorter_var_name))
-
   assertthat::assert_that(
     parameter_table$som_parameter[ind] %in% names(df) ||
       parameter_table$pfh_parameter[ind] %in% names(df))
-
-  parameter_orig <- parameter
-  parameter <- parameter_table$som_parameter[ind]
 
   if (!parameter_table$som_parameter[ind] %in% names(df)) {
 
@@ -349,6 +375,18 @@ get_stocks <- function(survey_form,
   names(df)[which(names(df) == paste0(parameter, "_max"))] <-
     "parameter_for_stock_max"
 
+  if (paste0(parameter, "_source") %in% names(df)) {
+
+    names(df)[which(names(df) == paste0(parameter, "_source"))] <-
+      "parameter_for_stock_source"
+
+  } else {
+
+    df$parameter_for_stock_source <- NA
+  }
+
+
+
   assertthat::assert_that(all(na.omit(df[[parameter]]) >= 0))
 
 
@@ -360,12 +398,12 @@ get_stocks <- function(survey_form,
 
     if (code_survey == "s1") {
       df_soil_depth <- get_stratifiers(level = "LI") %>%
-        select(plot_id, eff_soil_depth)
+        select(plot_id, eff_soil_depth, eff_soil_depth_source)
     }
 
     if (code_survey == "so") {
       df_soil_depth <- get_stratifiers(level = "LII") %>%
-        select(plot_id, eff_soil_depth)
+        select(plot_id, eff_soil_depth, eff_soil_depth_source)
     }
 
     df <- df %>%
@@ -390,7 +428,7 @@ get_stocks <- function(survey_form,
     mutate(survey_form = survey_form_i) %>%
     # If the effective soil depth is deeper than 100 cm or unknown (NA):
     # assume it is 100 cm (for stocks)
-    mutate(soil_depth =
+    mutate(depth_stock =
              ifelse(is.na(.data$eff_soil_depth) |
                       (.data$eff_soil_depth > 100),
                     100,
@@ -425,7 +463,222 @@ get_stocks <- function(survey_form,
                               NA))
 
 
-  ## 1.4. Create function format_stocks ----
+  # As requested by the partner, exclude data for 54_204 in 1997
+  # (because of being unreliable)
+
+  if (survey_form_i == "so_som" &&
+      parameter == "organic_carbon_total") {
+
+    df_working <- df_working %>%
+      filter(!(plot_id == "54_204" & survey_year == 1997))
+
+  }
+
+
+  ## 1.4. Prepare an overview of potential for stock calculation ----
+  # (only for "som" survey forms)
+
+  if (unlist(strsplit(survey_form_i, "_"))[2] == "som") {
+
+    plot_data_use_stocks <- get_env(paste0("data_availability_",
+                                           code_survey)) %>%
+      # Split survey_years by "_"
+      separate_rows(survey_years, sep = "_") %>%
+      # Keep distinct rows of plot_id and survey_years
+      distinct(code_country, code_plot, plot_id, survey_years) %>%
+      rename(survey_year = survey_years) %>%
+      mutate(
+        unique_survey = paste0(code_country, "_",
+                               survey_year, "_",
+                               code_plot)) %>%
+      mutate(
+        # Column with logical indicating whether a plausible stock could
+        # be calculated for the given plot survey (plot_id x survey_year)
+        plaus_stock_calculated = NA,
+        # Column indicating the reason why no stock was calculated,
+        # if plaus_stock_calculated is FALSE
+        reason_excluded = NA_character_,
+        # Column indicating the coverage of stocks that are assumed to be
+        # plausible, i.e. the soil compartments with plausible stocks
+        plaus_stock_coverage = NA_character_)
+
+    assertthat::assert_that(
+      all(unique(df_working$unique_survey) %in%
+            plot_data_use_stocks$unique_survey))
+
+    # Add reason for data which are not in "som"
+    # (e.g. because they are in "pfh")
+
+    plot_data_use_stocks <- plot_data_use_stocks %>%
+      mutate(
+        in_som = (unique_survey %in% unique(df_working$unique_survey)),
+        reason_excluded = case_when(
+          # One Slovakian plot excluded upon request of the soil expert
+          unique_survey == "54_1997_204" &
+            parameter == "organic_carbon_total" ~
+            "Considered implausible by partner",
+          in_som == FALSE ~ "No records in 'som'",
+          TRUE ~ reason_excluded)) %>%
+      select(-in_som)
+
+    df_summ <- df_working %>%
+      group_by(code_country, plot_id, unique_survey) %>%
+      reframe(
+        # Any below-ground layer
+        any_bg = any(layer_type != "forest_floor" &
+                       !is.na(layer_limit_inferior) &
+                       layer_limit_inferior > 0),
+        any_bg_non_redundant =
+          any(layer_type != "forest_floor" &
+                !is.na(layer_limit_inferior) &
+                layer_limit_inferior > 0 &
+                !is.na(layer_number)),
+        # depth_stock_source:
+        # - "Known to be >= 100 cm (depth of 'pfh')"
+        # - "Depth of profile ('pfh')"
+        # - "Manually harmonised"
+        # - "Default based on WRB soil classification"
+        # - "Max. of rooting, rock and obstacle depth"
+        # - "Original eff_soil_depth"
+        # - "Top of parent material horizons"
+        # - "Top of stony zone"
+        # - "Default (i.e. 100 cm)"
+        depth_stock_source = case_when(
+          any(!is.na(depth_stock) & depth_stock == 100 &
+                is.na(eff_soil_depth)) ~
+            "Default (i.e. 100 cm)",
+          any(grepl("no info", eff_soil_depth_source, ignore.case = TRUE)) ~
+            "Default (i.e. 100 cm)",
+          any(grepl("deep", eff_soil_depth_source, ignore.case = TRUE) &
+            grepl("'pfh'", eff_soil_depth_source)) ~
+            "Known to be >= 100 cm (depth of 'pfh')",
+          any(eff_soil_depth_source == "Bottom of profile ('pfh')") ~
+            "Depth of profile ('pfh')",
+          any(grepl("\\bWRB\\b", eff_soil_depth_source, ignore.case = TRUE)) ~
+            "Default based on WRB soil classification",
+          any(grepl("obstacle depth", eff_soil_depth_source,
+              ignore.case = TRUE)) ~
+            "Max. of rooting, rock and obstacle depth",
+          any(grepl("Original", eff_soil_depth_source, ignore.case = TRUE)) ~
+            "Original eff_soil_depth",
+          any(grepl("parent material", eff_soil_depth_source,
+              ignore.case = TRUE)) ~
+            "Top of parent material horizons",
+          any(grepl("stony zone", eff_soil_depth_source, ignore.case = TRUE)) ~
+            "Top of stony zone",
+          any(grepl("Harmonised", eff_soil_depth_source, ignore.case = TRUE)) ~
+            "Manually harmonised",
+          TRUE ~ NA_character_),
+        # bulk_density_source:
+        # - "Old data source"
+        # - "'pfh' (measured)"
+        # - "'pfh' (estimated)"
+        # - "'som'"
+        # - "'sw_swc'"
+        # - "PTF"
+        bulk_density_source = case_when(
+          any(grepl("som", bulk_density_source) &
+                layer_type != "forest_floor") ~
+            paste0(code_survey, "_som"),
+          any(grepl("swc", bulk_density_source) &
+                layer_type != "forest_floor") ~
+            "sw_swc",
+          any(grepl("pfh_measure", bulk_density_source)
+              & layer_type != "forest_floor") ~
+            paste0(code_survey, "_pfh (measured)"),
+          any(grepl("pfh_est", bulk_density_source) &
+                layer_type != "forest_floor") ~
+            paste0(code_survey, "_pfh (estimated)"),
+          any(grepl("fscdb", bulk_density_source, ignore.case = TRUE) &
+            layer_type != "forest_floor") ~
+            "Old data source",
+          any(grepl("PTF", bulk_density_source, ignore.case = TRUE) &
+            layer_type != "forest_floor") ~
+            "PTF",
+          TRUE ~ NA_character_),
+        # organic_layer_weight_source:
+        # - "'som'"
+        # - "Old data source"
+        # - "Bulk density and layer thickness"
+        organic_layer_weight_source = case_when(
+          any(grepl("^som", organic_layer_weight_source) &
+                !grepl("bulk_density", organic_layer_weight_source) &
+                layer_type != "mineral" &
+                !grepl("L", code_layer)) ~
+            paste0(code_survey, "_som"),
+          any(grepl("bulk_density", organic_layer_weight_source) &
+                layer_type != "mineral" &
+                !grepl("L", code_layer)) ~
+            "Bulk density & layer thickness",
+          any(grepl("fscdb", organic_layer_weight_source, ignore.case = TRUE) &
+                layer_type != "mineral" &
+                !grepl("L", code_layer)) ~
+            "Old data source",
+          TRUE ~ NA_character_),
+        # coarse_fragment_vol_source:
+        # - "Old data source"
+        # - "'pfh' (code_horizon_coarse_vol)"
+        # - "'pfh' (horizon_coarse_weight)"
+        # - "'som'"
+        # - "Default (i.e. 0 vol%)"
+        coarse_fragment_vol_source = case_when(
+          any(grepl("som", coarse_fragment_vol_source) &
+                layer_type == "mineral") ~
+            paste0(code_survey, "_som"),
+          any(grepl("pfh_weight", coarse_fragment_vol_source) &
+                layer_type == "mineral") ~
+            paste0(code_survey, "_pfh (horizon_coarse_weight)"),
+          any(grepl("pfh_code_vol", coarse_fragment_vol_source) &
+                layer_type == "mineral") ~
+            paste0(code_survey, "_pfh (code_horizon_coarse_vol)"),
+          any(grepl("fscdb", coarse_fragment_vol_source, ignore.case = TRUE) &
+                layer_type == "mineral") ~
+            "Old data source",
+          any(!is.na(coarse_fragment_vol_frac) &
+                coarse_fragment_vol_frac == 0 &
+                is.na(coarse_fragment_vol)) ~
+            "Default (i.e. 0 vol%)",
+          TRUE ~ NA_character_),
+        # parameter_for_stock_source:
+        # - "Old data source"
+        # - "'pfh' (same period)"
+        # - "'som'"
+        # - "PIR"
+        parameter_for_stock_source = case_when(
+          any(grepl("som", parameter_for_stock_source)) ~
+            paste0(code_survey, "_som"),
+          any(grepl("fscdb", parameter_for_stock_source,
+                    ignore.case = TRUE)) ~
+            "Old data source",
+          any(grepl("pfh", parameter_for_stock_source)) ~
+            paste0(code_survey, "_pfh (same period)"),
+          any(parameter_for_stock_source == "PIR") ~ "PIR",
+          any(grepl("manual correction", parameter_for_stock_source)) ~
+            "Manual correction (FSCC)"))
+
+    # Add summary of data sources per plot survey
+
+    plot_data_use_stocks <- plot_data_use_stocks %>%
+      left_join(df_summ %>%
+                  select(-code_country, -plot_id),
+                by = "unique_survey") %>%
+      mutate(
+        reason_excluded = case_when(
+          any_bg == FALSE ~ "No below-ground layers reported in 'som'",
+          any_bg == TRUE & any_bg_non_redundant == FALSE ~
+            "All below-ground layers are considered redundant",
+          TRUE ~ reason_excluded)) %>%
+      select(-any_bg,
+             -any_bg_non_redundant)
+
+    }
+
+
+
+
+
+
+  ## 1.5. Create function format_stocks ----
 
   format_stocks <- function(data_frame,
                             var_name = shorter_var_name) {
@@ -464,6 +717,10 @@ get_stocks <- function(survey_form,
   }
 
 
+
+
+
+
   # 2. Below-ground layers ----
 
   ## 2.1. Derive layer-based dataset for mineral and peat layers ----
@@ -478,6 +735,7 @@ get_stocks <- function(survey_form,
     select(survey_form,
            partner_short,
            plot_id,
+           unique_survey,
            profile_id,
            partner_code,
            code_country,
@@ -491,7 +749,7 @@ get_stocks <- function(survey_form,
            depth_bottom,
            depth_avg,
            layer_thickness,
-           soil_depth,
+           depth_stock,
            bulk_density,
            bulk_density_min,
            bulk_density_max,
@@ -548,6 +806,79 @@ get_stocks <- function(survey_form,
            -density_min_org,
            -density_max_org)
 
+  # Update overview of plot potentials
+
+  if (unlist(strsplit(survey_form_i, "_"))[2] == "som") {
+
+    df_summ <- bind_rows(
+      df_below_ground %>%
+        filter(!is.na(.data$density)) %>%
+        filter(!is.na(.data$depth_top) &
+                 !is.na(.data$depth_bottom)) %>%
+        group_by(profile_id, unique_survey) %>%
+        reframe(
+          max_depth = max(depth_bottom, na.rm = TRUE),
+          min_depth = min(depth_top, na.rm = TRUE),
+          nlay_below_ground = n(),
+          depth_stock = unique(depth_stock)) %>%
+        ungroup() %>%
+        rowwise() %>%
+        mutate(
+          stock_possible =
+            ((nlay_below_ground >= 2 ||
+                # If the soil depth is very shallow, one layer can be reliable,
+                # e.g. so_som 1996_7_12_1
+                (nlay_below_ground == 1 &&
+                   max_depth >= 0.7 * depth_stock)) &&
+               (min_depth == 0) &&
+               (depth_stock > 0))) %>%
+        ungroup() %>%
+        group_by(unique_survey) %>%
+        reframe(
+          nlay_below_ground = max(nlay_below_ground),
+          max_depth = max(max_depth),
+          min_depth = min(min_depth),
+          depth_stock = unique(depth_stock),
+          stock_possible = any(stock_possible)) %>%
+        ungroup() %>%
+        mutate(
+          reason_excl = ifelse(
+            stock_possible == FALSE,
+            case_when(
+              depth_stock == 0 ~ "Continuous bedrock at 0 cm",
+              min_depth > 0 ~ paste0("Insufficient data to calculate density ",
+                                     "in upper below-ground layer"),
+              # If not any of these cases, there should simply be insufficient
+              # layers with data
+              TRUE ~ paste0("Insufficient below-ground layers (as compared to ",
+                            "soil depth) for which density can be calculated")),
+            NA_character_)) %>%
+        select(unique_survey, reason_excl),
+
+      df_below_ground %>%
+        group_by(profile_id, unique_survey) %>%
+        reframe(
+          no_toc = all(is.na(parameter_for_stock))) %>%
+        ungroup() %>%
+        group_by(unique_survey) %>%
+        reframe(
+          no_toc = all(no_toc == TRUE)) %>%
+        ungroup() %>%
+        filter(no_toc == TRUE) %>%
+        mutate(reason_excl = "No relevant total organic carbon data") %>%
+        select(unique_survey, reason_excl))
+
+
+    plot_data_use_stocks <- plot_data_use_stocks %>%
+      left_join(
+        df_summ,
+        by = "unique_survey") %>%
+      mutate(
+        reason_excluded = coalesce(reason_excluded,
+                                   reason_excl)) %>%
+      select(-reason_excl)
+
+  }
 
 
 
@@ -562,7 +893,8 @@ get_stocks <- function(survey_form,
   if (constant_subsoil == TRUE) {
 
     cat(paste0(" \nGap-fill below-40-cm subsoil with the assumption that ",
-               "the subsoil carbon density remains constant.\n"))
+               "the subsoil ", shorter_var_name,
+               " density remains constant.\n"))
 
     source("./src/functions/harmonise_layer_to_depths.R")
 
@@ -609,15 +941,15 @@ get_stocks <- function(survey_form,
 
       # Update target depth range
       target_depth_range <- seq(40, 100, by = 1)
-      soil_depth_i <- round(unique(df_profile_i$soil_depth))
+      depth_stock_i <- round(unique(df_profile_i$depth_stock))
 
-      if (soil_depth_i != max(target_depth_range) &&
-          soil_depth_i > min(target_depth_range)) {
+      if (depth_stock_i != max(target_depth_range) &&
+          depth_stock_i > min(target_depth_range)) {
 
-        target_depth_range <- seq(40, soil_depth_i, by = 1)
+        target_depth_range <- seq(40, depth_stock_i, by = 1)
       }
 
-      if (soil_depth_i <= min(target_depth_range)) {
+      if (depth_stock_i <= min(target_depth_range)) {
         next
       }
 
@@ -786,14 +1118,52 @@ get_stocks <- function(survey_form,
 
 
 
-    ### 2.2.2. Fixed carbon density ----
+    ### 2.2.2. Fixed density ----
 
-    # For TOC
+  # Calculated based on available carbon densities and supplementary
+  # partner data for this depth range
+  # See "./src/stock_calculations/subsoil_c_densities.R"
 
-    if (parameter == "organic_carbon_total") {
+  subsoil_densities_table <- data.frame(
+    parameter = c("organic_carbon_total",
+                  "n_total",
+                  "extrac_p"),
+    density = c(0.30, # t C ha-1 cm-1
+                0.0178, # t N ha-1 cm-1
+                11.80 # kg P ha-1 cm-1 # Only based on five plots!
+                ),
+    density_min = c(0.06, # 5 % quantile
+                    0.0049,
+                    2.11),
+    density_max = c(2.58, # 95 % quantile
+                    0.1198,
+                    23.26))
+
+    # Currently only for TOC and TN and extrac_p
+
+    if (!parameter %in% subsoil_densities_table$parameter) {
+
+      cat(paste0("Unknown subsoil density below 80 cm for '",
+                 parameter,
+                 "'. ",
+                 "Densities below 80 cm will therefore not be gap-filled.\n"))
+
+    } else
+
+    if (parameter %in% subsoil_densities_table$parameter) {
+
+      density_i <- subsoil_densities_table$density[which(
+        subsoil_densities_table$parameter == parameter)] # t C ha-1 cm-1
+      density_min_i <- subsoil_densities_table$density_min[which(
+        subsoil_densities_table$parameter == parameter)] # 5 % quantile
+      density_max_i <- subsoil_densities_table$density_max[which(
+        subsoil_densities_table$parameter == parameter)] # 95 % quantile
+
 
       cat(paste0(" \nGap-fill below-80-cm subsoil with a fixed ",
-                 "carbon density value (0.31 t C ha-1 cm-1).\n"))
+                 shorter_var_name,
+                 " density value (", density_i, " ", unit_density_per_cm,
+                 ").\n"))
 
       source("./src/functions/harmonise_layer_to_depths.R")
 
@@ -843,15 +1213,15 @@ get_stocks <- function(survey_form,
 
           # Update target depth range
           target_depth_range <- seq(80, 100, by = 1)
-          soil_depth_i <- round(unique(df_profile_i$soil_depth))
+          depth_stock_i <- round(unique(df_profile_i$depth_stock))
 
-          if (soil_depth_i != max(target_depth_range) &&
-              soil_depth_i > min(target_depth_range)) {
+          if (depth_stock_i != max(target_depth_range) &&
+              depth_stock_i > min(target_depth_range)) {
 
-            target_depth_range <- seq(40, soil_depth_i, by = 1)
+            target_depth_range <- seq(80, depth_stock_i, by = 1)
           }
 
-          if (soil_depth_i <= min(target_depth_range)) {
+          if (depth_stock_i <= min(target_depth_range)) {
             next
           }
 
@@ -893,13 +1263,6 @@ get_stocks <- function(survey_form,
 
               limit_inf <- max(depth_range_missing)
 
-              # Calculated based on available carbon densities and supplementary
-              # partner data for this depth range
-              # See "./src/stock_calculations/subsoil_c_densities.R"
-
-              density_i <- 0.31 # t C ha-1 cm-1
-              density_min_i <- 0.06 # 5 % quantile
-              density_max_i <- 2.23 # 95 % quantile
 
               df_profile_i <- df_profile_i %>%
                 mutate(diff_with_limit_sup =
@@ -985,7 +1348,7 @@ get_stocks <- function(survey_form,
                 layer_number)
 
 
-    } # End of "if TOC" (for fixed carbon density)
+    } # End of "if parameter in list of parameters with known subsoil density"
 
 
 
@@ -1019,13 +1382,14 @@ get_stocks <- function(survey_form,
 
 
 
-  ## 2.3. Calculate below-ground carbon stocks ----
+  ## 2.3. Calculate below-ground stocks ----
 
   # Remark:
-  # It is rare for carbon densities to be higher than 10 t C ha-1 cm-1,
-  # and basically impossible for them to be above 17 t C ha-1 cm-1.
+  # It is rare for carbon densities to be higher than 10 t C ha-1 cm-1.
   # However, issues that lead to extremes are supposed to be solved in layer 1.
-  # Therefore, no corrections are done at this stage.
+  # Any remaining issues will be flagged as "implausible" in the final
+  # plot survey-specific carbon stock dataset using the function
+  # check_stock_plausibility.R.
 
 
   profile_stocks_below_ground <- NULL
@@ -1055,8 +1419,8 @@ get_stocks <- function(survey_form,
     prof_id_i <- as.character(unique(df_profile_i$profile_id))
     plot_id_i <- as.character(unique(df_profile_i$plot_id))
 
-    assertthat::assert_that(length(unique(df_profile_i$soil_depth)) == 1)
-    soil_depth_i <- unique(df_profile_i$soil_depth)
+    assertthat::assert_that(length(unique(df_profile_i$depth_stock)) == 1)
+    depth_stock_i <- unique(df_profile_i$depth_stock)
 
     # Prepare input for calculate_stocks function
 
@@ -1069,7 +1433,7 @@ get_stocks <- function(survey_form,
              density,
              density_min,
              density_max,
-             soil_depth,
+             depth_stock,
              gapfilled_post_layer1) %>%
       # Only calculate carbon stocks based on layers
       # for which the carbon density is known
@@ -1116,6 +1480,7 @@ get_stocks <- function(survey_form,
                                 mean(c(.data$depth_top,
                                        .data$prev_depth_bottom)),
                                 .data$depth_top)) %>%
+      ungroup() %>%
       select(-prev_depth_bottom,
              -next_depth_top)
 
@@ -1125,7 +1490,7 @@ get_stocks <- function(survey_form,
     # Only fit splines to profiles with:
     # - known carbon densities and layer limits for at least two layers OR
     #   for one layer, if this is the upper below-ground layer and if its
-    #   lower layer limit is >= 0.8 * soil_depth
+    #   lower layer limit is >= 0.7 * depth_stock
     # - and one of them should be the upper below-ground layer
 
     # If there are less than two layers or
@@ -1163,31 +1528,29 @@ get_stocks <- function(survey_form,
          # If the soil depth is very shallow, one layer can be reliable,
          # e.g. so_som 1996_7_12_1
          (nlay_below_ground == 1 &&
-          max_depth_i >= 0.8 * unique(prof$soil_depth))) &&
+          max_depth_i >= 0.7 * unique(prof$depth_stock))) &&
         (min(prof$depth_top) == 0) &&
-        (unique(prof$soil_depth) > 0)) {
+        (unique(prof$depth_stock) > 0)) {
 
       # Mean stock
 
       profile_stock_output_i <-
         spline2stock(prof = prof,
                      variab_name = "density",
+                     parameter_name = parameter,
                      survey_form = survey_form_i,
                      density_per_three_cm = density_per_three_cm,
                      graph = graph)
 
       max_obs_depth <- prof %>%
         filter(is.na(.data$gapfilled_post_layer1)) %>%
-        # filter(is.na(.data$gapfilled_post_layer1) |
-        #          (.data$gapfilled_post_layer1 ==
-        #             "rule: constant below 40 cm")) %>%
         pull(depth_bottom) %>%
         max()
 
-      use_stock_topsoil_i <- ifelse(max_obs_depth < 30 &
-                                      max_obs_depth < 0.8 * soil_depth_i,
-                                    TRUE,
-                                    FALSE)
+      # use_stock_topsoil_i <- ifelse(max_obs_depth < 30 &
+      #                                 max_obs_depth < 0.8 * depth_stock_i,
+      #                               TRUE,
+      #                               FALSE)
 
       profile_stocks_i <-
         data.frame(survey_form = unique(df_profile_i$survey_form),
@@ -1201,8 +1564,8 @@ get_stocks <- function(survey_form,
                    repetition = unique(df_profile_i$repetition),
                    contains_peat = any(df_profile_i$layer_type == "peat"),
                    obs_depth = max_obs_depth,
-                   use_stock_topsoil = use_stock_topsoil_i,
-                   soil_depth = soil_depth_i,
+                   # use_stock_topsoil = use_stock_topsoil_i,
+                   depth_stock = depth_stock_i,
                    profile_stock_output_i)
 
       profile_stocks_below_ground <-
@@ -1290,13 +1653,13 @@ get_stocks <- function(survey_form,
           nlay_below_ground_max =
             max(nlay_below_ground, na.rm = TRUE),
           obs_depth_avg =
-            round(mean(obs_depth, na.rm = TRUE), 2),
-          soil_depth_avg =
-            round(mean(soil_depth, na.rm = TRUE), 2),
+            round(mean(obs_depth, na.rm = TRUE), 1),
+          depth_stock_avg =
+            round(mean(depth_stock, na.rm = TRUE), 2),
           contains_peat =
             any(contains_peat == TRUE),
-          use_stock_topsoil =
-            any(use_stock_topsoil == TRUE),
+          # use_stock_topsoil =
+          #   any(use_stock_topsoil == TRUE),
           rmse_mpspline_max =
             ifelse(any(!is.na(rmse_mpspline)),
                    max(rmse_mpspline, na.rm = TRUE),
@@ -1336,6 +1699,7 @@ get_stocks <- function(survey_form,
   # 3. Forest floor layers ----
   ## 3.1. Derive layer-based dataset for forest floors ----
 
+  if (parameter == "organic_carbon_total") {
 
   # Get gap-filling data for TOCs of forest floors
 
@@ -1366,11 +1730,12 @@ get_stocks <- function(survey_form,
     lower = as.numeric(toc_ff[which(names(toc_ff) == "5%")]),
     upper = as.numeric(toc_ff[which(names(toc_ff) == "95%")]))
 
+  }
 
   # TOC data below LOQ for the forest floor are highly implausible
 
-  toc_loq <- read.csv2("./data/additional_data/ranges_qaqc.csv") %>%
-    filter(parameter_som == "organic_carbon_total") %>%
+  loq <- read.csv2("./data/additional_data/ranges_qaqc.csv") %>%
+    filter(parameter_som == parameter) %>%
     pull(LOQ_org)
 
 
@@ -1393,6 +1758,7 @@ get_stocks <- function(survey_form,
     select(survey_form,
            partner_short,
            plot_id,
+           unique_survey,
            profile_id,
            partner_code,
            code_country,
@@ -1406,7 +1772,7 @@ get_stocks <- function(survey_form,
            depth_bottom,
            depth_avg,
            layer_thickness,
-           soil_depth,
+           depth_stock,
            bulk_density,
            bulk_density_min,
            bulk_density_max,
@@ -1420,57 +1786,68 @@ get_stocks <- function(survey_form,
            parameter_for_stock,
            parameter_for_stock_min,
            parameter_for_stock_max) %>%
-    # Remove TOCs below LOQ (since highly implausible for forest floor),
+    # Remove values below LOQ (since highly implausible for forest floor),
     # e.g. for the UK in LI
     mutate(
       parameter_for_stock_min = ifelse(
         !is.na(parameter_for_stock) &
-          parameter_for_stock < toc_loq,
+          parameter_for_stock < loq,
         NA_real_,
         parameter_for_stock_min),
       parameter_for_stock_max = ifelse(
         !is.na(parameter_for_stock) &
-          parameter_for_stock < toc_loq,
+          parameter_for_stock < loq,
         NA_real_,
         parameter_for_stock_max),
       parameter_for_stock = ifelse(
         !is.na(parameter_for_stock) &
-          parameter_for_stock < toc_loq,
+          parameter_for_stock < loq,
         NA_real_,
-        parameter_for_stock)) %>%
-    # Gap-fill TOCs
-    mutate(
-      parameter_for_stock_min = ifelse(
-        !is.na(parameter_for_stock),
-        parameter_for_stock_min,
-        ifelse(
-          # Do not gap-fill if organic_layer_weight is still unknown
-          !is.na(organic_layer_weight),
-          case_when(
-            code_layer == "OF" ~ toc_of$lower,
-            code_layer == "OH" ~ toc_oh$lower,
-            .default = toc_ff$lower),
-          NA_real_)),
-      parameter_for_stock_max = ifelse(
-        !is.na(parameter_for_stock),
-        parameter_for_stock_max,
-        ifelse(
-          !is.na(organic_layer_weight),
-          case_when(
-            code_layer == "OF" ~ toc_of$upper,
-            code_layer == "OH" ~ toc_oh$upper,
-            .default = toc_ff$upper),
-          NA_real_)),
-      parameter_for_stock = ifelse(
-        !is.na(parameter_for_stock),
-        parameter_for_stock,
-        ifelse(
-          !is.na(organic_layer_weight),
-          case_when(
-            code_layer == "OF" ~ toc_of$mean,
-            code_layer == "OH" ~ toc_oh$mean,
-            .default = toc_ff$mean),
-          NA_real_))) %>%
+        parameter_for_stock))
+
+
+  if (parameter == "organic_carbon_total") {
+
+    df_forest_floor <- df_forest_floor %>%
+      # Gap-fill TOCs
+      mutate(
+        parameter_for_stock_min = ifelse(
+          !is.na(parameter_for_stock),
+          parameter_for_stock_min,
+          ifelse(
+            # Do not gap-fill if organic_layer_weight is still unknown
+            !is.na(organic_layer_weight),
+            case_when(
+              code_layer == "OF" ~ toc_of$lower,
+              code_layer == "OH" ~ toc_oh$lower,
+              .default = toc_ff$lower),
+            NA_real_)),
+        parameter_for_stock_max = ifelse(
+          !is.na(parameter_for_stock),
+          parameter_for_stock_max,
+          ifelse(
+            !is.na(organic_layer_weight),
+            case_when(
+              code_layer == "OF" ~ toc_of$upper,
+              code_layer == "OH" ~ toc_oh$upper,
+              .default = toc_ff$upper),
+            NA_real_)),
+        parameter_for_stock = ifelse(
+          !is.na(parameter_for_stock),
+          parameter_for_stock,
+          ifelse(
+            !is.na(organic_layer_weight),
+            case_when(
+              code_layer == "OF" ~ toc_of$mean,
+              code_layer == "OH" ~ toc_oh$mean,
+              .default = toc_ff$mean),
+            NA_real_)))
+
+  }
+
+
+
+  df_forest_floor <- df_forest_floor %>%
     # Carbon stock per layer (t C ha-1 for each layer)
     # Units: g C/kg forest floor * kg forest floor/m2
     mutate(stock_layer =
@@ -1597,9 +1974,9 @@ get_stocks <- function(survey_form,
 
   close(progress_bar)
 
-  profile_stocks_forest_floor <- profile_stocks_forest_floor %>%
-    mutate(unknown_forest_floor = ifelse(
-      is.na(stock_forest_floor), TRUE, FALSE))
+  # profile_stocks_forest_floor <- profile_stocks_forest_floor %>%
+  #   mutate(unknown_forest_floor = ifelse(
+  #     is.na(stock_forest_floor), TRUE, FALSE))
 
   assertthat::assert_that(
     all(profile_stocks_forest_floor$stock_forest_floor >= 0 |
@@ -1650,8 +2027,8 @@ get_stocks <- function(survey_form,
                unique(forest_floor_layers),
                NA_character_)) %>%
     relocate(stock_forest_floor, .before = stock_forest_floor_min) %>%
-    mutate(unknown_forest_floor = ifelse(
-        is.na(stock_forest_floor), TRUE, FALSE)) %>%
+    # mutate(known_forest_floor = ifelse(
+    #     !is.na(stock_forest_floor), TRUE, FALSE)) %>%
     arrange(partner_short,
             code_plot,
             survey_year) %>%
@@ -1824,14 +2201,15 @@ get_stocks <- function(survey_form,
     relocate(contains("stock_below_ground"), .after = stock_topsoil_max) %>%
     relocate(contains("stock_forest_floor"),
              .after = stock_below_ground_topsoil_max) %>%
-    relocate(use_stock_topsoil, .after = survey_year) %>%
-    relocate(unknown_forest_floor, .after = use_stock_topsoil) %>%
-    relocate(contains_peat, .after = unknown_forest_floor) %>%
+    # relocate(use_stock_topsoil, .after = survey_year) %>%
+    relocate(contains_peat, .after = survey_year) %>%
+    # relocate(known_forest_floor, .after = use_stock_topsoil) %>%
+    # relocate(contains_peat, .after = known_forest_floor) %>%
     relocate(contains("nlay"), .after = stock_forest_floor_max) %>%
     relocate(contains("nlay_below_ground"), .after = nlay_max) %>%
     relocate(contains("nlay_forest_floor"), .after = nlay_below_ground_max) %>%
-    relocate(soil_depth_avg, .after = stock_forest_floor_max) %>%
-    relocate(obs_depth_avg, .after = soil_depth_avg) %>%
+    relocate(depth_stock_avg, .after = stock_forest_floor_max) %>%
+    relocate(obs_depth_avg, .after = depth_stock_avg) %>%
     relocate(rmse_mpspline_max, .after = forest_floor_layers_unique)
 
 
@@ -1877,7 +2255,10 @@ get_stocks <- function(survey_form,
           filter(n > 1) %>%
           nrow)
 
-} # End of loop over survey_forms
+
+
+}
+  # End of loop over survey_forms ----
 
 
 
@@ -2015,10 +2396,20 @@ if (length(survey_forms) == 2) {
 
     plot_stocks <- plot_stocks %>%
       left_join(df_strat %>%
-                  select(-eff_soil_depth),
+                  select(-contains("eff_soil_depth")),
                 by = "plot_id")
 
   }
+
+  if (add_plausible_fscc == TRUE) {
+
+    plot_stocks <- check_stock_plausibility(data_frame = plot_stocks,
+                                            parameter = parameter,
+                                            shorter_var_name = shorter_var_name,
+                                            survey_form_orig = survey_form_orig)
+
+  }
+
 
   # Save the plot_stocks dataset
 
@@ -2051,15 +2442,230 @@ if (length(survey_forms) == 2) {
 
   create_attribute_catalogue(data_frame =
                                format_stocks(plot_stocks),
-                             path_to_save = dir)
+                             path_to_save = paste0(dir,
+                                                   "plot_",
+                                                   shorter_var_name,
+                                                   "_stocks_"))
 
 
+
+  # Plot overview
+
+  if (any(grepl("som", survey_forms))) {
+
+    unique_surveys_stocks <- plot_stocks %>%
+      filter(grepl("som", survey_form)) %>%
+      filter(stock_plaus == TRUE) %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot)) %>%
+      distinct(unique_survey) %>%
+      pull(unique_survey)
+
+    unique_surveys_stocks_implaus <- plot_stocks %>%
+      filter(grepl("som", survey_form)) %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot)) %>%
+      filter(stock_plaus == FALSE) %>%
+      mutate(reason = paste0("Implausible stock: ",
+                             implaus_fscc_reason)) %>%
+      as_tibble %>%
+      select(unique_survey, reason)
+
+    unique_surveys_plaus_cov <- plot_stocks %>%
+      filter(grepl("som", survey_form)) %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot)) %>%
+      mutate(cov = case_when(
+        stock_plaus == TRUE ~
+          "Complete (plausible for forest floor + topsoil + subsoil)",
+        stock_topsoil_plaus == TRUE ~
+          "Incomplete (plausible for forest floor + topsoil, not for subsoil)",
+        stock_below_ground_plaus == TRUE ~
+          "Incomplete (plausible for topsoil + subsoil, not for forest floor)",
+        stock_below_ground_topsoil_plaus == TRUE ~
+          paste0("Incomplete (plausible for topsoil, ",
+                 "not for forest floor and subsoil)"),
+        .default = NA_character_)) %>%
+      as_tibble %>%
+      select(unique_survey, cov)
+
+    unique_surveys_simultaneous_pfh <- plot_stocks %>%
+      filter(grepl("pfh", survey_form)) %>%
+      mutate(unique_survey = paste0(code_country, "_",
+                                    survey_year, "_",
+                                    code_plot)) %>%
+      filter(stock_plaus == TRUE) %>%
+      pull(unique_survey)
+
+    plot_data_use_stocks <- plot_data_use_stocks %>%
+      left_join(unique_surveys_stocks_implaus,
+                by = "unique_survey") %>%
+      mutate(
+        plaus_stock_calculated =
+               (unique_survey %in% unique_surveys_stocks),
+        reason_excluded = coalesce(reason_excluded,
+                                   reason)) %>%
+      select(-reason) %>%
+      left_join(unique_surveys_plaus_cov,
+                by = "unique_survey") %>%
+      mutate(plaus_stock_coverage = coalesce(plaus_stock_coverage,
+                                             cov)) %>%
+      select(-cov) %>%
+      mutate(
+        plaus_stock_pfh_simultaneous =
+          (unique_survey %in% unique_surveys_simultaneous_pfh)) %>%
+      rename(
+        !!paste0(parameter, "_source") := parameter_for_stock_source)
+
+
+    write.table(plot_data_use_stocks,
+                file = paste0(dir,
+                              survey_form_orig, "_",
+                              shorter_var_name, "_stock_potential_summary",
+                              ".csv"),
+                row.names = FALSE,
+                na = "",
+                sep = ";",
+                dec = ".")
+
+    source("./src/functions/create_attribute_catalogue.R")
+
+    create_attribute_catalogue(data_frame =
+                                 plot_data_use_stocks,
+                               path_to_save = paste0(dir,
+                                                     survey_form_orig, "_",
+                                                     shorter_var_name,
+                                                     "_stock_potential_",
+                                                     "summary_"))
+
+  }
 
 
 
   # Create graphs per plot ----
 
+  # !!!!!! To do:
+  # make sure that x axis starts from 0 (e.g. so_som 7_12)
+  # lower dpi
+  # only draw graphs for profiles which have an actual stock calculated
+  # positive depths
+  # include estimated c density ff
+  # add line at 30 cm if "use_topsoil"
+  # als stock forest floor is NA, dan geen stock forest floor gebruiken
+  # (i.e. ignore NA - zie 13_1607 in s1)
+
+
+  # Calculate the estimated thickness of forest floor layers (and the
+  # resulting variable density) based on pedotransfer bulk density
+  # estimates for forest floor layers.
+  # This will be used to visualise the (estimated) variable densities
+  # including the forest floor
+
+  # Retrieve the representative bulk density for forest floor layers
+
+  bd_ff <- get_parameter_stats(parameter = "bulk_density",
+                               mode = "stat",
+                               layer_type = "forest_floor_excl_ol")
+
+  bd_ff <- as.numeric(bd_ff[which(names(bd_ff) == "Mean")])
+
+
+
+
+
+
+
+
+
+
+
+
   if (graph == TRUE) {
+
+  # Estimate layer thicknesses of forest floor layers with unknown layer limits
+
+  df_layer_gapfilled <- df_layer %>%
+    mutate(
+      # Gap-filled layer_thickness
+      layer_thickness_gf = coalesce(
+        layer_thickness,
+        # Thickness of the layer
+        organic_layer_weight / (bd_ff * 1E-2)),
+      # Gap-filled density
+      density_gf = round(coalesce(
+        density,
+        ifelse(
+          layer_type == "forest_floor" &
+            is.na(layer_thickness) &
+            !is.na(stock_layer),
+          .data$stock_layer / .data$layer_thickness_gf,
+        NA_real_)), 2),
+      density_min_gf = round(coalesce(
+        density_min,
+        ifelse(
+          layer_type == "forest_floor" &
+            is.na(layer_thickness) &
+            !is.na(stock_layer_min),
+        .data$stock_layer_min / .data$layer_thickness_gf,
+        NA_real_)), 2),
+      density_max_gf = round(coalesce(
+        density_max,
+        ifelse(
+          layer_type == "forest_floor" &
+            is.na(layer_thickness) &
+            !is.na(stock_layer_max),
+        .data$stock_layer_max / .data$layer_thickness_gf,
+        NA_real_)), 2),
+      layer_thickness_gf = round(layer_thickness_gf, 1)) %>%
+    filter(!is.na(density_gf))
+
+
+  # Gap-fill layer limits
+
+  vec <- which(is.na(df_layer_gapfilled$depth_top))
+
+  for (j in sort(vec, decreasing = TRUE)) {
+
+    if (df_layer_gapfilled$profile_id_form[j + 1] !=
+        df_layer_gapfilled$profile_id_form[j]) {
+      # For example the case when there are only forest floor layers in
+      # a certain profile (e.g. "so_som_1993_1_40_1")
+
+      next
+    }
+
+    if (is.na(df_layer_gapfilled$depth_top[j + 1])) {
+      # For example the case when there are more than one layers and
+      # all layers are forest floor layers without layer limits
+      # (e.g. "s1_som_1988_55_1156_1")
+
+      next
+    }
+
+    assertthat::assert_that(
+      !is.na(df_layer_gapfilled$layer_thickness_gf[j]))
+
+    if (is.na(df_layer_gapfilled$depth_bottom[j])) {
+
+      df_layer_gapfilled$depth_bottom[j] <-
+        round(df_layer_gapfilled$depth_top[j + 1], 1)
+
+    }
+
+    if (is.na(df_layer_gapfilled$depth_top[j])) {
+
+      df_layer_gapfilled$depth_top[j] <-
+        round(df_layer_gapfilled$depth_bottom[j] -
+        df_layer_gapfilled$layer_thickness_gf[j], 1)
+    }
+  }
+
+  df_layer_gapfilled <- df_layer_gapfilled %>%
+    filter(!is.na(depth_top))
+
 
   ## Reorganise profile stocks ----
 
@@ -2071,14 +2677,15 @@ if (length(survey_forms) == 2) {
     values_to = "density") %>%
     mutate(depth = as.numeric(depth)) %>%
     select(survey_form, code_country, code_plot, plot_id, survey_year,
-           repetition, profile_id, profile_id_form, soil_depth,
+           repetition, profile_id, profile_id_form, depth_stock,
            stock, stock_below_ground, stock_below_ground_topsoil,
            depth, density) %>%
     filter(!is.na(density)) %>%
+    mutate(density_gf = density) %>%
     # Forest floor
     bind_rows(
       # Upper layer limit forest floor
-      df_layer %>%
+      df_layer_gapfilled %>%
         filter(layer_type == "forest_floor") %>%
         filter(profile_id_form %in% profile_stocks$profile_id_form) %>%
         left_join(profile_stocks %>%
@@ -2087,12 +2694,12 @@ if (length(survey_forms) == 2) {
                   by = "profile_id_form") %>%
         mutate(depth = depth_top) %>%
         select(survey_form, code_country, code_plot, plot_id, survey_year,
-               repetition, profile_id, profile_id_form, soil_depth,
+               repetition, profile_id, profile_id_form, depth_stock,
                stock, stock_below_ground, stock_below_ground_topsoil,
-               depth, density)) %>%
+               depth, density, density_gf)) %>%
     bind_rows(
       # Upper layer limit forest floor
-      df_layer %>%
+      df_layer_gapfilled %>%
         filter(layer_type == "forest_floor") %>%
         filter(profile_id_form %in% profile_stocks$profile_id_form) %>%
         left_join(profile_stocks %>%
@@ -2103,9 +2710,9 @@ if (length(survey_forms) == 2) {
                               depth_bottom - 0.1,
                               NA_real_)) %>%
         select(survey_form, code_country, code_plot, plot_id, survey_year,
-               repetition, profile_id, profile_id_form, soil_depth,
+               repetition, profile_id, profile_id_form, depth_stock,
                stock, stock_below_ground, stock_below_ground_topsoil,
-               depth, density))
+               depth, density, density_gf))
 
   profile_stocks_long <- profile_stocks_long %>%
     bind_rows(
@@ -2121,9 +2728,13 @@ if (length(survey_forms) == 2) {
             depth) %>%
     mutate(unique_survey = paste0(code_country, "_",
                                   survey_year, "_",
-                                  code_plot)) %>%
-    # For now, just remove (forest floor) layers without known density
-    filter(!is.na(density))
+                                  code_plot))
+
+
+  assertthat::assert_that(
+    all(!is.na(profile_stocks_long$density_gf)))
+
+
 
   # Set progress bar
   progress_bar <- txtProgressBar(min = 0,
@@ -2146,6 +2757,11 @@ if (length(survey_forms) == 2) {
       filter(plot_id == plot_id_i) %>%
       as.data.frame
 
+    depth_stock_i <- plot_stocks %>%
+      filter(plot_id == plot_id_i) %>%
+      distinct(depth_stock_avg) %>%
+      pull(depth_stock_avg)
+
 
     ## Plausible stocks ----
 
@@ -2153,16 +2769,16 @@ if (length(survey_forms) == 2) {
       left_join(df_strat,
                 by = "plot_id")
 
-    if (!is.na(df_strat_i$wrb_soil_group)) {
+    if (!is.na(df_strat_i$wrb_ref_soil_group)) {
 
       plaus_stocks_i <- plaus_stocks_i %>%
-        filter(wrb_soil_group == df_strat_i$wrb_soil_group)
+        filter(wrb_ref_soil_group == df_strat_i$wrb_ref_soil_group)
     }
 
-    if (!is.na(df_strat_i$forest_type)) {
+    if (!is.na(df_strat_i$eftc)) {
 
       plaus_stocks_i <- plaus_stocks_i %>%
-        filter(forest_type == df_strat_i$forest_type)
+        filter(eftc == df_strat_i$eftc)
     }
 
     if (nrow(plaus_stocks_i) > 0) {
@@ -2195,13 +2811,29 @@ if (length(survey_forms) == 2) {
         data.frame(depth = sort(unique(c(plaus_stocks_min_i$depth,
                                          plaus_stocks_max_i$depth)))) %>%
         left_join(plaus_stocks_min_i %>%
-                    rename(density_min = density) %>%
+                    mutate(density_min = density_gf) %>%
                     select(depth, density_min),
                   by = "depth") %>%
         left_join(plaus_stocks_max_i %>%
-                    rename(density_max = density) %>%
+                    rename(density_max = density_gf) %>%
                     select(depth, density_max),
                   by = "depth")
+
+      if (max(plaus_stocks_i$depth) > depth_stock_i) {
+
+        plaus_stocks_i <- plaus_stocks_i %>%
+          filter(depth <= depth_stock_i)
+
+        assertthat::assert_that(
+          abs(diff(c(max(plaus_stocks_i$depth), depth_stock_i))) <= 3)
+
+        plaus_stocks_i <- plaus_stocks_i %>%
+          mutate(
+            depth = ifelse(
+              depth == max(depth, na.rm = TRUE),
+              depth_stock_i,
+              depth))
+      }
 
     } else {
       plaus_stocks_i <- NULL
@@ -2212,9 +2844,10 @@ if (length(survey_forms) == 2) {
                          filter(plot_id == plot_id_i) %>%
                          distinct(depth) %>%
                          arrange(depth) %>%
-                         pull(depth))
+                         pull(depth),
+                       depth_stock_i)
 
-    depth_range_j <- (-1) * sort(unique(c(
+    depth_range_j <- (1) * sort(unique(c(
       0,
       seq(0, min(depth_range_j), by = -20),
       round(min(depth_range_j)),
@@ -2256,25 +2889,29 @@ if (length(survey_forms) == 2) {
           filter(grepl("som", survey_form))
       }
 
+
       stock_j <- stock_j %>%
         mutate(
           stock_final = case_when(
-            use_stock_topsoil == FALSE & unknown_forest_floor == FALSE ~ stock,
-            use_stock_topsoil == TRUE & unknown_forest_floor == FALSE ~
-              stock_topsoil,
-            use_stock_topsoil == FALSE & unknown_forest_floor == TRUE ~
-              stock_below_ground,
-            use_stock_topsoil == TRUE & unknown_forest_floor == TRUE ~
-              stock_below_ground_topsoil),
+            stock_plaus == TRUE ~ stock,
+            stock_topsoil_plaus == TRUE ~ stock_topsoil,
+            stock_below_ground_plaus == TRUE ~ stock_below_ground,
+            stock_below_ground_topsoil_plaus == TRUE ~
+              stock_below_ground_topsoil,
+            # If implausible
+            TRUE ~ stock),
           label = case_when(
-            use_stock_topsoil == FALSE & unknown_forest_floor == FALSE ~
+            stock_plaus == TRUE ~
               paste0("(*", survey_form, "*)"),
-            use_stock_topsoil == TRUE & unknown_forest_floor == FALSE ~
-              paste0("(*", survey_form, "* · forest floor + topsoil)"),
-            use_stock_topsoil == FALSE & unknown_forest_floor == TRUE ~
+            stock_topsoil_plaus == TRUE ~
+              paste0("(*", survey_form, "* · excl. subsoil)"),
+            stock_below_ground_plaus == TRUE ~
               paste0("(*", survey_form, "* · excl. forest floor)"),
-            use_stock_topsoil == TRUE & unknown_forest_floor == TRUE ~
-              paste0("(*", survey_form, "* · topsoil excl. forest floor)")))
+            stock_below_ground_topsoil_plaus ~
+              paste0("(*", survey_form, "* · excl. forest floor and subsoil)"),
+            # If implausible
+            TRUE ~ paste0("(*", survey_form,
+                          "* · stock considered implaus.)")))
 
       ## Graph ----
 
@@ -2286,11 +2923,23 @@ if (length(survey_forms) == 2) {
           geom_ribbon(data = plaus_stocks_i,
                       aes(ymin = density_min,
                           ymax = density_max,
-                          x = (-1) * depth),
+                          x = (1) * depth),
                       color = NA,
                       fill = "#D8E0E0",
                       alpha = 1)
       }
+
+      # If subsoil is implausible: draw line at 30 cm
+
+      if (stock_j$stock_below_ground_topsoil_plaus == TRUE &&
+          stock_j$stock_below_ground_plaus == FALSE) {
+
+        p_j <- p_j +
+          geom_vline(xintercept = 30, linetype = "dashed",
+                     color = "black", linewidth = 1)
+
+      }
+
 
       if (nrow(profiles_other_j) > 0) {
 
@@ -2300,8 +2949,17 @@ if (length(survey_forms) == 2) {
             geom_line(data = profile_stocks_long %>%
                         filter(profile_id_form ==
                                  profiles_other_j$profile_id_form[k]),
+                      aes(y = density_gf,
+                          x = (1) * depth),
+                      color = "grey",
+                      linetype = "21",
+                      linewidth = 1) +
+            geom_line(data = profile_stocks_long %>%
+                        filter(profile_id_form ==
+                                 profiles_other_j$profile_id_form[k]) %>%
+                        filter(!is.na(density)),
                       aes(y = density,
-                          x = (-1) * depth),
+                          x = (1) * depth),
                       color = "grey",
                       linewidth = 1)
         }
@@ -2314,11 +2972,23 @@ if (length(survey_forms) == 2) {
         p_j <- p_j +
           geom_line(data = profile_stocks_long %>%
                       filter(profile_id_form == profiles_j$profile_id_form[k]),
+                    aes(y = density_gf,
+                        x = (1) * depth),
+                    color = col_k,
+                    linetype = "21",
+                    linewidth = 1) +
+          geom_line(data = profile_stocks_long %>%
+                      filter(profile_id_form ==
+                               profiles_j$profile_id_form[k]) %>%
+                      filter(!is.na(density)),
                     aes(y = density,
-                        x = (-1) * depth),
+                        x = (1) * depth),
                     color = col_k,
                     linewidth = 1)
       }
+
+
+
 
       # p_j <- p_j +
       #   scale_color_identity(breaks = c("#CC3300", "#570000", "grey"),
@@ -2328,21 +2998,32 @@ if (length(survey_forms) == 2) {
       #                        guide = "legend",
       #                        name = NULL)
 
+      # Bottom left
       if (j %% 2 > 0 & j > (length(survey_years_i) - 2)) {
 
         p_j <- p_j +
-          labs(y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
+          labs(y = paste0("**", shorter_var_name, " density**<br>(",
+                          unit_density_per_cm_markdown, ")"),
+              #y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
                x = "**Depth**<br>(cm)")
+
+      # Left but not bottom
       } else if (j %% 2 > 0 & j <= (length(survey_years_i) - 2)) {
 
         p_j <- p_j +
           labs(y = NULL,
                x = "**Depth**<br>(cm)")
+
+      # Right bottom
       } else if (j %% 2 == 0 & j > (length(survey_years_i) - 2)) {
 
         p_j <- p_j +
-          labs(y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
+          labs(y = paste0("**", shorter_var_name, " density**<br>(",
+                          unit_density_per_cm_markdown, ")"),
+               #y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
                x = NULL)
+
+      # Else
       } else if (j %% 2 == 0 & j <= (length(survey_years_i) - 2)) {
 
         p_j <- p_j +
@@ -2351,18 +3032,16 @@ if (length(survey_forms) == 2) {
       }
 
       p_j <- p_j +
-        labs(# y = "**C density**<br>(t ha<sup>-1</sup> cm<sup>-1</sup>)",
-             # x = "**Depth**<br>(cm)",
-             fill = NULL,
+        labs(fill = NULL,
              title = survey_years_i[j],
              subtitle = paste0("C stock",
-                               ": ",
+                               ": *",
                                round(stock_j$stock_final),
-                               " t C ha<sup>-1</sup><br>",
+                               "* ", unit_density_per_cm_markdown, "<br>",
                                stock_j$label)) +
         coord_flip() +
         scale_y_continuous(expand = c(0, 0)) +
-        scale_x_continuous(breaks = depth_range_j,
+        scale_x_reverse(breaks = depth_range_j,
                            expand = c(0, 0)) +
         theme(text = element_text(color = "black",
                                   size = 10),
@@ -2447,9 +3126,13 @@ if (length(survey_forms) == 2) {
                                axis_titles = "collect") +
       plot_annotation(
         title = paste0("**", plot_id_i, "**<br>",
-                       "Soil type: ", df_strat_i$wrb_soil_group, "<br>",
-                       "Forest type: ", df_strat_i$forest_type, "<br>",
-                       "Humus type: ", df_strat_i$humus_type)) &
+                       "WRB reference soil group: *",
+                       df_strat_i$wrb_ref_soil_group,
+                       "*<br>",
+                       gsub("\n", "*<br>*",
+                       str_wrap(paste0("European forest type category: *",
+                       df_strat_i$eftc, "*"))), "<br>",
+                       "Humus form: *", df_strat_i$humus_form, "*")) &
       theme(legend.position = "bottom",
             legend.direction = "vertical",
             legend.justification = c("left", "top"),
@@ -2472,7 +3155,7 @@ if (length(survey_forms) == 2) {
     ggsave(filename = paste0(plot_id_i, ".png"),
            path = paste0(dir, code_survey, "_splines_per_plot/"),
            plot = p,
-           dpi = 500,
+           dpi = 300,
            height = height_i,
            width = 6.81)
 
