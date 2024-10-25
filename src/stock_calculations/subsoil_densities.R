@@ -9,6 +9,9 @@
 # Script initiation date: 2024-03-24
 
 
+parameter_for_density <- "extrac_p"
+
+
 # Import data ----
 
 # Layer 1 data
@@ -27,36 +30,40 @@ denmark_stocks <-
   mutate(plot_id = paste0("8_", Plot)) %>%
   rename(c_layer_stock = "C.(Mg.C.ha-1)") %>%
   filter(Layer == "80-100 cm") %>%
-  mutate(c_density = c_layer_stock / 20) %>%
-  select(plot_id, c_density)
+  mutate(density = c_layer_stock / 20) %>%
+  select(plot_id, density)
 
 
 
 # Combine data ----
 
-subsoil_c_densities <- bind_rows(
+subsoil_densities <- bind_rows(
   s1_som %>%
     select(plot_id, profile_id,
            layer_limit_superior, layer_limit_inferior,
-           bulk_density, coarse_fragment_vol, organic_carbon_total),
+           bulk_density, coarse_fragment_vol, organic_carbon_total,
+           n_total, extrac_p),
   s1_pfh %>%
     rename(layer_limit_superior = horizon_limit_up) %>%
     rename(layer_limit_inferior = horizon_limit_low) %>%
     rename(organic_carbon_total = horizon_c_organic_total) %>%
+    rename(n_total = horizon_n_total) %>%
+    mutate(extrac_p = NA) %>%
     select(plot_id, profile_id,
            layer_limit_superior, layer_limit_inferior,
-           bulk_density, coarse_fragment_vol, organic_carbon_total),
-  so_som %>%
-    select(plot_id, profile_id,
-           layer_limit_superior, layer_limit_inferior,
-           bulk_density, coarse_fragment_vol, organic_carbon_total),
-  so_pfh %>%
-    rename(layer_limit_superior = horizon_limit_up) %>%
-    rename(layer_limit_inferior = horizon_limit_low) %>%
-    rename(organic_carbon_total = horizon_c_organic_total) %>%
-    select(plot_id, profile_id,
-           layer_limit_superior, layer_limit_inferior,
-           bulk_density, coarse_fragment_vol, organic_carbon_total)) %>%
+           bulk_density, coarse_fragment_vol, organic_carbon_total,
+           n_total, extrac_p)) %>%
+  # so_som %>%
+  #   select(plot_id, profile_id,
+  #          layer_limit_superior, layer_limit_inferior,
+  #          bulk_density, coarse_fragment_vol, organic_carbon_total),
+  # so_pfh %>%
+  #   rename(layer_limit_superior = horizon_limit_up) %>%
+  #   rename(layer_limit_inferior = horizon_limit_low) %>%
+  #   rename(organic_carbon_total = horizon_c_organic_total) %>%
+  #   select(plot_id, profile_id,
+  #          layer_limit_superior, layer_limit_inferior,
+  #          bulk_density, coarse_fragment_vol, organic_carbon_total)) %>%
   # Filter for the wanted depths
   filter(!is.na(layer_limit_superior) &
            !is.na(layer_limit_inferior) &
@@ -74,39 +81,76 @@ subsoil_c_densities <- bind_rows(
                                        .data$layer_limit_inferior),
                                   abs(.data$layer_limit_superior -
                                         .data$layer_limit_inferior),
-                                  NA_real_)) %>%
+                                  NA_real_))
+
+
+assertthat::assert_that(parameter_for_density %in% names(subsoil_densities))
+
+names(subsoil_densities)[which(
+  names(subsoil_densities) == parameter_for_density)] <- "parameter_for_density"
+
+
+subsoil_densities <- subsoil_densities %>%
   # Carbon stock per layer (t C ha-1 (per layer))
-  mutate(c_stock_layer =
-           (.data$organic_carbon_total * .data$bulk_density *
+  mutate(stock_layer =
+           (.data$parameter_for_density * .data$bulk_density *
               (1 - .data$coarse_fragment_vol_frac) * .data$layer_thickness) /
            10000) %>%
-  filter(!is.na(c_stock_layer)) %>%
+  filter(!is.na(stock_layer) &
+           stock_layer >= 0) %>%
   group_by(profile_id, plot_id) %>%
-  reframe(c_stock_layer = sum(c_stock_layer, na.rm = TRUE),
+  reframe(stock_layer = sum(stock_layer, na.rm = TRUE),
           layer_thickness = sum(layer_thickness)) %>%
   ungroup() %>%
   # Calculate carbon density per cm (t C ha-1 cm-1)
-  mutate(c_density = c_stock_layer / layer_thickness) %>%
+  mutate(density = stock_layer / layer_thickness) %>%
   group_by(plot_id) %>%
-  reframe(c_density = mean(c_density)) %>%
-  ungroup %>%
-  bind_rows(denmark_stocks) %>%
-  arrange(c_density) %>%
-  pull(c_density)
+  reframe(density = mean(density)) %>%
+  ungroup
+
+if (parameter_for_density == "organic_carbon_total") {
+
+  subsoil_densities <- subsoil_densities %>%
+    bind_rows(denmark_stocks)
+}
+
+subsoil_densities <- subsoil_densities %>%
+  arrange(density) %>%
+  pull(density)
 
 
 
-summary(subsoil_c_densities)
-median(subsoil_c_densities)
-quantile(subsoil_c_densities, c(0.05, 0.95))
+summary(subsoil_densities)
+median(subsoil_densities)
+quantile(subsoil_densities, c(0.05, 0.95))
+
+# organic_carbon_total:
 
 #     Min.   1st Qu.    Median      Mean   3rd Qu.      Max.
-# 0.009834  0.098497  0.306272  0.730857  0.616370 12.661800
+# 0.009834  0.097200  0.298600  0.636684  0.565500 12.445875
 
 #           5%        95%
-#   0.05784099 2.23027130
+#   0.05776157 2.58060000
 
 
 
+# n_total:
+
+#      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.
+# 0.0008195 0.0077880 0.0177666 0.0405909 0.0458679 0.8360472
+
+#           5%        95%
+#   0.00494602 0.11981280
+
+
+
+# extrac_p:
+# Only based on five plots!!! (four in UK, one in Ireland)
+
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+# 1.416   4.883  11.801  12.539  20.703  23.894
+
+#         5%       95%
+#   2.109588 23.255596
 
 
