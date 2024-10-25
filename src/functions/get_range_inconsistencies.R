@@ -2772,6 +2772,70 @@ get_range_inconsistencies <- function(survey_form,
                         .data$n_total_source))
     }
 
+    # Plot 52_10
+    # organic_carbon_total of mineral layers should be a factor 10 lower
+    # in 2019
+
+    unique_layers_to_convert <- df %>%
+      filter(plot_id == "52_10") %>%
+      filter(layer_type != "forest_floor") %>%
+      filter(survey_year == 2019) %>%
+      mutate(unit_issue_toc =
+               # Upper limit of organic_carbon_total plausible range in %
+               ifelse(.data$organic_carbon_total > 130,
+                      TRUE,
+                      NA))
+
+    if (!identical(which(unique_layers_to_convert$unit_issue_toc == TRUE),
+                   integer(0)) &&
+        (unique_layers_to_convert %>%
+         filter(unit_issue_toc == TRUE) %>%
+         nrow) >= 2) {
+
+      unique_layers_to_convert <-
+        unique_layers_to_convert %>%
+        filter(unit_issue_toc == TRUE) %>%
+        distinct(unique_layer_repetition) %>%
+        pull(unique_layer_repetition)
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        .data$organic_carbon_total * 1E-1,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        # We can consider this as PIR since confirmed by
+                        # the partner
+                        "PIR",
+                        .data$organic_carbon_total_source))
+    }
+
+    # Plot 52_11
+    # Typo in organic_carbon_total in M24 replicate 3 in 2019
+
+    unique_layers_to_convert <- "52_2019_11_M24_3"
+
+    if (df$organic_carbon_total[which(df$unique_layer_repetition ==
+                                      unique_layers_to_convert)] > 150) {
+
+      df <- df %>%
+        mutate(organic_carbon_total =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        16.6,
+                        .data$organic_carbon_total),
+               organic_carbon_total_source =
+                 ifelse(.data$unique_layer_repetition %in%
+                          unique_layers_to_convert,
+                        # We can consider this as PIR since confirmed by
+                        # the partner
+                        "PIR",
+                        .data$organic_carbon_total_source))
+    }
+
     # Plot 52_12
     # organic_carbon_total of mineral layers should be a factor 10 higher
     # (in comparison with AFSCDB_LII)
@@ -2809,6 +2873,7 @@ get_range_inconsistencies <- function(survey_form,
                         "FSCDB.LII (2012)",
                         .data$organic_carbon_total_source))
     }
+
 
     # German partner_code 3604
     # Manually verified: TOC values in forest floor layers are unlikely low
