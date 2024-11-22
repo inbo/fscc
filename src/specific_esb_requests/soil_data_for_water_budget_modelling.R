@@ -225,6 +225,10 @@ for (i in seq_along(unique(df$plot_id))) {
 
   plot_id_i <- unique(df$plot_id)[i]
 
+  humus_form_i <- so_strat %>%
+    filter(plot_id == plot_id_i) %>%
+    pull(humus_form)
+
   soil_depth_i <- so_strat %>%
     filter(plot_id == plot_id_i) %>%
     pull(eff_soil_depth)
@@ -240,6 +244,43 @@ for (i in seq_along(unique(df$plot_id))) {
     filter(plot_id == plot_id_i)
 
   assertthat::assert_that(any(!is.na(df_sub$layer_limit_inferior)))
+
+
+  # Some profiles have no forest floor layers reported
+  # while their humus form is not "Mull" (while the absence of forest floor
+  # layers is only possible for Mulls)
+
+  # In those cases, we will estimate the organic layer weight and TOC based
+  # on other plots with the same humus form, European forest type category
+  # and WRB Reference Soil Group.
+
+  ## Check if any forest floor layer needs to be inserted ----
+
+  if (!any(df_sub$layer_type == "forest_floor") &&
+      (is.na(humus_form_i) ||
+      humus_form_i != "Mull")) {
+
+    extra_row <- df_sub %>%
+      filter(layer_number == 1) %>%
+      mutate(layer_type = "forest_floor",
+             layer_limit_superior = NA_real_,
+             layer_limit_inferior = 0,
+             code_layer = "OX",
+             obs = FALSE) %>%
+      mutate_at(vars(any_of(contains(c("bulk_density",
+                                       "coarse_fragment_vol",
+                                       "part_size",
+                                       "texture")))), ~NA)
+
+    df_sub <- df_sub %>%
+      mutate(layer_number = layer_number + 1)
+
+
+    df_sub <- bind_rows(df_sub,
+                        extra_row) %>%
+      arrange(layer_number)
+
+  }
 
   # Identify the lowest layer at this point
 
@@ -808,7 +849,7 @@ df <- df %>%
   select(-code_texture_class)
 
 
-
+df2 <- df
 
 
 
@@ -816,6 +857,29 @@ df <- df %>%
 # Combine physical parameters ----
 
 ## Bulk density ----
+
+# Retrieve the representative bulk density for forest floor layers
+# This can be used to gap-fill the organic_layer_weight of forest floor
+# layers with known thickness
+
+source("./src/functions/get_parameter_stats.R")
+
+bd_ff <- get_parameter_stats(parameter = "bulk_density",
+                             mode = "stat",
+                             layer_type = "forest_floor_excl_ol")
+
+bd_ff <- as.numeric(bd_ff[which(names(bd_ff) == "Mean")])
+
+# Bulk density of forest floor (excluding OL): 120 kg m-3
+
+bd_ol <- get_parameter_stats(parameter = "bulk_density",
+                             mode = "stat",
+                             layer_type = "ol")
+
+bd_ol <- as.numeric(bd_ol[which(names(bd_ol) == "Mean")])
+
+
+
 
 bulk_density_columns <-
   df %>%
@@ -833,12 +897,27 @@ df <- df %>%
         paste0("pfh_measure (",
                .data$pfh_horizon_bulk_dens_measure_survey_year, ")"),
       !is.na(pfh_horizon_bulk_dens_est) ~
-        paste0("pfh_est (", .data$pfh_horizon_bulk_dens_est_survey_year, ")")),
+        paste0("pfh_est (", .data$pfh_horizon_bulk_dens_est_survey_year, ")"),
+      !is.na(layer_limit_superior) &
+        is.na(organic_layer_weight) &
+        grepl("L", code_layer, ignore.case = TRUE) ~
+        "Default 'OL' (Level I)",
+      !is.na(layer_limit_superior) &
+        is.na(organic_layer_weight) &
+        layer_type == "forest_floor" ~
+        "Default 'OFH' (Level I)"),
     bulk_density = coalesce(
       bulk_density,
       swc_bulk_density,
       pfh_horizon_bulk_dens_measure,
-      pfh_horizon_bulk_dens_est)) %>%
+      pfh_horizon_bulk_dens_est,
+      case_when(
+        !is.na(layer_limit_superior) &
+          is.na(organic_layer_weight) &
+          grepl("L", code_layer, ignore.case = TRUE) ~ bd_ol,
+        !is.na(layer_limit_superior) &
+          is.na(organic_layer_weight) &
+          layer_type == "forest_floor" ~ bd_ff))) %>%
   rowwise() %>%
   mutate(
     bulk_density_min = ifelse(
@@ -1076,7 +1155,7 @@ df <- df %>%
         !is.na(layer_thickness) &
         layer_type %in% c("peat", "forest_floor"),
       # kg m-2
-      round(.data$bulk_density * (.data$layer_thickness * 1e-2), 2),
+      round(.data$bulk_density * (.data$layer_thickness * 1e-2), 1),
       NA_real_),
     organic_layer_weight_source = ifelse(
       layer_type %in% c("peat", "forest_floor"),
@@ -1136,27 +1215,393 @@ df <- df %>%
 
 
 
+# Gap-fill forest floor based on Level I plots in similar context ----
 
-# Gap-fill thicknesses of forest floor layers ----
+# Some forest floor records have no organic layer weight reported:
+# - if a layer was reported without any information on organic_layer_weight
+#   or thickness
+# - if no forest floor layers were reported while the humus form of the
+#   plot is not "Mull". (In this case, a forest floor layer was inserted
+#   earlier in this script). In this case, organic_carbon_total is also
+#   missing.
 
-# Retrieve the representative bulk density for forest floor layers
+# We will use data on organic_layer_weight (and if needed:
+# organic_carbon_total) based on the systematic Level I network, for plots
+# with the same WRB Reference Soil Group and European Forest Type Category.
+
+
+
+
+# A small test to see which combination of two stratifiers is
+# the best predictor for organic_layer_weight
+# (in case the combination of three predictors results in too few observations
+#  in Level I)
+
+s1_data <- get_env("s1_som") %>%
+  filter(!is.na(organic_layer_weight)) %>%
+  group_by(unique_survey_repetition, plot_id) %>%
+  reframe(organic_layer_weight = sum(organic_layer_weight, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(plot_id) %>%
+  reframe(organic_layer_weight = mean(organic_layer_weight, na.rm = TRUE)) %>%
+  ungroup() %>%
+  left_join(get_env("s1_strat") %>%
+              select(plot_id,
+                     humus_form, wrb_ref_soil_group, eftc),
+            by = "plot_id") %>%
+  filter(
+    !is.na(organic_layer_weight) &
+      !is.na(humus_form) &
+      !is.na(wrb_ref_soil_group) &
+      !is.na(eftc)) %>%
+  mutate(
+    humus_form = as.factor(humus_form),
+    wrb_ref_soil_group = as.factor(wrb_ref_soil_group),
+    eftc = as.factor(eftc))
+
+# Fit the models: wrb_ref_soil_group versus eftc (combined with humus_form)
+
+model_humus_wrb <- glm(organic_layer_weight ~ humus_form * wrb_ref_soil_group,
+                       data = s1_data,
+                       family = gaussian)
+
+model_humus_eftc <- glm(organic_layer_weight ~ humus_form * eftc,
+                        data = s1_data,
+                        family = gaussian)
+
+# Compare AICs
+AIC(model_humus_wrb, model_humus_eftc)
+
+# Result:
+# if there are too few observations, it is better to omit eftc than to omit
+# wrb_ref_soil_group, as the latter is a stronger predictor for
+# organic_layer_weight in combination with humus_form.
+
+
+# Fit the models: wrb_ref_soil_group versus eftc (without humus_form)
+
+model_wrb <- glm(organic_layer_weight ~ wrb_ref_soil_group,
+                       data = s1_data,
+                       family = gaussian)
+
+model_eftc <- glm(organic_layer_weight ~ eftc,
+                        data = s1_data,
+                        family = gaussian)
+
+# Compare AICs
+AIC(model_wrb, model_eftc)
+
+# Result:
+# In absence of humus_form information, and if there are too few observations
+# for the combination of other predictors, it is better to omit eftc than
+# to omit wrb_ref_soil_group, as the latter is a stronger predictor for
+# organic_layer_weight
+
+
+
+## Create a table with Level I organic layer weights per layer ----
+## for a given combinations of stratifiers
+
+table_olw <- df %>%
+  filter(layer_type == "forest_floor" &
+           is.na(organic_layer_weight)) %>%
+  filter(is.na(layer_limit_superior)) %>%
+  left_join(so_strat %>%
+              select(plot_id,
+                     humus_form, wrb_ref_soil_group,
+                     eftc, biogeographical_region),
+            by = "plot_id") %>%
+  select(code_layer, contains("layer_limit"),
+         humus_form, wrb_ref_soil_group, eftc, biogeographical_region) %>%
+  mutate(
+    code_layer_harm = ifelse(
+      code_layer == "OX" | code_layer == "O" | code_layer == "O2",
+      "OFH",
+      code_layer),
+    key = paste0(code_layer, "_",
+                 humus_form, "_",
+                 wrb_ref_soil_group, "_",
+                 eftc)) %>%
+  distinct(key, .keep_all = TRUE) %>%
+  mutate(
+    organic_layer_weight = NA_real_,
+    organic_layer_weight_min = NA_real_,
+    organic_layer_weight_max = NA_real_,
+    count_plots = NA_integer_)
+
+# Set progress bar
+progress_bar <- txtProgressBar(min = 0,
+                               max = nrow(table_olw), style = 3)
+
+for (i in seq_len(nrow(table_olw))) {
+
+  s1_sub <- get_env("s1_som") %>%
+    filter(layer_type == "forest_floor") %>%
+    # Filter for plots with data
+    filter(!is.na(organic_layer_weight)) %>%
+    # Harmonise code_layer
+    mutate(
+      code_layer_harm = ifelse(
+        !code_layer %in% c("OL", "OF", "OH", "OFH"),
+        case_when(
+          grepl("L", code_layer, ignore.case = TRUE) ~ "OL",
+          TRUE ~ "OFH"),
+        code_layer)) %>%
+    relocate(code_layer_harm, .after = code_layer) %>%
+    # Filter for code_layers containing any of the letters in the target
+    # code_layer (harmonised),
+    # e.g. "OF", "OH", "OFH" for target code_layer "OFH".
+    filter(grepl(paste0("[",
+                        substr(table_olw$code_layer_harm[i],
+                               2,
+                               nchar(table_olw$code_layer_harm[i])),
+                        "]"),
+                 substr(code_layer_harm, 2, nchar(code_layer_harm)))) %>%
+    left_join(get_env("s1_strat") %>%
+                select(plot_id,
+                       humus_form, wrb_ref_soil_group,
+                       eftc, biogeographical_region),
+              by = "plot_id") %>%
+    # Filter for the most recent survey_year
+    group_by(plot_id) %>%
+    filter(survey_year == max(survey_year)) %>%
+    ungroup()
+
+
+  # If humus form is known
+
+  if (!is.na(table_olw$humus_form[i]) &&
+      # Special case: these systems sometimes receive a thick forest floor
+      # in "Level I", which means that either the organic_layer_weight
+      # or the humus form is a mistake. Best to assume the latter.
+      table_olw$key[i] != "OFH_Mull_Podzols_Boreal") {
+
+    s1_plots_sub_i <- s1_sub %>%
+      filter(humus_form == table_olw$humus_form[i]) %>%
+      filter(wrb_ref_soil_group == table_olw$wrb_ref_soil_group[i]) %>%
+      filter(eftc == table_olw$eftc[i])
+
+    if (n_distinct(s1_plots_sub_i$plot_id) < 5) {
+
+      # Filter less strictly
+      # wrb_ref_soil_group is a stronger predictor for organic_layer_weight
+      # in combination with humus_form than eftc
+
+      s1_plots_sub_i <- get_env("s1_strat") %>%
+        filter(humus_form == table_olw$humus_form[i]) %>%
+        filter(wrb_ref_soil_group == table_olw$wrb_ref_soil_group[i])
+
+    }
+
+    if (n_distinct(s1_plots_sub_i$plot_id) < 5) {
+
+      # Filter less strictly
+
+      s1_plots_sub_i <- get_env("s1_strat") %>%
+        filter(humus_form == table_olw$humus_form[i]) %>%
+        filter(eftc == table_olw$eftc[i])
+
+    }
+
+    if (n_distinct(s1_plots_sub_i$plot_id) < 5) {
+
+      # Filter less strictly
+
+      s1_plots_sub_i <- get_env("s1_strat") %>%
+        filter(humus_form == table_olw$humus_form[i]) %>%
+        filter(biogeographical_region == table_olw$biogeographical_region[i])
+
+    }
+
+    if (n_distinct(s1_plots_sub_i$plot_id) < 5) {
+
+      # Filter less strictly
+
+      s1_plots_sub_i <- get_env("s1_strat") %>%
+        filter(humus_form == table_olw$humus_form[i])
+
+    }
+
+  } else
+
+    # If humus form is unknown
+
+    if (is.na(table_olw$humus_form[i]) ||
+        table_olw$key[i] == "OFH_Mull_Podzols_Boreal") {
+
+      s1_plots_sub_i <- s1_sub %>%
+        filter(wrb_ref_soil_group == table_olw$wrb_ref_soil_group[i]) %>%
+        filter(eftc == table_olw$eftc[i])
+
+      if (n_distinct(s1_plots_sub_i$plot_id) < 5) {
+
+        # Filter less strictly
+        # wrb_ref_soil_group is a stronger predictor for organic_layer_weight
+        # than eftc
+
+        s1_plots_sub_i <- get_env("s1_strat") %>%
+          filter(wrb_ref_soil_group == table_olw$wrb_ref_soil_group[i])
+
+      }
+
+      if (n_distinct(s1_plots_sub_i$plot_id) < 5) {
+
+        # Filter less strictly
+
+        s1_plots_sub_i <- get_env("s1_strat") %>%
+          filter(eftc == table_olw$eftc[i])
+
+      }
+  }
+
+  assertthat::assert_that(n_distinct(s1_plots_sub_i$plot_id) > 0)
+
+
+  # Summarise organic_layer_weight data
+
+  s1_sub <- s1_sub %>%
+    # Filter for plots in a similar context
+    filter(plot_id %in% unique(s1_plots_sub_i$plot_id)) %>%
+    # Sum up organic_layer_weights per profile (e.g. "OF" and "OH" for "OFH")
+    group_by(unique_survey_repetition, plot_id) %>%
+    reframe(organic_layer_weight = sum(organic_layer_weight, na.rm = TRUE)) %>%
+    ungroup() %>%
+    # Take the average per plot across the profiles
+    group_by(plot_id) %>%
+    reframe(organic_layer_weight = mean(organic_layer_weight, na.rm = TRUE)) %>%
+    ungroup() %>%
+    pull(organic_layer_weight)
+
+
+  # Complete the data
+
+  table_olw$organic_layer_weight[i] <- mean(s1_sub)
+  table_olw$organic_layer_weight_min[i] <- quantile(s1_sub, 0.05)
+  table_olw$organic_layer_weight_max[i] <- quantile(s1_sub, 0.95)
+  table_olw$count_plots[i] <- length(s1_sub)
+
+
+  # Update progress bar
+  setTxtProgressBar(progress_bar, i)
+
+} # End of "for each of the rows in the table"
+
+close(progress_bar)
+
+
+
+
+
+
+
+
+## Gap-fill organic_layer_weight of forest floor ----
+
+vec <- which(
+  df$layer_type == "forest_floor" &
+    is.na(df$organic_layer_weight))
+
+assertthat::assert_that(all(is.na(df$layer_limit_superior[vec])))
+
+for (i in vec) {
+
+  so_strat_i <- so_strat %>%
+    filter(plot_id == df$plot_id[i]) %>%
+    as.data.frame()
+
+  key_i <- paste0(
+    df$code_layer[i], "_",
+    so_strat_i$humus_form, "_",
+    so_strat_i$wrb_ref_soil_group, "_",
+    so_strat_i$eftc)
+
+  olw_i <- table_olw %>%
+    filter(key == key_i) %>%
+    as.data.frame()
+
+  assertthat::assert_that(nrow(olw_i) == 1)
+
+  df$organic_layer_weight_source[i] <-
+    "Layer-specific default for similar context (Level I)"
+  df$organic_layer_weight[i] <- round(olw_i$organic_layer_weight, 1)
+
+}
+
+
+
+
+## Gap-fill total organic carbon content of forest floor ----
+
+# Retrieve the representative TOC for forest floor layers
 
 source("./src/functions/get_parameter_stats.R")
 
-bd_ff <- get_parameter_stats(parameter = "bulk_density",
-                             mode = "stat",
-                             layer_type = "forest_floor_excl_ol")
+# OF
+toc_of <- get_parameter_stats(parameter = "organic_carbon_total",
+                              mode = "stat",
+                              layer_type = "of")
+toc_of <- data.frame(
+  mean = as.numeric(toc_of[which(names(toc_of) == "Mean")]),
+  lower = as.numeric(toc_of[which(names(toc_of) == "5%")]),
+  upper = as.numeric(toc_of[which(names(toc_of) == "95%")]))
 
-bd_ff <- as.numeric(bd_ff[which(names(bd_ff) == "Mean")])
+# OH
+toc_oh <- get_parameter_stats(parameter = "organic_carbon_total",
+                              mode = "stat",
+                              layer_type = "oh")
+toc_oh <- data.frame(
+  mean = as.numeric(toc_oh[which(names(toc_oh) == "Mean")]),
+  lower = as.numeric(toc_oh[which(names(toc_oh) == "5%")]),
+  upper = as.numeric(toc_oh[which(names(toc_oh) == "95%")]))
 
-# Bulk density of forest floor (excluding OL): 120 kg m-3
+# OL
+toc_ol <- get_parameter_stats(parameter = "organic_carbon_total",
+                              mode = "stat",
+                              layer_type = "ol")
+toc_ol <- data.frame(
+  mean = as.numeric(toc_ol[which(names(toc_ol) == "Mean")]),
+  lower = as.numeric(toc_ol[which(names(toc_ol) == "5%")]),
+  upper = as.numeric(toc_ol[which(names(toc_ol) == "95%")]))
 
-bd_ol <- get_parameter_stats(parameter = "bulk_density",
-                             mode = "stat",
-                             layer_type = "ol")
+# Forest floor excluding OL
+toc_ff <- get_parameter_stats(parameter = "organic_carbon_total",
+                              mode = "stat",
+                              layer_type = "forest_floor_excl_ol")
+toc_ff <- data.frame(
+  mean = as.numeric(toc_ff[which(names(toc_ff) == "Mean")]),
+  lower = as.numeric(toc_ff[which(names(toc_ff) == "5%")]),
+  upper = as.numeric(toc_ff[which(names(toc_ff) == "95%")]))
 
-bd_ol <- as.numeric(bd_ol[which(names(bd_ol) == "Mean")])
 
+# Gap-fill TOC
+
+df <- df %>%
+  mutate(
+    organic_carbon_total_source = ifelse(
+      layer_type == "forest_floor" & is.na(organic_carbon_total),
+      case_when(
+        grepl("L", code_layer, ignore.case = TRUE) ~ "Default 'OL' (Level I)",
+        code_layer == "OF" ~ "Default 'OF' (Level I)",
+        code_layer == "OH" ~ "Default 'OH' (Level I)",
+        TRUE ~ "Default 'OFH' (Level I)"),
+      organic_carbon_total_source),
+    organic_carbon_total = ifelse(
+      layer_type == "forest_floor" & is.na(organic_carbon_total),
+      case_when(
+        grepl("L", code_layer, ignore.case = TRUE) ~ round(toc_ol$mean, 1),
+        code_layer == "OF" ~ round(toc_of$mean, 1),
+        code_layer == "OH" ~ round(toc_oh$mean, 1),
+        TRUE ~ round(toc_ff$mean, 1)),
+      organic_carbon_total))
+
+
+
+
+
+
+
+
+# Gap-fill thicknesses of forest floor layers ----
 
 df <- df %>%
   mutate(
@@ -1239,8 +1684,8 @@ for (i in seq_along(unique(df$plot_id))) {
     # If the organic_layer_weight is also unknown, we cannot estimate
     # the layer thickness and we can basically not use the record.
 
-    # At the moment, such records are just left in the dataset,
-    # but they can easily be removed by filtering for known layer limits.
+    # At the moment, organic_layer_weight is always being gap-filled based
+    # on data from Level I plots in a similar context.
 
     if (is.na(df$organic_layer_weight[j])) {
       next
@@ -1461,7 +1906,7 @@ df <- df %>%
     organic_carbon_total_source = ifelse(
       is.na(organic_carbon_total) &
         layer_limit_superior >= 80,
-      "fixed value subsoil",
+      "Default value subsoil",
       organic_carbon_total_source),
     organic_carbon_total = ifelse(
       is.na(organic_carbon_total) &
@@ -1505,23 +1950,23 @@ df <- df %>%
   # can also be used for LOCF)
   mutate(
     bulk_density_source = ifelse(
-      organic_carbon_total_source != "fixed value subsoil",
+      organic_carbon_total_source != "Default value subsoil",
       case_when(
         !is.na(bulk_density) ~ bulk_density_source,
         !is.na(bulk_density_ptf) ~ "PTF"),
       bulk_density_source),
     bulk_density_min = ifelse(
-      organic_carbon_total_source != "fixed value subsoil",
+      organic_carbon_total_source != "Default value subsoil",
       coalesce(bulk_density_min,
                bd_ptf_lower(bulk_density_ptf)),
       bulk_density_min),
     bulk_density_max = ifelse(
-      organic_carbon_total_source != "fixed value subsoil",
+      organic_carbon_total_source != "Default value subsoil",
       coalesce(bulk_density_max,
                bd_ptf_upper(bulk_density_ptf)),
       bulk_density_max),
     bulk_density = ifelse(
-      organic_carbon_total_source != "fixed value subsoil",
+      organic_carbon_total_source != "Default value subsoil",
       coalesce(bulk_density,
                bulk_density_ptf),
       bulk_density)) %>%
@@ -1550,16 +1995,16 @@ df <- df %>%
   rowwise() %>%
   mutate(
     bulk_density_source = ifelse(
-      organic_carbon_total_source == "fixed value subsoil" &
+      organic_carbon_total_source == "Default value subsoil" &
         is.na(bulk_density),
       case_when(
         bulk_density_locf >= bulk_density_ptf ~ "LOCF",
-        bulk_density_ptf > bulk_density_locf ~ "PTF (fixed TOC)",
+        bulk_density_ptf > bulk_density_locf ~ "PTF (default TOC)",
         TRUE ~ bulk_density_source),
       bulk_density_source),
     # The widest possible uncertainty range
     bulk_density_min = ifelse(
-      organic_carbon_total_source == "fixed value subsoil" &
+      organic_carbon_total_source == "Default value subsoil" &
         is.na(bulk_density),
       # If there is no uncertainty in the LOCF value (because only one
       # value was originally reported for a certain depth layer of a
@@ -1571,14 +2016,14 @@ df <- df %>%
           bd_ptf_lower(bulk_density_ptf)),
       bulk_density_min),
     bulk_density_max = ifelse(
-      organic_carbon_total_source == "fixed value subsoil" &
+      organic_carbon_total_source == "Default value subsoil" &
         is.na(bulk_density),
       max(bulk_density_locf_max,
           bd_ptf_upper(bulk_density_ptf)),
       bulk_density_max),
     bulk_density = ifelse(
       # Gap-fill bulk densities in layers below 80 cm
-      organic_carbon_total_source == "fixed value subsoil" &
+      organic_carbon_total_source == "Default value subsoil" &
         is.na(bulk_density),
       # Take the maximum of the LOCF value versus the estimated bulk density
       # (using the PTF)
@@ -1919,14 +2364,17 @@ create_attribute_catalogue(data_frame = "so_strat",
 
 # Number of plots with any information on the requested parameters
 
-df %>%
+so_data_for_wbm %>%
+  mutate_all(function(x) ifelse((x == ""), NA, x)) %>%
   group_by(plot_id) %>%
   reframe(any_bd = any(!is.na(bulk_density)),
           any_cf = any(!is.na(coarse_fragment_vol)),
-          any_texture = any(!is.na(part_size_clay) &
-                           !is.na(part_size_silt) &
-                           !is.na(part_size_sand)),
-          any_texture_class = any(!is.na(texture_class)),
+          any_texture = (!any(layer_type == "mineral")) |
+            (any(!is.na(part_size_clay) &
+                   !is.na(part_size_silt) &
+                   !is.na(part_size_sand))),
+          any_texture_class = (!any(layer_type == "mineral")) |
+            any(!is.na(texture_class)),
           any_toc = any(!is.na(organic_carbon_total)),
           any_olw = (!any(layer_type == "forest_floor")) |
             any(!is.na(organic_layer_weight))) %>%
@@ -1935,8 +2383,32 @@ df %>%
                         any_texture &
                         any_toc &
                         any_olw)) %>%
+  mutate(bd_and_tex = (any_bd & (any_texture | any_texture_class))) %>%
   select(-plot_id) %>%
   summarise(across(everything(), \(x) sum(x, na.rm = TRUE)))
+
+so_data_for_wbm %>%
+  mutate_all(function(x) ifelse((x == ""), NA, x)) %>%
+  group_by(country, partner_code, plot_id) %>%
+  reframe(any_texture = (!any(layer_type == "mineral")) |
+            (any(!is.na(part_size_clay) &
+                  !is.na(part_size_silt) &
+                  !is.na(part_size_sand))),
+          any_texture_class = (!any(layer_type == "mineral")) |
+            any(!is.na(texture_class))) %>%
+  filter(!any_texture & !any_texture_class) %>%
+  group_by(partner_code, country) %>%
+  reframe(count_no_tex = n()) %>%
+  left_join(
+    so_data_for_wbm %>%
+      distinct(plot_id, .keep_all = TRUE) %>%
+      group_by(partner_code) %>%
+      reframe(count_tot = n()),
+    by = "partner_code") %>%
+  ungroup() %>%
+  mutate(
+    perc_plots_without_tex = round(count_no_tex / count_tot * 100)) %>%
+  arrange(desc(perc_plots_without_tex))
 
 
 
