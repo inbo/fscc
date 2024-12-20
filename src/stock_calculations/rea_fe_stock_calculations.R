@@ -1,11 +1,11 @@
 
 
-# Calculate phosphorus stocks until 100 cm (or until the effective soil depth
+# Calculate reactive Fe stocks until 100 cm (or until the effective soil depth
 # if shallower)
 # ---------------------------------------------------------------------------
 
 # Details: In this script, validated and gap-filled "layer 1+" solid soil data
-# are processed to calculate soil carbon stocks using different functions.
+# are processed to calculate soil reactive Fe stocks using different functions.
 # The detailed steps taken in each function can be found within the "Roxygen"
 # documentation of the function, i.e. on top of the function scripts
 # (in "./src/stock_calculations/functions/" folder).
@@ -46,7 +46,7 @@ level <- "LII"
 calculate_new_stocks <- FALSE # FALSE if you prefer to import
 # the most recently calculated stock data;
 # TRUE if you prefer to recalculate the stocks
-shorter_var_name <- "extrac_p"
+shorter_var_name <- "rea_fe"
 
 
 # Import data
@@ -67,7 +67,7 @@ if (calculate_new_stocks == TRUE) {
 
     get_stocks(survey_form = "s1",
                data_frame = NULL,
-               parameter = "extrac_p",
+               parameter = "rea_fe",
                constant_subsoil = TRUE,
                exclude_ol = TRUE,
                graph = TRUE,
@@ -86,7 +86,7 @@ if (calculate_new_stocks == TRUE) {
 
     get_stocks(survey_form = "so",
                data_frame = NULL,
-               parameter = "extrac_p",
+               parameter = "rea_fe",
                constant_subsoil = TRUE,
                exclude_ol = TRUE,
                graph = TRUE,
@@ -106,7 +106,7 @@ if (calculate_new_stocks == TRUE) {
   # Import most recent stocks
 
   dir <- paste0(list.dirs("./output/stocks", recursive = FALSE)[
-    grepl("_extrac_p_stocks",
+    grepl("_rea_fe_stocks",
           list.dirs("./output/stocks", recursive = FALSE))], "/")
 
   if (length(dir) > 1) {
@@ -162,20 +162,20 @@ if (calculate_new_stocks == TRUE) {
 
     data <- read.csv(paste0(dir,
                             survey_form_i,
-                            "_profile_extrac_p_stocks.csv"),
+                            "_profile_rea_fe_stocks.csv"),
                      sep = ";")
 
-    assign_env(paste0(survey_form_i, "_profile_extrac_p_stocks"),
+    assign_env(paste0(survey_form_i, "_profile_rea_fe_stocks"),
                data)
 
     # Plot stocks
 
     data <- read.csv(paste0(dir,
                             survey_form_i,
-                            "_plot_extrac_p_stocks.csv"),
+                            "_plot_rea_fe_stocks.csv"),
                      sep = ";")
 
-    assign_env(paste0(survey_form_i, "_plot_extrac_p_stocks"),
+    assign_env(paste0(survey_form_i, "_plot_rea_fe_stocks"),
                data)
 
   }
@@ -197,7 +197,7 @@ plot_stocks <- get_env(paste0("so_som", "_plot_",
 
 ## 8.2. Plots per stratifier ----
 
-plot_extrac_p_stocks <-
+plot_rea_fe_stocks <-
   # bind_rows(
   #   s1_plot_c_stocks,
   #   so_plot_c_stocks
@@ -300,7 +300,7 @@ source("./src/functions/graph_interval.R")
 
 ### Humus form ----
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(stock_forest_floor)) %>%
                  mutate(humus_form = case_when(
                    grepl("Histo", humus_form) |
@@ -320,7 +320,7 @@ graph_interval(data = plot_extrac_p_stocks %>%
 
 ### WRB soil group ----
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(stock)),
                response = "stock",
                group = "wrb_ref_soil_group",
@@ -336,7 +336,7 @@ graph_interval(data = plot_extrac_p_stocks %>%
 d_forest_type <- read.csv("./data/additional_data/d_forest_type.csv",
                           sep = ";")
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(stock)) %>%
                  left_join(d_forest_type %>%
                              select(code,
@@ -377,7 +377,7 @@ source("./src/functions/as_sf.R")
 #            !is.na(longitude_dec)) %>%
 #   as_sf
 
-data_so_full <- plot_extrac_p_stocks %>%
+data_so_full <- plot_rea_fe_stocks %>%
   filter(grepl("so_", survey_form)) %>%
   filter(!is.na(latitude_dec) &
            !is.na(longitude_dec)) %>%
@@ -385,7 +385,7 @@ data_so_full <- plot_extrac_p_stocks %>%
 
 assertthat::assert_that(n_distinct(data_so$plot_id) == nrow(data_so))
 
-plot_extrac_p_stocks %>%
+plot_rea_fe_stocks %>%
   filter(!is.na(stock)) %>%
   filter(grepl("so_", survey_form)) %>%
   mutate(code_country = as.factor(code_country)) %>%
@@ -487,7 +487,7 @@ source("./src/functions/graph_interval.R")
 
 # Forest floor to below-ground topsoil
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(di_ff_top)),
                response = "di_ff_top",
                group = "wrb_ref_soil_group",
@@ -499,7 +499,7 @@ graph_interval(data = plot_extrac_p_stocks %>%
                number_of_groups = 10,
                aspect.ratio = 0.7)
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(di_ff_top)) %>%
                  mutate(humus_form = case_when(
                    grepl("Histo", humus_form) |
@@ -519,7 +519,7 @@ graph_interval(data = plot_extrac_p_stocks %>%
 
 # Below-ground topsoil to below-ground
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(di_top_soil)),
                response = "di_top_soil",
                group = "wrb_ref_soil_group",
@@ -532,7 +532,7 @@ graph_interval(data = plot_extrac_p_stocks %>%
                aspect.ratio = 0.7)
 
 
-graph_interval(data = plot_extrac_p_stocks %>%
+graph_interval(data = plot_rea_fe_stocks %>%
                  filter(!is.na(di_top_soil)) %>%
                  filter(!is.na(eftc)) %>%
                  left_join(d_forest_type %>%
@@ -553,15 +553,6 @@ graph_interval(data = plot_extrac_p_stocks %>%
                number_of_groups = 13,
                aspect.ratio = 1,
                return = TRUE)
-
-
-
-
-
-
-
-
-
 
 
 
