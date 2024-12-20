@@ -90,6 +90,7 @@ map_icpf <- function(layers,
                      biogeo_palette = "biogeo_col",
                      with_logo = FALSE,
                      count_plots_legend = FALSE,
+                     return = FALSE,
                      inset_maps_offset_x = 0,
                      width = 6.81) {
 
@@ -132,7 +133,8 @@ map_icpf <- function(layers,
     filter(.data$short_name != "outside") %>%
     # Rename category "Black Sea"
     mutate(code = if_else(.data$short_name == "blackSea",
-                          "Black Sea", .data$code))
+                          "Black Sea", .data$code)) %>%
+    filter(code != "Anatolian")
 
   # Check the file size
   object.size(biogeo_sf) %>% format(units = "MB")
@@ -190,10 +192,27 @@ map_icpf <- function(layers,
 
        point_col <- point_col[seq_len(length(layers))]
 
+       if (grepl("stock", variable_cat) && grepl("cat", variable_cat)) {
+
+         point_col <- colorRampPalette(c("white", "black"))(7)
+         point_col <- viridisLite::magma(7, direction = -1)
+         point_col <- point_col[seq(2, length(point_col) - 1)]
+
+       }
 
     } else if (!is.null(variable_cat)) {
 
-      if (grepl("wrb", variable_cat)) {
+      if (grepl("wrb_by_stock", variable_cat)) {
+
+        point_col <- viridisLite::magma(6, direction = 1)
+
+      # } else if (grepl("stock", variable_cat) &&
+      #            grepl("cat", variable_cat)) {
+      #
+      #   point_col <- colorRampPalette(c("white", "black"))(7)
+      #   point_col <- point_col[seq(2, length(point_col) - 1)]
+
+      } else if (grepl("wrb", variable_cat)) {
 
         # Based on worldwide WRB map:
 
@@ -267,7 +286,8 @@ map_icpf <- function(layers,
   }
 
 
-  # Legend: create a character vector with the colours and the corresponding
+  # Legend ----
+  # create a character vector with the colours and the corresponding
   # class as name
 
   if (!is.null(legend_classes)) {
@@ -277,12 +297,32 @@ map_icpf <- function(layers,
   if (identical(legend_classes, TRUE) &&
       !is.null(variable_cat)) {
 
-    legend_classes_col <- bind_rows(
-      get_env(layers) %>%
+    if (grepl("wrb_by_stock", variable_cat) ||
+        (grepl("stock", variable_cat) && grepl("cat", variable_cat))) {
+
+      suppressMessages({
+        layers_part1 <- get_env(layers) %>%
+          filter(!.data[[variable_cat]] %in% c("Other", "Unknown")) %>%
+          distinct(.data[[variable_cat]]) %>%
+          left_join(
+            get_env(layers) %>%
+              group_by(.data[[variable_cat]]) %>%
+              reframe(count = n()) %>%
+              ungroup)
+      })
+
+
+    } else {
+
+      layers_part1 <- get_env(layers) %>%
         filter(!.data[[variable_cat]] %in% c("Other", "Unknown")) %>%
         group_by(.data[[variable_cat]]) %>%
         reframe(count = n()) %>%
-        arrange(desc(count)),
+        arrange(desc(count))
+    }
+
+    legend_classes_col <- bind_rows(
+      layers_part1,
       get_env(layers) %>%
         filter(.data[[variable_cat]] %in% c("Other", "Unknown")) %>%
         group_by(.data[[variable_cat]]) %>%
@@ -364,7 +404,7 @@ map_icpf <- function(layers,
 
   # Define colour palette biogeographical regions
   biogeo_col <- c("#14293a",
-                  "#556400",
+                #  "#556400",
                   "#6b9c6c",
                   "#005f0e",
                   "#004a30",
@@ -421,6 +461,12 @@ map_icpf <- function(layers,
       left_join(legend_classes_col %>%
                   select(-count),
                 by = variable_cat)
+
+    if (count_plots_legend == FALSE) {
+
+      spat_layer_1 <- spat_layer_1 %>%
+        mutate(name = .data[[variable_cat]])
+    }
   }
 
 
@@ -449,9 +495,9 @@ map_icpf <- function(layers,
 
     # Create a legend for the biogeographical regions
   base_map <- base_map +
-    guides(fill = guide_legend(title = "Biogeographical region", # Title
+    guides(fill = guide_legend(title = "**Biogeographical region**", # Title
                                # Size of legend symbols (squares)
-                               override.aes = list(size = 5),
+                               override.aes = list(size = 4),
                                # Order of this legend relative to other legends
                                # in the plot, i.e. second (from top)
                                order = 2))
@@ -468,8 +514,12 @@ map_icpf <- function(layers,
       # Black coordinates
       axis.text = element_text(color = "black"),
       # Set the size of the plot title to 10 and make it bold
-      legend.title = element_markdown(size = 10),
-      plot.title = element_markdown(size = 10),
+      legend.title = element_markdown(lineheight = 1.4,
+                                      colour = col_front,
+                                      size = 10,
+                                      margin = margin(b = 5)), #12
+      plot.title = element_markdown(size = 10,
+                                    lineheight = 1.4),
       # Position the legend at the top right corner of the plot
       legend.justification = c("right", "top"),
       # Set the background colour of the plot panel using the 'sea_col' variable
@@ -534,8 +584,8 @@ map_icpf <- function(layers,
       theme(legend.text =
               element_markdown(vjust = 0.3,
                                lineheight = 1.2,
-                               size = 6,
-                               margin = margin(b = 3, t = 3))) +
+                               # size = 6,
+                               margin = margin(b = 3, t = 3, l = 5))) +
       # Map the points of the first sf layer
       geom_sf(data = spat_layer_1,
               aes(color = name),
@@ -1152,6 +1202,12 @@ map_icpf <- function(layers,
          # Set the width and height of the saved plot in inches
          width = width,
          height = 5.3)
+
+
+  if (return == TRUE) {
+    return(full_map)
+  }
+
 
 
 
