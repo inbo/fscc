@@ -195,7 +195,7 @@ get_range_inconsistencies <- function(survey_form,
   parameters_without_loq <-
     names(df)[names(df) %in%
                 ranges_qaqc$parameter[which(
-                  is.na(ranges_qaqc$LOQ_org) | is.na(ranges_qaqc$LOQ_mineral))]]
+                  is.na(ranges_qaqc$LOQ_org) & is.na(ranges_qaqc$LOQ_mineral))]]
 
 
   } else {
@@ -2818,7 +2818,10 @@ get_range_inconsistencies <- function(survey_form,
 
     unique_layers_to_convert <- "52_2019_11_M24_3"
 
-    if (df$organic_carbon_total[which(df$unique_layer_repetition ==
+    if (!identical(df$organic_carbon_total[which(df$unique_layer_repetition ==
+                                                unique_layers_to_convert)],
+                  numeric(0)) &&
+        df$organic_carbon_total[which(df$unique_layer_repetition ==
                                       unique_layers_to_convert)] > 150) {
 
       df <- df %>%
