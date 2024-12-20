@@ -1505,6 +1505,16 @@ gapfill_internally <- function(survey_form,
 
 
 
+
+
+
+
+
+
+
+
+
+
   # . ----
   # Gap-fill concentrations in forest floor ----
 
@@ -1543,7 +1553,11 @@ gapfill_internally <- function(survey_form,
       rename(unique_survey_repetition = unique_survey_profile) %>%
       # Rename analytical parameters to join
       rename(organic_carbon_total = horizon_c_organic_total) %>%
-      rename(n_total = horizon_n_total)
+      rename(organic_carbon_total_source = horizon_c_organic_total_source) %>%
+      rename(n_total = horizon_n_total) %>%
+      rename(n_total_source = horizon_n_total_source) %>%
+      rename(exch_ca = horizon_exch_ca) %>%
+      rename(exch_ca_source = horizon_exch_ca_source)
 
     cat(paste0(" \nAdd 'pfh' forest floor analytical data to '",
                survey_form, "'.\n"))
@@ -1573,97 +1587,187 @@ gapfill_internally <- function(survey_form,
     #   layers known, than there are unique below-ground repetitions (profiles):
     #   count_all_ff_nona < count_distinct_bg_up
 
-    # Carbon
 
-    profs_potential_c <- df %>%
-      # Filter out redundant layers
-      filter(!is.na(layer_number)) %>%
-      # Filter out forest floor layers without olw
-      filter(layer_type != "forest_floor" |
-               (layer_type == "forest_floor" &
-                  !is.na(organic_layer_weight))) %>%
-      # Group per profile
-      group_by(unique_survey_repetition,
-               unique_survey, code_country, code_plot) %>%
-      reframe(any_ff_na = (any(.data$layer_type == "forest_floor" &
-                                 is.na(.data$organic_carbon_total))),
-              all_ff_nona =
-                all(!is.na(organic_carbon_total[
-                  which(layer_type == "forest_floor")])),
-              count_bg_layers =
-                length(which(.data$layer_type != "forest_floor")),
-              count_bg_layers_nona =
-                length(which(.data$layer_type != "forest_floor" &
-                         !is.na(.data$organic_carbon_total))),
-              organic_carbon_total_bg_up =
-                ifelse(any(layer_number_bg == 1),
-                       organic_carbon_total[which(layer_number_bg == 1)],
-                       NA_real_)) %>%
-      filter(count_bg_layers_nona > 0)
+    # Define the parameters
+    parameters_chem <- c(
+      "organic_carbon_total", "n_total",
+      "extrac_p", "extrac_s", "rea_fe", "rea_al", "exch_ca")
 
-    plots_gapfill_c <- profs_potential_c %>%
-      # Group per unique_survey
-      group_by(unique_survey, code_country, code_plot) %>%
-      reframe(all_any_ff_na = all(any_ff_na == TRUE),
-              any_ff_na_nona =
-                any(any_ff_na == TRUE) & any(all_ff_nona == TRUE),
-              count_all_ff_nona = length(which(.data$all_ff_nona == TRUE)),
-              count_distinct_bg_up = n_distinct(organic_carbon_total_bg_up,
-                                                na.rm = TRUE)) %>%
-      filter(all_any_ff_na == TRUE |
-               any_ff_na_nona == TRUE) %>%
-      filter(count_all_ff_nona < count_distinct_bg_up)
+    # Generalized gap-fill processing function
+    process_gapfill <- function(df, param) {
+      # Dynamically create column names
+      layer_type_col <- "layer_type"
+      layer_number_col <- "layer_number"
+      layer_number_bg_col <- "layer_number_bg"
+      olw_col <- "organic_layer_weight"
 
-    profs_gapfill_c <- profs_potential_c %>%
-      filter(unique_survey %in% plots_gapfill_c$unique_survey) %>%
-      filter(any_ff_na == TRUE)
+      # Process profiles for the specific parameter
+      profs_potential <- df %>%
+        # Filter out redundant layers
+        filter(!is.na(!!sym(layer_number_col))) %>%
+        # Filter out forest floor layers without olw
+        filter(!!sym(layer_type_col) != "forest_floor" |
+                 (!!sym(layer_type_col) == "forest_floor" &
+                    !is.na(!!sym(olw_col)))) %>%
+        # Group per profile
+        group_by(unique_survey_repetition,
+                 unique_survey, code_country, code_plot) %>%
+        reframe(
+          any_ff_na = (any(!!sym(layer_type_col) == "forest_floor" &
+                             is.na(!!sym(param)))),
+          all_ff_nona ={
+            ff_rows <- which(!!sym(layer_type_col) == "forest_floor")
+            if (length(ff_rows) == 0) TRUE
+            else all(!is.na(.data[[param]][ff_rows]))
+          },
+          count_bg_layers =
+            length(which(!!sym(layer_type_col) != "forest_floor")),
+          count_bg_layers_nona =
+            length(which(!!sym(layer_type_col) != "forest_floor" &
+                           !is.na(!!sym(param)))),
+          !!paste0(param, "_bg_up") := {
+            bg_rows <- which(!!sym(layer_number_bg_col) == 1)
+            if (length(bg_rows) > 0) .data[[param]][bg_rows[1]]
+            else NA_real_
+          }
+        ) %>%
+        filter(count_bg_layers_nona > 0)
+
+      # Process plots for gap-filling
+      plots_gapfill <- profs_potential %>%
+        # Group per unique_survey
+        group_by(unique_survey, code_country, code_plot) %>%
+        reframe(
+          all_any_ff_na = all(any_ff_na == TRUE),
+          any_ff_na_nona =
+            any(any_ff_na == TRUE) & any(all_ff_nona == TRUE),
+          count_all_ff_nona = length(which(.data$all_ff_nona == TRUE)),
+          count_distinct_bg_up = n_distinct(!!sym(paste0(param, "_bg_up")),
+                                            na.rm = TRUE)
+        ) %>%
+        filter(all_any_ff_na == TRUE |
+                 any_ff_na_nona == TRUE) %>%
+        filter(count_all_ff_nona < count_distinct_bg_up)
+
+      # Profiles to gap-fill
+      profs_gapfill <- profs_potential %>%
+        filter(unique_survey %in% plots_gapfill$unique_survey) %>%
+        filter(any_ff_na == TRUE)
+
+      # Return a list with both intermediate and final results
+      list(
+        profs_potential = profs_potential,
+        plots_gapfill = plots_gapfill,
+        profs_gapfill = profs_gapfill
+      )
+    }
+
+    # Filter parameters to only those that exist in df
+    existing_params <- parameters_chem[parameters_chem %in% names(df)]
+
+    # Apply the function to existing parameters only
+    profs_gapfill <- lapply(existing_params, function(param) {
+      process_gapfill(df, param)
+    })
+
+    # Name the list elements
+    names(profs_gapfill) <- existing_params
 
 
-    # Nitrogen
 
-    profs_potential_n <- df %>%
-      # Filter out redundant layers
-      filter(!is.na(layer_number)) %>%
-      # Filter out forest floor layers without olw
-      filter(layer_type != "forest_floor" |
-               (layer_type == "forest_floor" &
-                  !is.na(organic_layer_weight))) %>%
-      # Group per profile
-      group_by(unique_survey_repetition,
-               unique_survey, code_country, code_plot) %>%
-      reframe(any_ff_na = (any(.data$layer_type == "forest_floor" &
-                                 is.na(.data$n_total))),
-              all_ff_nona =
-                all(!is.na(n_total[
-                  which(layer_type == "forest_floor")])),
-              count_bg_layers =
-                length(which(.data$layer_type != "forest_floor")),
-              count_bg_layers_nona =
-                length(which(.data$layer_type != "forest_floor" &
-                               !is.na(.data$n_total))),
-              n_total_bg_up =
-                ifelse(any(layer_number_bg == 1),
-                       n_total[which(layer_number_bg == 1)],
-                       NA_real_)) %>%
-      filter(count_bg_layers_nona > 0)
 
-    plots_gapfill_n <- profs_potential_n %>%
-      # Group per unique_survey
-      group_by(unique_survey, code_country, code_plot) %>%
-      reframe(all_any_ff_na = all(any_ff_na == TRUE),
-              any_ff_na_nona =
-                any(any_ff_na == TRUE) & any(all_ff_nona == TRUE),
-              count_all_ff_nona = length(which(.data$all_ff_nona == TRUE)),
-              count_distinct_bg_up = n_distinct(n_total_bg_up,
-                                                na.rm = TRUE)) %>%
-      filter(all_any_ff_na == TRUE |
-               any_ff_na_nona == TRUE) %>%
-      filter(count_all_ff_nona < count_distinct_bg_up)
 
-    profs_gapfill_n <- profs_potential_n %>%
-      filter(unique_survey %in% plots_gapfill_n$unique_survey) %>%
-      filter(any_ff_na == TRUE)
-
+    # # Carbon
+    #
+    # profs_potential_c <- df %>%
+    #   # Filter out redundant layers
+    #   filter(!is.na(layer_number)) %>%
+    #   # Filter out forest floor layers without olw
+    #   filter(layer_type != "forest_floor" |
+    #            (layer_type == "forest_floor" &
+    #               !is.na(organic_layer_weight))) %>%
+    #   # Group per profile
+    #   group_by(unique_survey_repetition,
+    #            unique_survey, code_country, code_plot) %>%
+    #   reframe(any_ff_na = (any(.data$layer_type == "forest_floor" &
+    #                              is.na(.data$organic_carbon_total))),
+    #           all_ff_nona =
+    #             all(!is.na(organic_carbon_total[
+    #               which(layer_type == "forest_floor")])),
+    #           count_bg_layers =
+    #             length(which(.data$layer_type != "forest_floor")),
+    #           count_bg_layers_nona =
+    #             length(which(.data$layer_type != "forest_floor" &
+    #                      !is.na(.data$organic_carbon_total))),
+    #           organic_carbon_total_bg_up =
+    #             ifelse(any(layer_number_bg == 1),
+    #                    organic_carbon_total[which(layer_number_bg == 1)],
+    #                    NA_real_)) %>%
+    #   filter(count_bg_layers_nona > 0)
+    #
+    # plots_gapfill_c <- profs_potential_c %>%
+    #   # Group per unique_survey
+    #   group_by(unique_survey, code_country, code_plot) %>%
+    #   reframe(all_any_ff_na = all(any_ff_na == TRUE),
+    #           any_ff_na_nona =
+    #             any(any_ff_na == TRUE) & any(all_ff_nona == TRUE),
+    #           count_all_ff_nona = length(which(.data$all_ff_nona == TRUE)),
+    #           count_distinct_bg_up = n_distinct(organic_carbon_total_bg_up,
+    #                                             na.rm = TRUE)) %>%
+    #   filter(all_any_ff_na == TRUE |
+    #            any_ff_na_nona == TRUE) %>%
+    #   filter(count_all_ff_nona < count_distinct_bg_up)
+    #
+    # profs_gapfill_c <- profs_potential_c %>%
+    #   filter(unique_survey %in% plots_gapfill_c$unique_survey) %>%
+    #   filter(any_ff_na == TRUE)
+    #
+    #
+    # # Nitrogen
+    #
+    # profs_potential_n <- df %>%
+    #   # Filter out redundant layers
+    #   filter(!is.na(layer_number)) %>%
+    #   # Filter out forest floor layers without olw
+    #   filter(layer_type != "forest_floor" |
+    #            (layer_type == "forest_floor" &
+    #               !is.na(organic_layer_weight))) %>%
+    #   # Group per profile
+    #   group_by(unique_survey_repetition,
+    #            unique_survey, code_country, code_plot) %>%
+    #   reframe(any_ff_na = (any(.data$layer_type == "forest_floor" &
+    #                              is.na(.data$n_total))),
+    #           all_ff_nona =
+    #             all(!is.na(n_total[
+    #               which(layer_type == "forest_floor")])),
+    #           count_bg_layers =
+    #             length(which(.data$layer_type != "forest_floor")),
+    #           count_bg_layers_nona =
+    #             length(which(.data$layer_type != "forest_floor" &
+    #                            !is.na(.data$n_total))),
+    #           n_total_bg_up =
+    #             ifelse(any(layer_number_bg == 1),
+    #                    n_total[which(layer_number_bg == 1)],
+    #                    NA_real_)) %>%
+    #   filter(count_bg_layers_nona > 0)
+    #
+    # plots_gapfill_n <- profs_potential_n %>%
+    #   # Group per unique_survey
+    #   group_by(unique_survey, code_country, code_plot) %>%
+    #   reframe(all_any_ff_na = all(any_ff_na == TRUE),
+    #           any_ff_na_nona =
+    #             any(any_ff_na == TRUE) & any(all_ff_nona == TRUE),
+    #           count_all_ff_nona = length(which(.data$all_ff_nona == TRUE)),
+    #           count_distinct_bg_up = n_distinct(n_total_bg_up,
+    #                                             na.rm = TRUE)) %>%
+    #   filter(all_any_ff_na == TRUE |
+    #            any_ff_na_nona == TRUE) %>%
+    #   filter(count_all_ff_nona < count_distinct_bg_up)
+    #
+    # profs_gapfill_n <- profs_potential_n %>%
+    #   filter(unique_survey %in% plots_gapfill_n$unique_survey) %>%
+    #   filter(any_ff_na == TRUE)
+    #
 
 
 
@@ -1673,106 +1777,224 @@ gapfill_internally <- function(survey_form,
 
     if (survey_form_type == "som") {
 
-      df <- df %>%
-        # Carbon
-        mutate(
-          organic_carbon_total_source = ifelse(
-            is.na(organic_carbon_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_c$unique_survey,
-            # Sources for gap-filling
-            case_when(
-              !is.na(som_organic_carbon_total) ~
-                "som (other repetitions in same period)",
-              !is.na(pfh_organic_carbon_total) ~ "pfh (same period)"),
-            # Original data are kept
-            organic_carbon_total_source),
-          organic_carbon_total = ifelse(
-            is.na(organic_carbon_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_c$unique_survey,
-            # Gap-fill
-            coalesce(
-              som_organic_carbon_total,
-              pfh_organic_carbon_total),
-            # Else, don't change
-            organic_carbon_total)) %>%
-        # Nitrogen
-        mutate(
-          n_total_source = ifelse(
-            is.na(n_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_n$unique_survey,
-            # Sources for gap-filling
-            case_when(
-              !is.na(som_n_total) ~
-                "som (other repetitions in same period)",
-              !is.na(pfh_n_total) ~ "pfh (same period)"),
-            # Original data are kept
-            n_total_source),
-          n_total = ifelse(
-            is.na(n_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_n$unique_survey,
-            # Gap-fill
-            coalesce(
-              som_n_total,
-              pfh_n_total),
-            # Else, don't change
-            n_total))
+      # Generalized gap-fill mutation function
+      apply_gapfill <- function(df, parameters_chem) {
+        for (param in parameters_chem) {
+          # Dynamic column names
+          som_col <- paste0("som_", param)
+          pfh_col <- paste0("pfh_", param)
+          source_col <- paste0(param, "_source")
+
+          # Identify the specific gap-fill profiles for this parameter
+          gapfill_surveys <- profs_gapfill[[param]]$profs_gapfill$unique_survey
+
+          # Check which columns exist
+          has_som <- som_col %in% names(df)
+          has_pfh <- pfh_col %in% names(df)
+
+          # Skip if neither source exists
+          if (!has_som && !has_pfh) next
+
+          # Create the mutation expressions
+          if (has_som && has_pfh) {
+            df <- df %>%
+              mutate(
+                !!source_col := ifelse(
+                  is.na(!!sym(param)) &
+                    layer_type == "forest_floor" &
+                    unique_survey %in% gapfill_surveys,
+                  case_when(
+                    !is.na(.data[[som_col]]) ~
+                      "som (other repetitions in same period)",
+                    !is.na(.data[[pfh_col]]) ~ "pfh (same period)",
+                    TRUE ~ NA_character_
+                  ),
+                  !!sym(source_col)
+                ),
+                !!param := ifelse(
+                  is.na(!!sym(param)) &
+                    layer_type == "forest_floor" &
+                    unique_survey %in% gapfill_surveys,
+                  coalesce(.data[[som_col]], .data[[pfh_col]]),
+                  !!sym(param)
+                )
+              )
+          } else if (has_som) {
+            df <- df %>%
+              mutate(
+                !!source_col := ifelse(
+                  is.na(!!sym(param)) &
+                    layer_type == "forest_floor" &
+                    unique_survey %in% gapfill_surveys,
+                  case_when(
+                    !is.na(.data[[som_col]]) ~
+                      "som (other repetitions in same period)",
+                    TRUE ~ NA_character_
+                  ),
+                  !!sym(source_col)
+                ),
+                !!param := ifelse(
+                  is.na(!!sym(param)) &
+                    layer_type == "forest_floor" &
+                    unique_survey %in% gapfill_surveys,
+                  .data[[som_col]],
+                  !!sym(param)
+                )
+              )
+          }
+        }
+        return(df)
+      }
+
+
+      # Apply the gap-fill mutation
+      df <- apply_gapfill(df, parameters_chem)
+
+
+      # df <- df %>%
+      #   # Carbon
+      #   mutate(
+      #     organic_carbon_total_source = ifelse(
+      #       is.na(organic_carbon_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_c$unique_survey,
+      #       # Sources for gap-filling
+      #       case_when(
+      #         !is.na(som_organic_carbon_total) ~
+      #           "som (other repetitions in same period)",
+      #         !is.na(pfh_organic_carbon_total) ~ "pfh (same period)"),
+      #       # Original data are kept
+      #       organic_carbon_total_source),
+      #     organic_carbon_total = ifelse(
+      #       is.na(organic_carbon_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_c$unique_survey,
+      #       # Gap-fill
+      #       coalesce(
+      #         som_organic_carbon_total,
+      #         pfh_organic_carbon_total),
+      #       # Else, don't change
+      #       organic_carbon_total)) %>%
+      #   # Nitrogen
+      #   mutate(
+      #     n_total_source = ifelse(
+      #       is.na(n_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_n$unique_survey,
+      #       # Sources for gap-filling
+      #       case_when(
+      #         !is.na(som_n_total) ~
+      #           "som (other repetitions in same period)",
+      #         !is.na(pfh_n_total) ~ "pfh (same period)"),
+      #       # Original data are kept
+      #       n_total_source),
+      #     n_total = ifelse(
+      #       is.na(n_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_n$unique_survey,
+      #       # Gap-fill
+      #       coalesce(
+      #         som_n_total,
+      #         pfh_n_total),
+      #       # Else, don't change
+      #       n_total))
 
     }
 
 
     if (survey_form_type == "pfh") {
 
-      df <- df %>%
-        # carbon
-        mutate(
-          organic_carbon_total_source = ifelse(
-            is.na(organic_carbon_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_c$unique_survey,
-            # Sources for gap-filling
-            case_when(
-              !is.na(pfh_organic_carbon_total) ~
-                "pfh (other repetitions in same period)",
-              !is.na(som_organic_carbon_total) ~ "som (same period)"),
-            # Original data are kept
-            organic_carbon_total_source),
-          organic_carbon_total = ifelse(
-            is.na(organic_carbon_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_c$unique_survey,
-            # Gap-fill
-            coalesce(
-              pfh_organic_carbon_total,
-              som_organic_carbon_total),
-            # Else, don't change
-            organic_carbon_total)) %>%
-        # nitrogen
-        mutate(
-          n_total_source = ifelse(
-            is.na(n_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_n$unique_survey,
-            # Sources for gap-filling
-            case_when(
-              !is.na(pfh_n_total) ~
-                "pfh (other repetitions in same period)",
-              !is.na(som_n_total) ~ "som (same period)"),
-            # Original data are kept
-            n_total_source),
-          n_total = ifelse(
-            is.na(n_total) &
-              layer_type == "forest_floor" &
-              unique_survey %in% profs_gapfill_n$unique_survey,
-            # Gap-fill
-            coalesce(
-              pfh_n_total,
-              som_n_total),
-            # Else, don't change
-            n_total))
+
+      # Generalized gap-fill mutation function
+      apply_gapfill <- function(df, parameters_chem) {
+        # Only process parameters that exist in df
+        existing_params <- parameters_chem[parameters_chem %in% names(df)]
+
+        for (param in existing_params) {
+          # Dynamic column names
+          pfh_col <- paste0("pfh_", param)
+          som_col <- paste0("som_", param)
+          source_col <- paste0(param, "_source")
+
+          # Identify the specific gap-fill profiles for this parameter
+          gapfill_surveys <- profs_gapfill[[param]]$profs_gapfill$unique_survey
+
+          # Apply mutations
+          df <- df %>%
+            mutate(
+              !!source_col := ifelse(
+                is.na(!!sym(param)) &
+                  layer_type == "forest_floor" &
+                  unique_survey %in% gapfill_surveys,
+                case_when(
+                  !is.na(.data[[pfh_col]]) ~
+                    "pfh (other repetitions in same period)",
+                  !is.na(.data[[som_col]]) ~ "som (same period)",
+                  TRUE ~ NA_character_
+                ),
+                !!sym(source_col)
+              ),
+              !!param := ifelse(
+                is.na(!!sym(param)) &
+                  layer_type == "forest_floor" &
+                  unique_survey %in% gapfill_surveys,
+                coalesce(.data[[pfh_col]], .data[[som_col]]),
+                !!sym(param)
+              )
+            )
+        }
+        return(df)
+      }
+
+      df <- apply_gapfill(df, parameters_chem)
+
+      # df <- df %>%
+      #   # carbon
+      #   mutate(
+      #     organic_carbon_total_source = ifelse(
+      #       is.na(organic_carbon_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_c$unique_survey,
+      #       # Sources for gap-filling
+      #       case_when(
+      #         !is.na(pfh_organic_carbon_total) ~
+      #           "pfh (other repetitions in same period)",
+      #         !is.na(som_organic_carbon_total) ~ "som (same period)"),
+      #       # Original data are kept
+      #       organic_carbon_total_source),
+      #     organic_carbon_total = ifelse(
+      #       is.na(organic_carbon_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_c$unique_survey,
+      #       # Gap-fill
+      #       coalesce(
+      #         pfh_organic_carbon_total,
+      #         som_organic_carbon_total),
+      #       # Else, don't change
+      #       organic_carbon_total)) %>%
+      #   # nitrogen
+      #   mutate(
+      #     n_total_source = ifelse(
+      #       is.na(n_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_n$unique_survey,
+      #       # Sources for gap-filling
+      #       case_when(
+      #         !is.na(pfh_n_total) ~
+      #           "pfh (other repetitions in same period)",
+      #         !is.na(som_n_total) ~ "som (same period)"),
+      #       # Original data are kept
+      #       n_total_source),
+      #     n_total = ifelse(
+      #       is.na(n_total) &
+      #         layer_type == "forest_floor" &
+      #         unique_survey %in% profs_gapfill_n$unique_survey,
+      #       # Gap-fill
+      #       coalesce(
+      #         pfh_n_total,
+      #         som_n_total),
+      #       # Else, don't change
+      #       n_total))
     }
 
   } # End of "if gapfill_ff_concentrations is true"
@@ -1793,6 +2015,8 @@ gapfill_internally <- function(survey_form,
       rename(horizon_c_organic_total_source = organic_carbon_total_source) %>%
       rename(horizon_n_total = n_total) %>%
       rename(horizon_n_total_source = n_total_source) %>%
+      rename(horizon_exch_ca = exch_ca) %>%
+      rename(horizon_exch_ca_source = exch_ca_source) %>%
       rename(unique_survey_profile = unique_survey_repetition)
 
   }

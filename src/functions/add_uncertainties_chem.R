@@ -42,7 +42,8 @@ add_uncertainties_chem <- function(survey_form,
 
   lqa <- get_env(paste0(unlist(str_split(survey_form, "_"))[1],
                         "_lqa")) %>%
-    filter(code_parameter == "Total_N") %>% # "P_extr", "Total_N", "org_C"
+    # "P_extr", "Total_N", "org_C", "S_extr", "Fe_react", "Al_react", "Ca_exch"
+    filter(code_parameter == "Total_N") %>%
     filter(!is.na(control_chart_std)) %>%
     arrange(control_chart_std) %>%
     pull(control_chart_std) %>%
@@ -52,30 +53,37 @@ add_uncertainties_chem <- function(survey_form,
     # e.g. due to calibration errors or mistakes in calculations)
     quantile(0.80)
 
-  # 4 g kg-1
+  # Total N: 4.0 g kg-1
+  # extrac_p: 4.9 mg kg-1
+  # extrac_s: 5.0 mg kg-1
+  # rea_fe: 6.0 mg kg-1
+  # rea_al: 6.7 mg kg-1
+  # exch_ca: 10 cmol(+) kg-1
+
+  # FYI: 1 cmol(+) (from Ca2+) kg-1 = 200.39 mg Ca2+ kg-1
 
 
   uncertainties <- data.frame(
     parameter_som = c("organic_carbon_total", "n_total",
-                      "extrac_p"),
+                      "extrac_p", "extrac_s", "rea_fe", "rea_al", "exch_ca"),
     parameter_pfh = c("horizon_c_organic_total", "horizon_n_total",
-                      NA),
-    org_before_2000 = c(11.8, 4, 4.9),
-    org_after_2000 = c(5.2, 4, 4.9),
-    min_before_2000 = c(3.5, 4, 4.9),
-    min_after_2000 = c(1.5, 4, 4.9),
+                      NA, NA, NA, NA, "horizon_exch_ca"),
+    org_before_2000 = c(11.8, 4, 4.9, 5, 6, 6.7, 10),
+    org_after_2000 = c(5.2, 4, 4.9, 5, 6, 6.7, 10),
+    min_before_2000 = c(3.5, 4, 4.9, 5, 6, 6.7, 10),
+    min_after_2000 = c(1.5, 4, 4.9, 5, 6, 6.7, 10),
     source = c("Confidence interval of central lab reanalyses by JRC (2011)",
-               "LQA", "LQA")
-  )
+               "LQA", "LQA", "LQA", "LQA", "LQA", "LQA"))
 
 
   # Define parameters
 
-  if (survey_form_type == "som") {
+  if (is.null(parameters)) {
+    parameters <- c("organic_carbon_total", "n_total", "extrac_p",
+                    "extrac_s", "rea_fe", "rea_al", "exch_ca")
+  }
 
-    if (is.null(parameters)) {
-      parameters <- c("organic_carbon_total", "n_total", "extrac_p")
-    }
+  if (survey_form_type == "som") {
 
     assertthat::assert_that(
       all(parameters %in% names(df)))
@@ -87,12 +95,7 @@ add_uncertainties_chem <- function(survey_form,
 
   if (survey_form_type == "pfh") {
 
-    if (is.null(parameters)) {
-      parameters <- c("horizon_c_organic_total", "horizon_n_total")
-    }
-
-    assertthat::assert_that(
-      all(parameters %in% names(df)))
+    parameters <- parameters[which(parameters %in% names(df))]
 
     assertthat::assert_that(
       all(parameters %in% uncertainties$parameter_pfh))
@@ -116,7 +119,38 @@ add_uncertainties_chem <- function(survey_form,
       distinct(max_possible) %>%
       pull(max_possible)
 
-    assertthat::assert_that(length(max_i) == 1)
+    assertthat::assert_that(identical(max_i, integer(0)) ||
+                              length(max_i) == 1)
+
+    if (identical(max_i, integer(0))) {
+
+      cation_data <- data.frame(
+        par = c("free_h", "exch_k", "exch_ca",
+                "exch_mg", "exch_na", "exch_al",
+                "exch_fe", "exch_mn"),
+        charge = c(1, 1, 2,
+                   2, 1, 3,
+                   2, 2),
+        molar_mass = c(1.008, 39.098, 40.078,
+                       24.305, 22.990, 26.982,
+                       55.845, 54.938))
+
+      assert_that(parameter_i %in% cation_data$par)
+
+      charge_i <- cation_data$charge[which(cation_data$par == parameter_i)]
+      mol_i <- cation_data$molar_mass[which(cation_data$par == parameter_i)]
+
+
+      # These exchangeable data are reported in cmol(+) kg-1.
+      # If they would be converted to mg kg-1, the maximum would be
+      # 1E6 mg kg-1. Convert this to a molar maximum.
+
+      max_i <- 1E6 * # mg kg-1
+        1E-1 / # cg mg-1
+        mol_i * # g per mol cations
+        charge_i # mol(+) mol-1 cations
+
+    }
 
 
     if (!parameter_min_i %in% names(df)) {

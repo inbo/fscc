@@ -9,7 +9,7 @@
 # Script initiation date: 2024-03-24
 
 
-parameter_for_density <- "extrac_p"
+parameter_for_density <- "exch_ca"
 
 
 # Import data ----
@@ -42,17 +42,21 @@ subsoil_densities <- bind_rows(
     select(plot_id, profile_id,
            layer_limit_superior, layer_limit_inferior,
            bulk_density, coarse_fragment_vol, organic_carbon_total,
-           n_total, extrac_p),
+           n_total, extrac_p, extrac_s, rea_fe, rea_al, exch_ca),
   s1_pfh %>%
     rename(layer_limit_superior = horizon_limit_up) %>%
     rename(layer_limit_inferior = horizon_limit_low) %>%
     rename(organic_carbon_total = horizon_c_organic_total) %>%
     rename(n_total = horizon_n_total) %>%
     mutate(extrac_p = NA) %>%
+    mutate(extrac_s = NA) %>%
+    mutate(rea_fe = NA) %>%
+    mutate(rea_al = NA) %>%
+    mutate(exch_ca = horizon_exch_ca) %>%
     select(plot_id, profile_id,
            layer_limit_superior, layer_limit_inferior,
            bulk_density, coarse_fragment_vol, organic_carbon_total,
-           n_total, extrac_p)) %>%
+           n_total, extrac_p, extrac_s, rea_fe, rea_al, exch_ca)) %>%
   # so_som %>%
   #   select(plot_id, profile_id,
   #          layer_limit_superior, layer_limit_inferior,
@@ -152,5 +156,53 @@ quantile(subsoil_densities, c(0.05, 0.95))
 
 #         5%       95%
 #   2.109588 23.255596
+
+
+
+# extrac_s:
+# Only based on five plots!!!
+
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+# 3.991  11.465  17.918  15.631  19.556  25.223
+
+#         5%       95%
+#   5.485744 24.089562
+
+
+
+# rea_fe:
+# Only based on five plots!!!
+
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+#  2.557   4.143 151.380 238.341 385.578 648.046
+
+#         5%       95%
+#   2.874324 595.552650
+
+
+
+
+# rea_al:
+# Only based on five plots!!!
+
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+#  5.535  28.952  75.265  90.862 137.175 207.383
+
+#         5%       95%
+#   10.21837 193.34104
+
+
+
+
+# exch_ca:
+
+#     Min.   1st Qu.    Median      Mean   3rd Qu.      Max.
+# 0.001186  0.015470  0.107171  0.560656  0.805233 10.578141
+
+#            5%         95%
+#   0.002165719 2.136135929
+
+
+
 
 

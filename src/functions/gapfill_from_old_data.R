@@ -5,6 +5,11 @@ gapfill_from_old_data <- function(survey_form,
                                   parameters = c("bulk_density",
                                                  "organic_carbon_total",
                                                  "n_total",
+                                                 "extrac_p",
+                                                 "extrac_s",
+                                                 "rea_fe",
+                                                 "rea_al",
+                                                 "exch_ca",
                                                  "organic_layer_weight",
                                                  "coarse_fragment_vol",
                                                  "part_size_clay",
@@ -15,7 +20,9 @@ gapfill_from_old_data <- function(survey_form,
   source("./src/functions/assign_env.R")
   source("./src/functions/expand_unique_survey_vec_adjacent_years.R")
   source("./src/functions/add_dec_coord_columns.R")
+  source("./src/functions/as_character_summary.R")
 
+  stopifnot(require("purrr"))
 
   # Import survey forms ----
 
@@ -410,6 +417,11 @@ gapfill_from_old_data <- function(survey_form,
       identical(parameters, c("bulk_density",
                               "organic_carbon_total",
                               "n_total",
+                              "extrac_p",
+                              "extrac_s",
+                              "rea_fe",
+                              "rea_al",
+                              "exch_ca",
                               "organic_layer_weight",
                               "coarse_fragment_vol",
                               "part_size_clay",
@@ -457,26 +469,18 @@ gapfill_from_old_data <- function(survey_form,
 
     # Add "afscdb" data to df
 
+
     df <- df %>%
-      left_join(so_som_existing_rec %>%
-                  select(unique_layer_repetition,
-                         bulk_density,
-                         organic_carbon_total,
-                         n_total,
-                         organic_layer_weight,
-                         coarse_fragment_vol,
-                         part_size_clay,
-                         part_size_silt,
-                         part_size_sand) %>%
-                  rename(bulk_density_afscdb = bulk_density,
-                         organic_carbon_total_afscdb = organic_carbon_total,
-                         n_total_afscdb = n_total,
-                         organic_layer_weight_afscdb = organic_layer_weight,
-                         coarse_fragment_vol_afscdb = coarse_fragment_vol,
-                         part_size_clay_afscdb = part_size_clay,
-                         part_size_silt_afscdb = part_size_silt,
-                         part_size_sand_afscdb = part_size_sand),
-                by = "unique_layer_repetition")
+      left_join(
+        so_som_existing_rec %>%
+          select(unique_layer_repetition,
+                 all_of(parameters)) %>%
+          rename_with(~ paste0(.x, "_afscdb"),
+                      all_of(parameters)),
+        by = "unique_layer_repetition")
+
+
+
 
 
 
@@ -487,87 +491,115 @@ gapfill_from_old_data <- function(survey_form,
 
     # Merge the columns
 
-    df <- df %>%
-      # Bulk density
-      mutate(
-        bulk_density_source = case_when(
-          !is.na(bulk_density_source) ~ bulk_density_source,
-          !is.na(.data$bulk_density) ~ "som (same year)",
-          !is.na(.data$bulk_density_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        bulk_density = coalesce(
-          .data$bulk_density,
-          .data$bulk_density_afscdb)) %>%
-      # Organic carbon total
-      mutate(
-        organic_carbon_total_source = case_when(
-          !is.na(organic_carbon_total_source) ~ organic_carbon_total_source,
-          !is.na(.data$organic_carbon_total) ~ "som (same year)",
-          !is.na(.data$organic_carbon_total_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        organic_carbon_total = coalesce(
-          .data$organic_carbon_total,
-          .data$organic_carbon_total_afscdb)) %>%
-      # N total
-      mutate(
-        n_total_source = case_when(
-          !is.na(n_total_source) ~ n_total_source,
-          !is.na(.data$n_total) ~ "som (same year)",
-          !is.na(.data$n_total_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        n_total = coalesce(
-          .data$n_total,
-          .data$n_total_afscdb)) %>%
-      # Organic layer weight
-      mutate(
-        organic_layer_weight_source = case_when(
-          !is.na(organic_layer_weight_source) ~ organic_layer_weight_source,
-          !is.na(.data$organic_layer_weight) ~ "som (same year)",
-          !is.na(.data$organic_layer_weight_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        organic_layer_weight = coalesce(
-          .data$organic_layer_weight,
-          .data$organic_layer_weight_afscdb)) %>%
-      # Coarse fragments
-      mutate(
-        coarse_fragment_vol_source = case_when(
-          !is.na(coarse_fragment_vol_source) ~ coarse_fragment_vol_source,
-          !is.na(.data$coarse_fragment_vol) ~ "som (same year)",
-          !is.na(.data$coarse_fragment_vol_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        coarse_fragment_vol = coalesce(
-          .data$coarse_fragment_vol,
-          .data$coarse_fragment_vol_afscdb)) %>%
-      # Clay
-      mutate(
-        part_size_clay_source = case_when(
-          !is.na(part_size_clay_source) ~ part_size_clay_source,
-          !is.na(.data$part_size_clay) ~ "som (same year)",
-          !is.na(.data$part_size_clay_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        part_size_clay = coalesce(
-          .data$part_size_clay,
-          .data$part_size_clay_afscdb)) %>%
-      # Silt
-      mutate(
-        part_size_silt_source = case_when(
-          !is.na(part_size_silt_source) ~ part_size_silt_source,
-          !is.na(.data$part_size_silt) ~ "som (same year)",
-          !is.na(.data$part_size_silt_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        part_size_silt = coalesce(
-          .data$part_size_silt,
-          .data$part_size_silt_afscdb)) %>%
-      # Sand
-      mutate(
-        part_size_sand_source = case_when(
-          !is.na(part_size_sand_source) ~ part_size_sand_source,
-          !is.na(.data$part_size_sand) ~ "som (same year)",
-          !is.na(.data$part_size_sand_afscdb) ~ "FSCDB.LII (2012)",
-          TRUE ~ NA_character_),
-        part_size_sand = coalesce(
-          .data$part_size_sand,
-          .data$part_size_sand_afscdb))
+
+    # Function to process a single parameter
+    process_parameter <- function(df, param) {
+      # Create source column name
+      source_col <- paste0(param, "_source")
+      afscdb_col <- paste0(param, "_afscdb")
+
+      # Create a new dataframe with mutated columns
+      df %>%
+        mutate(
+          !!source_col := case_when(
+            !is.na(!!sym(source_col)) ~ !!sym(source_col),
+            !is.na(!!sym(param)) ~ "som (same year)",
+            !is.na(!!sym(afscdb_col)) ~ "FSCDB.LII (2012)",
+            TRUE ~ NA_character_
+          ),
+          !!param := coalesce(
+            !!sym(param),
+            !!sym(afscdb_col)
+          )
+        )
+    }
+
+    # Apply the function to all parameters
+    df <- Reduce(process_parameter, parameters, init = df)
+
+
+
+    # df <- df %>%
+    #   # Bulk density
+    #   mutate(
+    #     bulk_density_source = case_when(
+    #       !is.na(bulk_density_source) ~ bulk_density_source,
+    #       !is.na(.data$bulk_density) ~ "som (same year)",
+    #       !is.na(.data$bulk_density_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     bulk_density = coalesce(
+    #       .data$bulk_density,
+    #       .data$bulk_density_afscdb)) %>%
+    #   # Organic carbon total
+    #   mutate(
+    #     organic_carbon_total_source = case_when(
+    #       !is.na(organic_carbon_total_source) ~ organic_carbon_total_source,
+    #       !is.na(.data$organic_carbon_total) ~ "som (same year)",
+    #       !is.na(.data$organic_carbon_total_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     organic_carbon_total = coalesce(
+    #       .data$organic_carbon_total,
+    #       .data$organic_carbon_total_afscdb)) %>%
+    #   # N total
+    #   mutate(
+    #     n_total_source = case_when(
+    #       !is.na(n_total_source) ~ n_total_source,
+    #       !is.na(.data$n_total) ~ "som (same year)",
+    #       !is.na(.data$n_total_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     n_total = coalesce(
+    #       .data$n_total,
+    #       .data$n_total_afscdb)) %>%
+    #   # Organic layer weight
+    #   mutate(
+    #     organic_layer_weight_source = case_when(
+    #       !is.na(organic_layer_weight_source) ~ organic_layer_weight_source,
+    #       !is.na(.data$organic_layer_weight) ~ "som (same year)",
+    #       !is.na(.data$organic_layer_weight_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     organic_layer_weight = coalesce(
+    #       .data$organic_layer_weight,
+    #       .data$organic_layer_weight_afscdb)) %>%
+    #   # Coarse fragments
+    #   mutate(
+    #     coarse_fragment_vol_source = case_when(
+    #       !is.na(coarse_fragment_vol_source) ~ coarse_fragment_vol_source,
+    #       !is.na(.data$coarse_fragment_vol) ~ "som (same year)",
+    #       !is.na(.data$coarse_fragment_vol_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     coarse_fragment_vol = coalesce(
+    #       .data$coarse_fragment_vol,
+    #       .data$coarse_fragment_vol_afscdb)) %>%
+    #   # Clay
+    #   mutate(
+    #     part_size_clay_source = case_when(
+    #       !is.na(part_size_clay_source) ~ part_size_clay_source,
+    #       !is.na(.data$part_size_clay) ~ "som (same year)",
+    #       !is.na(.data$part_size_clay_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     part_size_clay = coalesce(
+    #       .data$part_size_clay,
+    #       .data$part_size_clay_afscdb)) %>%
+    #   # Silt
+    #   mutate(
+    #     part_size_silt_source = case_when(
+    #       !is.na(part_size_silt_source) ~ part_size_silt_source,
+    #       !is.na(.data$part_size_silt) ~ "som (same year)",
+    #       !is.na(.data$part_size_silt_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     part_size_silt = coalesce(
+    #       .data$part_size_silt,
+    #       .data$part_size_silt_afscdb)) %>%
+    #   # Sand
+    #   mutate(
+    #     part_size_sand_source = case_when(
+    #       !is.na(part_size_sand_source) ~ part_size_sand_source,
+    #       !is.na(.data$part_size_sand) ~ "som (same year)",
+    #       !is.na(.data$part_size_sand_afscdb) ~ "FSCDB.LII (2012)",
+    #       TRUE ~ NA_character_),
+    #     part_size_sand = coalesce(
+    #       .data$part_size_sand,
+    #       .data$part_size_sand_afscdb))
 
 
 
@@ -594,7 +626,8 @@ gapfill_from_old_data <- function(survey_form,
     if (all(!layers_to_check %in% df$unique_layer_repetition)) {
 
       assertthat::assert_that(
-        all(layers_to_check %in% so_som_afscdb$unique_layer_repetition))
+        all(layers_to_check %in% so_som_afscdb$unique_layer_repetition) |
+          nrow(df) < 100)
 
       so_som_missing_records <- rbind(
         so_som_missing_records,
@@ -673,6 +706,11 @@ gapfill_from_old_data <- function(survey_form,
                part_size_silt_orig = part_size_silt,
                part_size_sand_orig = part_size_sand,
                n_total_orig = n_total,
+               extrac_p_orig = extrac_p,
+               extrac_s_orig = extrac_s,
+               rea_fe_orig = rea_fe,
+               rea_al_orig = rea_al,
+               exch_ca_orig = exch_ca,
                code_layer_orig = code_layer,
                code_soil_horizon_sample_c = NA,
                elec_cond = NA,
@@ -692,6 +730,11 @@ gapfill_from_old_data <- function(survey_form,
                bulk_density_afscdb = bulk_density,
                organic_carbon_total_afscdb = organic_carbon_total,
                n_total_afscdb = n_total,
+               extrac_p_afscdb = extrac_p,
+               extrac_s_afscdb = extrac_s,
+               rea_fe_afscdb = rea_fe,
+               rea_al_afscdb = rea_al,
+               exch_ca_afscdb = exch_ca,
                organic_layer_weight_afscdb = organic_layer_weight,
                coarse_fragment_vol_afscdb = coarse_fragment_vol,
                part_size_clay_afscdb = part_size_clay,
@@ -714,6 +757,26 @@ gapfill_from_old_data <- function(survey_form,
                         NA_character_),
                n_total_source =
                  ifelse(!is.na(.data$n_total),
+                        "FSCDB.LII.2. (2012)",
+                        NA_character_),
+               extrac_p_source =
+                 ifelse(!is.na(.data$extrac_p),
+                        "FSCDB.LII.2. (2012)",
+                        NA_character_),
+               extrac_s_source =
+                 ifelse(!is.na(.data$extrac_s),
+                        "FSCDB.LII.2. (2012)",
+                        NA_character_),
+               rea_fe_source =
+                 ifelse(!is.na(.data$rea_fe),
+                        "FSCDB.LII.2. (2012)",
+                        NA_character_),
+               rea_al_source =
+                 ifelse(!is.na(.data$rea_al),
+                        "FSCDB.LII.2. (2012)",
+                        NA_character_),
+               exch_ca_source =
+                 ifelse(!is.na(.data$exch_ca),
                         "FSCDB.LII.2. (2012)",
                         NA_character_),
                part_size_clay_source = ifelse(!is.na(.data$part_size_clay),
@@ -742,53 +805,73 @@ gapfill_from_old_data <- function(survey_form,
                exch_ace = NA_real_,
                exch_cec = NA_real_) %>%
         # Replace empty strings with NA
-        mutate_all(~ replace(., . == "", NA)) %>%
-        select(
-          country, partner_short, partner, survey_year,
-          code_country, code_plot, code_layer, repetition,
-          layer_limit_superior, layer_limit_inferior, subsamples,
-          date_labor_analyses, moisture_content,
-          part_size_clay, part_size_silt, part_size_sand,
-          code_texture_class, bulk_density, coarse_fragment_vol,
-          organic_layer_weight,
-          ph_cacl2, ph_h2o, organic_carbon_total, n_total,
-          carbonates, exch_acidiy, exch_al, exch_ca,
-          exch_fe, exch_k, exch_mg, exch_mn,
-          exch_na, free_h, extrac_al, extrac_ca,
-          extrac_cd, extrac_cr, extrac_cu, extrac_fe,
-          extrac_hg, extrac_k, extrac_mg, extrac_mn,
-          extrac_na, extrac_ni, extrac_p, extrac_pb,
-          extrac_s, extrac_zn, tot_al, tot_ca,
-          tot_fe, tot_k, tot_mg, tot_mn,
-          tot_na, rea_al, rea_fe, exch_bce,
-          exch_ace, exch_cec, elec_cond, ni,
-          base_saturation, origin, code_soil_horizon_sample_c, p_ox,
-          other_obs, partner_code, q_flag, change_date,
-          code_line, line_nr, qif_key, code_plot_orig,
-          download_date, layer_type, plot_id, unique_survey,
-          unique_survey_repetition,
-          unique_survey_layer, unique_layer_repetition, unique_layer,
+        mutate_all(~ replace(., . == "", NA))
 
-          part_size_clay_source, part_size_silt_source,
-          part_size_sand_source,
-          bulk_density_source,
-          coarse_fragment_vol_source,
-          organic_layer_weight_source,
-          organic_carbon_total_source, n_total_source,
-          code_layer_orig,
-          part_size_clay_orig, part_size_silt_orig,
-          part_size_sand_orig,
-          bulk_density_orig, coarse_fragment_vol_orig,
-          organic_layer_weight_orig, organic_carbon_total_orig,
-          n_total_orig,
-          origin_merged, origin_merge_info,
 
-          bulk_density_afscdb, organic_carbon_total_afscdb, n_total_afscdb,
-          organic_layer_weight_afscdb, coarse_fragment_vol_afscdb,
-          part_size_clay_afscdb, part_size_silt_afscdb,
-          part_size_sand_afscdb)
+      if (!(all(colnames(df) %in% colnames(so_som_afscdb_to_add)))) {
+        missing_cols <- colnames(df)[
+          which(!colnames(df) %in% colnames(so_som_afscdb_to_add))]
+      }
 
-      assertthat::assert_that(all(names(df) == names(so_som_afscdb_to_add)))
+      # Assert that the column names of so_som_afscdb_to_add are the same
+      # as in df
+      assertthat::assert_that(
+        all(colnames(df) %in% colnames(so_som_afscdb_to_add)),
+        msg = paste0("The columns ", as_character_summary(missing_cols),
+                     " of 'df' are still missing in ",
+                     "'so_som_afscdb_to_add'.\n"))
+
+      # Reorder the columns in so_som_afscdb_to_add to match df
+      so_som_afscdb_to_add <- so_som_afscdb_to_add %>%
+        select(all_of(colnames(df)))
+
+        # select(
+        #   country, partner_short, partner, survey_year,
+        #   code_country, code_plot, code_layer, repetition,
+        #   layer_limit_superior, layer_limit_inferior, subsamples,
+        #   date_labor_analyses, moisture_content,
+        #   part_size_clay, part_size_silt, part_size_sand,
+        #   code_texture_class, bulk_density, coarse_fragment_vol,
+        #   organic_layer_weight,
+        #   ph_cacl2, ph_h2o, organic_carbon_total, n_total,
+        #   carbonates, exch_acidiy, exch_al, exch_ca,
+        #   exch_fe, exch_k, exch_mg, exch_mn,
+        #   exch_na, free_h, extrac_al, extrac_ca,
+        #   extrac_cd, extrac_cr, extrac_cu, extrac_fe,
+        #   extrac_hg, extrac_k, extrac_mg, extrac_mn,
+        #   extrac_na, extrac_ni, extrac_p, extrac_pb,
+        #   extrac_s, extrac_zn, tot_al, tot_ca,
+        #   tot_fe, tot_k, tot_mg, tot_mn,
+        #   tot_na, rea_al, rea_fe, exch_bce,
+        #   exch_ace, exch_cec, elec_cond, ni,
+        #   base_saturation, origin, code_soil_horizon_sample_c, p_ox,
+        #   other_obs, partner_code, q_flag, change_date,
+        #   code_line, line_nr, qif_key, code_plot_orig,
+        #   download_date, layer_type, plot_id, unique_survey,
+        #   unique_survey_repetition,
+        #   unique_survey_layer, unique_layer_repetition, unique_layer,
+        #
+        #   part_size_clay_source, part_size_silt_source,
+        #   part_size_sand_source,
+        #   bulk_density_source,
+        #   coarse_fragment_vol_source,
+        #   organic_layer_weight_source,
+        #   organic_carbon_total_source, n_total_source,
+        #
+        #   code_layer_orig,
+        #   part_size_clay_orig, part_size_silt_orig,
+        #   part_size_sand_orig,
+        #   bulk_density_orig, coarse_fragment_vol_orig,
+        #   organic_layer_weight_orig, organic_carbon_total_orig,
+        #   n_total_orig,
+        #   origin_merged, origin_merge_info,
+        #
+        #   bulk_density_afscdb, organic_carbon_total_afscdb, n_total_afscdb,
+        #   organic_layer_weight_afscdb, coarse_fragment_vol_afscdb,
+        #   part_size_clay_afscdb, part_size_silt_afscdb,
+        #   part_size_sand_afscdb)
+
+      # assertthat::assert_that(all(names(df) == names(so_som_afscdb_to_add)))
 
       df <- rbind(df,
                   so_som_afscdb_to_add)
@@ -1212,6 +1295,11 @@ gapfill_from_old_data <- function(survey_form,
       identical(parameters, c("bulk_density",
                               "organic_carbon_total",
                               "n_total",
+                              "extrac_p",
+                              "extrac_s",
+                              "rea_fe",
+                              "rea_al",
+                              "exch_ca",
                               "organic_layer_weight",
                               "coarse_fragment_vol",
                               "part_size_clay",
@@ -1258,20 +1346,31 @@ gapfill_from_old_data <- function(survey_form,
     # Add "afscdb" data to df
 
     df <- df %>%
-      left_join(s1_som_existing_rec %>%
-                  select(unique_layer_repetition_s1_som,
-                         bulk_density,
-                         organic_carbon_total,
-                         n_total,
-                         organic_layer_weight,
-                         coarse_fragment_vol) %>%
-                  rename(bulk_density_fscdb = bulk_density,
-                         organic_carbon_total_fscdb = organic_carbon_total,
-                         n_total_fscdb = n_total,
-                         organic_layer_weight_fscdb = organic_layer_weight,
-                         coarse_fragment_vol_fscdb = coarse_fragment_vol),
-                by = join_by("unique_layer_repetition" ==
-                               "unique_layer_repetition_s1_som"))
+      left_join(
+        s1_som_existing_rec %>%
+          select(unique_layer_repetition_s1_som,
+                 all_of(parameters)) %>%
+          rename_with(~ paste0(.x, "_fscdb"),
+                      all_of(parameters)),
+        by = join_by("unique_layer_repetition" ==
+                       "unique_layer_repetition_s1_som"))
+
+
+    # df <- df %>%
+    #   left_join(s1_som_existing_rec %>%
+    #               select(unique_layer_repetition_s1_som,
+    #                      bulk_density,
+    #                      organic_carbon_total,
+    #                      n_total,
+    #                      organic_layer_weight,
+    #                      coarse_fragment_vol) %>%
+    #               rename(bulk_density_fscdb = bulk_density,
+    #                      organic_carbon_total_fscdb = organic_carbon_total,
+    #                      n_total_fscdb = n_total,
+    #                      organic_layer_weight_fscdb = organic_layer_weight,
+    #                      coarse_fragment_vol_fscdb = coarse_fragment_vol),
+    #             by = join_by("unique_layer_repetition" ==
+    #                            "unique_layer_repetition_s1_som"))
 
 
 
@@ -1282,57 +1381,84 @@ gapfill_from_old_data <- function(survey_form,
 
     # Merge the columns
 
-    df <- df %>%
-      # Bulk density
-      mutate(
-        bulk_density_source = case_when(
-          !is.na(bulk_density_source) ~ bulk_density_source,
-          !is.na(.data$bulk_density) ~ "som (same year)",
-          !is.na(.data$bulk_density_fscdb) ~ "FSCDB.LI (2002)",
-          TRUE ~ NA_character_),
-        bulk_density = coalesce(
-          .data$bulk_density,
-          .data$bulk_density_fscdb)) %>%
-      # Organic carbon total
-      mutate(
-        organic_carbon_total_source = case_when(
-          !is.na(organic_carbon_total_source) ~ organic_carbon_total_source,
-          !is.na(.data$organic_carbon_total) ~ "som (same year)",
-          !is.na(.data$organic_carbon_total_fscdb) ~ "FSCDB.LI (2002)",
-          TRUE ~ NA_character_),
-        organic_carbon_total = coalesce(
-          .data$organic_carbon_total,
-          .data$organic_carbon_total_fscdb)) %>%
-      # N total
-      mutate(
-        n_total_source = case_when(
-          !is.na(n_total_source) ~ n_total_source,
-          !is.na(.data$n_total) ~ "som (same year)",
-          !is.na(.data$n_total_fscdb) ~ "FSCDB.LI (2002)",
-          TRUE ~ NA_character_),
-        n_total = coalesce(
-          .data$n_total,
-          .data$n_total_fscdb)) %>%
-      # Organic layer weight
-      mutate(
-        organic_layer_weight_source = case_when(
-          !is.na(organic_layer_weight_source) ~ organic_layer_weight_source,
-          !is.na(.data$organic_layer_weight) ~ "som (same year)",
-          !is.na(.data$organic_layer_weight_fscdb) ~ "FSCDB.LI (2002)",
-          TRUE ~ NA_character_),
-        organic_layer_weight = coalesce(
-          .data$organic_layer_weight,
-          .data$organic_layer_weight_fscdb)) %>%
-      # Coarse fragments
-      mutate(
-        coarse_fragment_vol_source = case_when(
-          !is.na(coarse_fragment_vol_source) ~ coarse_fragment_vol_source,
-          !is.na(.data$coarse_fragment_vol) ~ "som (same year)",
-          !is.na(.data$coarse_fragment_vol_fscdb) ~ "FSCDB.LI (2002)",
-          TRUE ~ NA_character_),
-        coarse_fragment_vol = coalesce(
-          .data$coarse_fragment_vol,
-          .data$coarse_fragment_vol_fscdb))
+    # Function to process a single parameter
+    process_parameter <- function(df, param) {
+      # Create source column name
+      source_col <- paste0(param, "_source")
+      afscdb_col <- paste0(param, "_afscdb")
+
+      # Create a new dataframe with mutated columns
+      df %>%
+        mutate(
+          !!source_col := case_when(
+            !is.na(!!sym(source_col)) ~ !!sym(source_col),
+            !is.na(!!sym(param)) ~ "som (same year)",
+            !is.na(!!sym(afscdb_col)) ~ "FSCDB.LI (2002)",
+            TRUE ~ NA_character_
+          ),
+          !!param := coalesce(
+            !!sym(param),
+            !!sym(afscdb_col)
+          )
+        )
+    }
+
+    # Apply the function to all parameters
+    df <- Reduce(process_parameter, parameters, init = df)
+
+
+
+    # df <- df %>%
+    #   # Bulk density
+    #   mutate(
+    #     bulk_density_source = case_when(
+    #       !is.na(bulk_density_source) ~ bulk_density_source,
+    #       !is.na(.data$bulk_density) ~ "som (same year)",
+    #       !is.na(.data$bulk_density_fscdb) ~ "FSCDB.LI (2002)",
+    #       TRUE ~ NA_character_),
+    #     bulk_density = coalesce(
+    #       .data$bulk_density,
+    #       .data$bulk_density_fscdb)) %>%
+    #   # Organic carbon total
+    #   mutate(
+    #     organic_carbon_total_source = case_when(
+    #       !is.na(organic_carbon_total_source) ~ organic_carbon_total_source,
+    #       !is.na(.data$organic_carbon_total) ~ "som (same year)",
+    #       !is.na(.data$organic_carbon_total_fscdb) ~ "FSCDB.LI (2002)",
+    #       TRUE ~ NA_character_),
+    #     organic_carbon_total = coalesce(
+    #       .data$organic_carbon_total,
+    #       .data$organic_carbon_total_fscdb)) %>%
+    #   # N total
+    #   mutate(
+    #     n_total_source = case_when(
+    #       !is.na(n_total_source) ~ n_total_source,
+    #       !is.na(.data$n_total) ~ "som (same year)",
+    #       !is.na(.data$n_total_fscdb) ~ "FSCDB.LI (2002)",
+    #       TRUE ~ NA_character_),
+    #     n_total = coalesce(
+    #       .data$n_total,
+    #       .data$n_total_fscdb)) %>%
+    #   # Organic layer weight
+    #   mutate(
+    #     organic_layer_weight_source = case_when(
+    #       !is.na(organic_layer_weight_source) ~ organic_layer_weight_source,
+    #       !is.na(.data$organic_layer_weight) ~ "som (same year)",
+    #       !is.na(.data$organic_layer_weight_fscdb) ~ "FSCDB.LI (2002)",
+    #       TRUE ~ NA_character_),
+    #     organic_layer_weight = coalesce(
+    #       .data$organic_layer_weight,
+    #       .data$organic_layer_weight_fscdb)) %>%
+    #   # Coarse fragments
+    #   mutate(
+    #     coarse_fragment_vol_source = case_when(
+    #       !is.na(coarse_fragment_vol_source) ~ coarse_fragment_vol_source,
+    #       !is.na(.data$coarse_fragment_vol) ~ "som (same year)",
+    #       !is.na(.data$coarse_fragment_vol_fscdb) ~ "FSCDB.LI (2002)",
+    #       TRUE ~ NA_character_),
+    #     coarse_fragment_vol = coalesce(
+    #       .data$coarse_fragment_vol,
+    #       .data$coarse_fragment_vol_fscdb))
 
 
 
@@ -1386,6 +1512,11 @@ gapfill_from_old_data <- function(survey_form,
                part_size_silt_orig = part_size_silt,
                part_size_sand_orig = part_size_sand,
                n_total_orig = n_total,
+               extrac_p_orig = extrac_p,
+               extrac_s_orig = extrac_s,
+               rea_fe_orig = rea_fe,
+               rea_al_orig = rea_al,
+               exch_ca_orig = exch_ca,
                code_layer_orig = code_layer,
                line_nr = NA,
                p_ox = NA,
@@ -1417,6 +1548,11 @@ gapfill_from_old_data <- function(survey_form,
                bulk_density_fscdb = bulk_density,
                organic_carbon_total_fscdb = organic_carbon_total,
                n_total_fscdb = n_total,
+               extrac_p_fscdb = extrac_p,
+               extrac_s_fscdb = extrac_s,
+               rea_fe_fscdb = rea_fe,
+               rea_al_fscdb = rea_al,
+               exch_ca_fscdb = exch_ca,
                organic_layer_weight_fscdb = organic_layer_weight,
                coarse_fragment_vol_fscdb = coarse_fragment_vol,
                part_size_clay_fscdb = part_size_clay,
@@ -1441,6 +1577,26 @@ gapfill_from_old_data <- function(survey_form,
                  ifelse(!is.na(.data$n_total),
                         "FSCDB.LI (2002)",
                         NA_character_),
+               extrac_p_source =
+                 ifelse(!is.na(.data$extrac_p),
+                        "FSCDB.LI (2002)",
+                        NA_character_),
+               extrac_s_source =
+                 ifelse(!is.na(.data$extrac_s),
+                        "FSCDB.LI (2002)",
+                        NA_character_),
+               rea_fe_source =
+                 ifelse(!is.na(.data$rea_fe),
+                        "FSCDB.LI (2002)",
+                        NA_character_),
+               rea_al_source =
+                 ifelse(!is.na(.data$rea_al),
+                        "FSCDB.LI (2002)",
+                        NA_character_),
+               exch_ca_source =
+                 ifelse(!is.na(.data$exch_ca),
+                        "FSCDB.LI (2002)",
+                        NA_character_),
                part_size_clay_source = ifelse(!is.na(.data$part_size_clay),
                                               "FSCDB.LI (2002)",
                                               NA_character_),
@@ -1449,41 +1605,59 @@ gapfill_from_old_data <- function(survey_form,
                                               NA_character_),
                part_size_sand_source = ifelse(!is.na(.data$part_size_sand),
                                               "FSCDB.LI (2002)",
-                                              NA_character_)) %>%
-        select(
-            country, partner_short, partner, survey_year, code_country,
-            code_plot, code_layer, repetition, layer_limit_superior,
-            layer_limit_inferior, subsamples, date_labor_analyses,
-            moisture_content, part_size_clay, part_size_silt,
-            part_size_sand, code_texture_class, bulk_density,
-            coarse_fragment_vol, organic_layer_weight, ph_cacl2,
-            ph_h2o, organic_carbon_total, n_total, carbonates,
-            exch_acidiy, exch_al, exch_ca, exch_fe,
-            exch_k, exch_mg, exch_mn, exch_na,
-            free_h, extrac_al, extrac_ca, extrac_cd,
-            extrac_cr, extrac_cu, extrac_fe, extrac_hg,
-            extrac_k, extrac_mg, extrac_mn, extrac_na,
-            extrac_ni, extrac_p, extrac_pb, extrac_s,
-            extrac_zn, tot_al, tot_ca, tot_fe,
-            tot_k, tot_mg, tot_mn, tot_na,
-            rea_al, rea_fe, p_ox, other_obs,
-            partner_code, q_flag, change_date, code_line,
-            line_nr, qif_key, code_plot_orig, download_date,
-            layer_type, plot_id,
-            unique_survey, unique_survey_repetition, unique_survey_layer,
-            unique_layer_repetition, unique_layer, part_size_clay_source,
-            part_size_silt_source, part_size_sand_source, bulk_density_source,
-            coarse_fragment_vol_source, organic_layer_weight_source,
-            organic_carbon_total_source,
-            n_total_source, code_layer_orig, part_size_clay_orig,
-            part_size_silt_orig, part_size_sand_orig, bulk_density_orig,
-            coarse_fragment_vol_orig, organic_layer_weight_orig,
-            organic_carbon_total_orig,
-            n_total_orig, bulk_density_fscdb, organic_carbon_total_fscdb,
-            n_total_fscdb,
-            organic_layer_weight_fscdb, coarse_fragment_vol_fscdb)
+                                              NA_character_))
 
-      assertthat::assert_that(all(names(df) == names(s1_som_fscdb_to_add)))
+      if (!(all(colnames(df) %in% colnames(s1_som_fscdb_to_add)))) {
+        missing_cols <- colnames(df)[
+          which(!colnames(df) %in% colnames(s1_som_fscdb_to_add))]
+      }
+
+      # Assert that the column names of so_som_afscdb_to_add are the same
+      # as in df
+      assertthat::assert_that(
+        all(colnames(df) %in% colnames(s1_som_fscdb_to_add)),
+        msg = paste0("The columns ", as_character_summary(missing_cols),
+                     " of 'df' are still missing in ",
+                     "'so_som_afscdb_to_add'.\n"))
+
+      # Reorder the columns in so_som_afscdb_to_add to match df
+      s1_som_fscdb_to_add <- s1_som_fscdb_to_add %>%
+        select(all_of(colnames(df)))
+
+      #   select(
+      #       country, partner_short, partner, survey_year, code_country,
+      #       code_plot, code_layer, repetition, layer_limit_superior,
+      #       layer_limit_inferior, subsamples, date_labor_analyses,
+      #       moisture_content, part_size_clay, part_size_silt,
+      #       part_size_sand, code_texture_class, bulk_density,
+      #       coarse_fragment_vol, organic_layer_weight, ph_cacl2,
+      #       ph_h2o, organic_carbon_total, n_total, carbonates,
+      #       exch_acidiy, exch_al, exch_ca, exch_fe,
+      #       exch_k, exch_mg, exch_mn, exch_na,
+      #       free_h, extrac_al, extrac_ca, extrac_cd,
+      #       extrac_cr, extrac_cu, extrac_fe, extrac_hg,
+      #       extrac_k, extrac_mg, extrac_mn, extrac_na,
+      #       extrac_ni, extrac_p, extrac_pb, extrac_s,
+      #       extrac_zn, tot_al, tot_ca, tot_fe,
+      #       tot_k, tot_mg, tot_mn, tot_na,
+      #       rea_al, rea_fe, p_ox, other_obs,
+      #       partner_code, q_flag, change_date, code_line,
+      #       line_nr, qif_key, code_plot_orig, download_date,
+      #       layer_type, plot_id,
+      #       unique_survey, unique_survey_repetition, unique_survey_layer,
+      #       unique_layer_repetition, unique_layer, part_size_clay_source,
+      #       part_size_silt_source, part_size_sand_source, bulk_density_source,
+      #       coarse_fragment_vol_source, organic_layer_weight_source,
+      #       organic_carbon_total_source,
+      #       n_total_source, code_layer_orig, part_size_clay_orig,
+      #       part_size_silt_orig, part_size_sand_orig, bulk_density_orig,
+      #       coarse_fragment_vol_orig, organic_layer_weight_orig,
+      #       organic_carbon_total_orig,
+      #       n_total_orig, bulk_density_fscdb, organic_carbon_total_fscdb,
+      #       n_total_fscdb,
+      #       organic_layer_weight_fscdb, coarse_fragment_vol_fscdb)
+      #
+      # assertthat::assert_that(all(names(df) == names(s1_som_fscdb_to_add)))
 
       df <- rbind(df,
                   s1_som_fscdb_to_add)

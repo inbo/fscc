@@ -81,6 +81,14 @@ get_stocks <- function(survey_form,
     survey_forms <- paste0(code_survey,
                            c("_som", "_pfh"))
 
+    # Some parameters only appear in "som"
+
+    if (!parameter %in% names(get_env(paste0(code_survey, "_pfh")))) {
+
+      survey_forms <- paste0(code_survey,
+                             c("_som"))
+    }
+
   }
 
   if (length(unlist(str_split(survey_form, "_"))) == 2) {
@@ -117,6 +125,17 @@ get_stocks <- function(survey_form,
 
 
   # Specify parameter ----
+
+  cation_data <- data.frame(
+    par = c("free_h", "exch_k", "exch_ca",
+            "exch_mg", "exch_na", "exch_al",
+            "exch_fe", "exch_mn"),
+    charge = c(1, 1, 2,
+               2, 1, 3,
+               2, 2),
+    molar_mass = c(1.008, 39.098, 40.078,
+                   24.305, 22.990, 26.982,
+                   55.845, 54.938))
 
   parameter_table <- data.frame(
     som_parameter = c(
@@ -156,23 +175,25 @@ get_stocks <- function(survey_form,
       "%wt", "kg m-3", "mg kg-1", "mg kg-1",
       "kg m-2"),
     # Only for variables for which stocks can be calculated
-    unit_density_per_cm = c(
-      "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA, "1E4 mol+ ha-1 cm-1",
-      "t ha-1 cm-1", "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "1E4 mol+ ha-1 cm-1",
-      "kg ha-1 cm-1",
-      "1E4 mol+ ha-1 cm-1", NA, "t ha-1 cm-1", "kg ha-1 cm-1",
-      "1E4 mol+ ha-1 cm-1",
-      "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "t ha-1 cm-1",
-      "1E4 mol+ ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA,
-      "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-      "kg ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-      "kg ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", NA, "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1",
-      "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-      NA, NA, "kg ha-1 cm-1", "kg ha-1 cm-1",
-      NA),
+    # unit_density_per_cm = c(
+    #   "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA, "1E4 mol+ ha-1 cm-1",
+    #   "t ha-1 cm-1", "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1",
+    #   "1E4 mol+ ha-1 cm-1",
+    #   "kg ha-1 cm-1",
+    #   "1E4 mol+ ha-1 cm-1", NA, "t ha-1 cm-1", "kg ha-1 cm-1",
+    #   "1E4 mol+ ha-1 cm-1",
+    #   "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "t ha-1 cm-1",
+    #   "1E4 mol+ ha-1 cm-1",
+    #   "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA,
+    #   "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
+    #   "kg ha-1 cm-1",
+    #   "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
+    #   "kg ha-1 cm-1",
+    #   "kg ha-1 cm-1", "kg ha-1 cm-1", NA, "1E4 mol+ ha-1 cm-1",
+    #   "kg ha-1 cm-1",
+    #   "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
+    #   NA, NA, "kg ha-1 cm-1", "kg ha-1 cm-1",
+    #   NA),
     # Only for variables for which stocks can be calculated
     shorter_name = c(
       "extrac_pb", "extrac_zn", NA, NA, "exch_mn",
@@ -187,6 +208,29 @@ get_stocks <- function(survey_form,
       NA, NA, "rea_al", "rea_fe",
       NA
     )) %>%
+    mutate(
+      unit_density_per_cm = case_when(
+        # Only calculate for rows for which stocks can be calculated (i.e.
+        # where shorter_var_name is not NA)
+        !is.na(shorter_var_name) & unit == "mg kg-1" ~ "kg ha-1 cm-1",
+        # Important: this needs to be converted!!!!! from "1E4 mol+ ha-1 cm-1"
+        !is.na(shorter_var_name) & unit == "cmol+ kg-1" ~ "kg ha-1 cm-1",
+        !is.na(shorter_var_name) & unit == "g kg-1" ~ "t ha-1 cm-1",
+        TRUE ~ NA_character_
+      )) %>%
+    left_join(
+      cation_data,
+      by = join_by("som_parameter" == "par")) %>%
+    mutate(
+      density_convert_factor = ifelse(
+        unit == "cmol+ kg-1",
+        # Equivalent in mg kg-1 for 1 cmol+ kg-1:
+        1 / # 1 cmol+ kg-1
+          charge * # mol(+) mol-1 cations
+          molar_mass * # g mol-1 cations
+          1E1, # mg cg-1
+        1)) %>%
+    select(-charge, -molar_mass) %>%
     mutate(
       unit_markdown = gsub("1E4", "10<sup>4</sup>",
                            gsub("-1", "<sup>-1</sup>",
@@ -212,6 +256,7 @@ get_stocks <- function(survey_form,
   unit_density_per_cm <- parameter_table$unit_density_per_cm[ind]
   unit_density_per_cm_markdown <-
     parameter_table$unit_density_per_cm_markdown[ind]
+  density_convert_factor <- parameter_table$density_convert_factor[ind]
   shorter_var_name <- parameter_table$shorter_name[ind]
 
   assertthat::assert_that(!is.na(shorter_var_name))
@@ -769,32 +814,36 @@ get_stocks <- function(survey_form,
     # 1 ton C = 1E6 g C
     # Unit conversion factor: * 100 / 1000000
     mutate(density =
-             (.data$parameter_for_stock * .data$bulk_density *
+             (.data$parameter_for_stock * density_convert_factor *
+                .data$bulk_density *
                 (1 - .data$coarse_fragment_vol_frac)) / 10000) %>%
     mutate(density_min =
-             (.data$parameter_for_stock_min * .data$bulk_density_min *
+             (.data$parameter_for_stock_min * density_convert_factor *
+                .data$bulk_density_min *
                 (1 - .data$coarse_fragment_vol_max_frac)) / 10000) %>%
     mutate(density_max =
-             (.data$parameter_for_stock_max * .data$bulk_density_max *
+             (.data$parameter_for_stock_max * density_convert_factor *
+                .data$bulk_density_max *
                 (1 - .data$coarse_fragment_vol_min_frac)) / 10000) %>%
     # Organic layers (peat) with known organic_layer_weight
     mutate(density_org =
              ifelse(layer_type == "peat" &
                       !is.na(.data$organic_layer_weight),
-                    (.data$parameter_for_stock * .data$organic_layer_weight) /
+                    (.data$parameter_for_stock * density_convert_factor *
+                       .data$organic_layer_weight) /
                       (.data$layer_thickness * 100),
                     NA_integer_)) %>%
     mutate(density_min_org =
              ifelse(layer_type == "peat" &
                       !is.na(.data$organic_layer_weight),
-                    (.data$parameter_for_stock_min *
+                    (.data$parameter_for_stock_min * density_convert_factor *
                        .data$organic_layer_weight_min) /
                       (.data$layer_thickness * 100),
                     NA_integer_)) %>%
     mutate(density_max_org =
              ifelse(layer_type == "peat" &
                       !is.na(.data$organic_layer_weight),
-                    (.data$parameter_for_stock_max *
+                    (.data$parameter_for_stock_max * density_convert_factor *
                        .data$organic_layer_weight_max) /
                       (.data$layer_thickness * 100),
                     NA_integer_)) %>%
@@ -865,7 +914,7 @@ get_stocks <- function(survey_form,
           no_toc = all(no_toc == TRUE)) %>%
         ungroup() %>%
         filter(no_toc == TRUE) %>%
-        mutate(reason_excl = "No relevant total organic carbon data") %>%
+        mutate(reason_excl = paste0("No relevant '", parameter, "' data")) %>%
         select(unique_survey, reason_excl))
 
 
@@ -1127,19 +1176,35 @@ get_stocks <- function(survey_form,
   subsoil_densities_table <- data.frame(
     parameter = c("organic_carbon_total",
                   "n_total",
-                  "extrac_p"),
+                  "extrac_p",
+                  "extrac_s",
+                  "rea_fe",
+                  "rea_al",
+                  "exch_ca"),
     density = c(0.30, # t C ha-1 cm-1
                 0.0178, # t N ha-1 cm-1
-                11.80 # kg P ha-1 cm-1 # Only based on five plots!
+                11.80, # kg P ha-1 cm-1 # Only based on five plots!
+                17.91, # kg S ha-1 cm-1
+                151.38, # kg Fe ha-1 cm-1
+                75.27, # kg Al ha-1 cm-1
+                0.107 # cmol(+) kg-1
                 ),
     density_min = c(0.06, # 5 % quantile
                     0.0049,
-                    2.11),
+                    2.11,
+                    5.49,
+                    2.87,
+                    10.22,
+                    0.002),
     density_max = c(2.58, # 95 % quantile
                     0.1198,
-                    23.26))
+                    23.26,
+                    24.09,
+                    595.56,
+                    193.34,
+                    2.136))
 
-    # Currently only for TOC and TN and extrac_p
+    # Currently only for a few parameters
 
     if (!parameter %in% subsoil_densities_table$parameter) {
 
@@ -1153,11 +1218,16 @@ get_stocks <- function(survey_form,
     if (parameter %in% subsoil_densities_table$parameter) {
 
       density_i <- subsoil_densities_table$density[which(
-        subsoil_densities_table$parameter == parameter)] # t C ha-1 cm-1
+        subsoil_densities_table$parameter == parameter)] *
+        density_convert_factor # t C ha-1 cm-1
+
       density_min_i <- subsoil_densities_table$density_min[which(
-        subsoil_densities_table$parameter == parameter)] # 5 % quantile
+        subsoil_densities_table$parameter == parameter)] *
+        density_convert_factor # 5 % quantile
+
       density_max_i <- subsoil_densities_table$density_max[which(
-        subsoil_densities_table$parameter == parameter)] # 95 % quantile
+        subsoil_densities_table$parameter == parameter)] *
+        density_convert_factor # 95 % quantile
 
 
       cat(paste0(" \nGap-fill below-80-cm subsoil with a fixed ",
@@ -1851,13 +1921,16 @@ get_stocks <- function(survey_form,
     # Carbon stock per layer (t C ha-1 for each layer)
     # Units: g C/kg forest floor * kg forest floor/m2
     mutate(stock_layer =
-             (.data$parameter_for_stock * .data$organic_layer_weight) /
+             (.data$parameter_for_stock * density_convert_factor *
+                .data$organic_layer_weight) /
              100) %>%
     mutate(stock_layer_min =
-             (.data$parameter_for_stock_min * .data$organic_layer_weight_min) /
+             (.data$parameter_for_stock_min * density_convert_factor *
+                .data$organic_layer_weight_min) /
              100) %>%
     mutate(stock_layer_max =
-             (.data$parameter_for_stock_max * .data$organic_layer_weight_max) /
+             (.data$parameter_for_stock_max * density_convert_factor *
+                .data$organic_layer_weight_max) /
              100) %>%
     # Carbon density (t C ha-1 cm-1)
     mutate(density =
@@ -2257,8 +2330,7 @@ get_stocks <- function(survey_form,
 
 
 
-}
-  # End of loop over survey_forms ----
+} # End of loop over survey_forms ----
 
 
 
@@ -2353,7 +2425,7 @@ if (length(survey_forms) == 2) {
                          path_name = "./output/stocks/")
   }
 
-  write.table(profile_stocks,
+  write.table(format_stocks(profile_stocks),
               file = paste0(dir,
                             survey_form,
                             "_profile_",
@@ -2427,7 +2499,7 @@ if (length(survey_forms) == 2) {
                          path_name = "./output/stocks/")
   }
 
-  write.table(plot_stocks,
+  write.table(format_stocks(plot_stocks),
               file = paste0(dir,
                             survey_form_orig,
                             "_plot_",
@@ -2453,9 +2525,11 @@ if (length(survey_forms) == 2) {
 
   if (any(grepl("som", survey_forms))) {
 
+    if (add_plausible_fscc == TRUE) {
+
     unique_surveys_stocks <- plot_stocks %>%
       filter(grepl("som", survey_form)) %>%
-      filter(stock_plaus == TRUE) %>%
+        filter(stock_plaus == TRUE) %>%
       mutate(unique_survey = paste0(code_country, "_",
                                     survey_year, "_",
                                     code_plot)) %>%
@@ -2516,10 +2590,12 @@ if (length(survey_forms) == 2) {
       select(-cov) %>%
       mutate(
         plaus_stock_pfh_simultaneous =
-          (unique_survey %in% unique_surveys_simultaneous_pfh)) %>%
+          (unique_survey %in% unique_surveys_simultaneous_pfh))
+    }
+
+    plot_data_use_stocks <- plot_data_use_stocks %>%
       rename(
         !!paste0(parameter, "_source") := parameter_for_stock_source)
-
 
     write.table(plot_data_use_stocks,
                 file = paste0(dir,
@@ -2542,6 +2618,16 @@ if (length(survey_forms) == 2) {
                                                      "summary_"))
 
   }
+
+
+
+
+
+
+
+
+
+
 
 
 

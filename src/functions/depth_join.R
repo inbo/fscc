@@ -128,7 +128,10 @@ depth_join <- function(df1,
       possible_parameters <- c("organic_carbon_total",
                                "n_total",
                                "extrac_p",
-                               "extrac_s")
+                               "extrac_s",
+                               "rea_fe",
+                               "rea_al",
+                               "exch_ca")
     }
 
     parameters <- unique(
@@ -148,6 +151,9 @@ depth_join <- function(df1,
         NA))
 
   }
+
+
+
 
     # Harmonise coarse fragments
 
@@ -515,8 +521,19 @@ depth_join <- function(df1,
               # Add weights
               # Only for gravimetric parameters
 
-              assertthat::assert_that("organic_layer_weight_bd" %in%
-                                        names(df2_j))
+              if (!"organic_layer_weight_bd" %in% names(df2_j)) {
+
+                df2_j <- df2_j %>%
+                  mutate(
+                    # Derive organic layer weight from bulk density
+                    organic_layer_weight_bd = ifelse(
+                      !is.na(bulk_density) &
+                        !is.na(layer_thickness),
+                      # kg m-2
+                      round(.data$bulk_density * (.data$layer_thickness * 1e-2),
+                            1),
+                      NA_real_))
+              }
 
               if ("organic_layer_weight" %in% names(df2_j)) {
 
@@ -601,7 +618,7 @@ depth_join <- function(df1,
       assertthat::assert_that(
         all(!is.na(df2_sub$layer_limit_superior)))
 
-      if (any(!is.na(df2_sub$layer_limit_inferior))) {
+      if (any(is.na(df2_sub$layer_limit_inferior))) {
 
         df2_sub <- df2_sub %>%
           mutate(layer_limit_inferior = ifelse(is.na(layer_limit_inferior),
