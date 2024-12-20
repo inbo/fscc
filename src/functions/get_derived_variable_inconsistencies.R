@@ -619,6 +619,26 @@ get_derived_variable_inconsistencies <- function(survey_form,
 
     # Solve problems with texture ----
 
+    # Manual correction: in so_som 64_5, silt and sand seem to be switched
+    # (based on both texture class and ESD texture class)
+
+    if (survey_form == "so_som") {
+
+      df <- df %>%
+        mutate(
+          part_size_silt2 = part_size_silt,
+          part_size_silt = ifelse(
+            unique_survey == "64_2004_5",
+            part_size_sand,
+            part_size_silt),
+          part_size_sand = ifelse(
+            unique_survey == "64_2004_5",
+            part_size_silt2,
+            part_size_sand)) %>%
+        select(-part_size_silt2)
+
+    }
+
     # If sum textures is between 85 and 115, it may be justifiable to
     # normalise the particle size fractions to 100
     # Any potential errors in assuming they are reported proportionally
