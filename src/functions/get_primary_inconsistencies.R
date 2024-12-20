@@ -408,7 +408,7 @@ get_primary_inconsistencies <- function(code_survey,
     # if the survey form does not contain any ambiguous layers
     # (e.g. for "so_som")
 
-    if (all(df$code_layer == df$code_layer_orig)) {
+    if (all(identical(df$code_layer, df$code_layer_orig))) {
       df <- df[, -which(names(df) == "code_layer_orig")]
       }
 

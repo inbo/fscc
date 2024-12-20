@@ -86,7 +86,7 @@ graph_interval <- function(data,
   if (!is.null(number_of_groups)) {
 
     assertthat::assert_that(is.numeric(number_of_groups) &
-                              number_of_groups < n_distinct(data$group))
+                              number_of_groups <= n_distinct(data$group))
 
     groups_selected <- data %>%
       group_by(across(all_of(group))) %>%

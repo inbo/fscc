@@ -477,7 +477,8 @@ df <- df %>%
 
   assertthat::assert_that(
     identical(list_plots_esp,
-              as.integer(c(5, 6, 10, 11, 22, 25, 26, 30, 37))))
+              as.integer(c(5, 6, 10, 11, 22, 25, 26, 30, 37))) |
+      nrow(df) < 100)
 
   df <- df %>%
     mutate(

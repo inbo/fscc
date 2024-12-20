@@ -13,6 +13,12 @@ harmonise_prf <- function(survey_form,
     df <- data_frame
   }
 
+  if (!"plot_id" %in% names(df)) {
+
+    df <- df %>%
+      mutate(plot_id = paste0(code_country, "_", code_plot))
+
+  }
 
   # s1_prf ----
 

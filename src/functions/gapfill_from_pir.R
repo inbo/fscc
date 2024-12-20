@@ -627,13 +627,14 @@ gapfill_from_pir <- function(code_survey,
       }
       } else {
 
-        # If the inconcistency concerns FSCC_12 (pH measurement method)
+        # If the inconsistency concerns FSCC_12 (pH measurement method)
 
         pir_checked_survey_form$parameter_value_current[i] <-
           pull(df[row_ind, which(names(df) == "other_obs")])
 
 
         if (as.Date(df$change_date[row_ind]) >= as.Date("2023-03-02") &&
+            !is.na(df$other_obs[row_ind]) &&
             str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
 
           pir_checked_survey_form$fscc_action[i] <-
@@ -642,6 +643,7 @@ gapfill_from_pir <- function(code_survey,
 
         # If the change_date is before 2 March 2023 OR
         if (as.Date(df$change_date[row_ind]) < as.Date("2023-03-02") ||
+            is.na(df$other_obs[row_ind]) ||
             # If the values haven't been updated
             !str_detect(df$other_obs[row_ind], "H2O|H20|water|CaCl2")) {
 
