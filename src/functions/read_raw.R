@@ -1215,6 +1215,8 @@ if (code_survey %in% c("s1", "so")) {
     left_join(coord_harmonised %>%
                 select(plot_id, longitude_dec, latitude_dec),
               by = "plot_id") %>%
+    # If new plots are uploaded
+    filter(!is.na(longitude_dec) & !is.na(latitude_dec)) %>%
     as_sf # EPSG 3035 (ETRS89 / LAEA Europe)
 
     # Extract the transformed coordinates
@@ -1226,12 +1228,21 @@ if (code_survey %in% c("s1", "so")) {
              y_etrs89 = coords_epsg3035[, 2]) %>%
       st_drop_geometry()
 
+  coordinate_list <- data_availability %>%
+    select(plot_id) %>%
+    # To add any new plots without harmonised coordinates
+    left_join(coordinate_list %>%
+                select(plot_id, longitude_dec, latitude_dec,
+                       x_etrs89, y_etrs89),
+              by = "plot_id")
+
   updated_coords <- NULL
   updated_coords_overview <- NULL
 
   for (i in seq_len(nrow(coordinate_list))) {
 
     coord_harm_i <- coord_harmonised %>%
+      # Can be empty for new plots
       filter(plot_id == coordinate_list$plot_id[i])
 
     coord_database_i <- coordinates_full %>%
@@ -1244,12 +1255,16 @@ if (code_survey %in% c("s1", "so")) {
       coord_database_i <- coord_database_i %>%
         filter(coord_database_i$change_date > coord_harm_i$observation_date)
 
+    }
+
       # If any of these coordinates are clearly different
 
-      if ((any(round(coord_database_i$longitude_dec, 2) !=
+      if (nrow(coord_harm_i) == 0 ||
+          (any(coord_database_i$change_date > coord_harm_i$observation_date) &&
+          ((any(round(coord_database_i$longitude_dec, 2) !=
               round(coord_harm_i$longitude_dec, 2))) ||
           (any(round(coord_database_i$latitude_dec, 2) !=
-               round(coord_harm_i$latitude_dec, 2)))) {
+               round(coord_harm_i$latitude_dec, 2)))))) {
 
         updated_coords <- c(updated_coords, coordinate_list$plot_id[i])
 
@@ -1266,8 +1281,8 @@ if (code_survey %in% c("s1", "so")) {
                                change_date[which.max(
                                  as.numeric(as.Date(change_date)))])),
             coord_harm_i %>%
-              mutate(sources_database_update = NA,
-                     change_date_recent = NA) %>%
+              mutate(sources_database_update = NA_character_,
+                     change_date_recent = NA_character_) %>%
               select(longitude_dec, latitude_dec, sources_database_update,
                      change_date_recent)) %>%
           mutate(plot_id = coordinate_list$plot_id[i],
@@ -1299,7 +1314,7 @@ if (code_survey %in% c("s1", "so")) {
           bind_rows(updated_coords_overview,
                     coord_i_summ)
       }
-    }
+
   }
 
 
@@ -1316,7 +1331,9 @@ if (code_survey %in% c("s1", "so")) {
     # Alert if there are coordinate updates in s1 or so
 
     assertthat::assert_that(isFALSE(
-      any(grepl("so|s1", updated_coords_overview$sources_database_update))))
+      any(grepl("so|s1", updated_coords_overview$sources_database_update))),
+      msg = paste0("There are any updates in the soil survey, ",
+                   "so better to rerun the script to harmonise coordinates."))
 
   }
 
