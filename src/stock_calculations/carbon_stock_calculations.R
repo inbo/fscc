@@ -590,6 +590,16 @@ so_plot_c_stocks %>%
             stat = "mean_median")
 
 
+plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(!is.na(stock_change)) %>%
+  boot_icpf(column_name = "stock_change",
+            stat = "mean_median")
+
+
+
+
+
 # Total SOC stock (forest floor + topsoil)
 
 so_plot_c_stocks %>%
@@ -744,7 +754,13 @@ so_plot_c_stocks %>%
   filter(max(survey_year) >= 2000) %>%
   boot_mc_change(column_name = "stock")
 
-
+so_plot_c_stocks %>%
+  filter(!is.na(stock)) %>%
+  # filter(contains_peat == FALSE) %>%
+  filter(grepl("som", survey_form)) %>%
+  group_by(plot_id) %>%
+  filter(max(survey_year) >= 2000) %>%
+  boot_mc_change(column_name = "stock")
 # Total SOC stock (forest floor + topsoil)
 
 so_plot_c_stocks %>%
@@ -844,30 +860,34 @@ so_plot_c_stocks %>%
 # Below-ground mineral C stocks until 100
 
 min_below_ground <-
-  bind_rows(s1_plot_c_stocks %>%
-              filter(use_stock_topsoil == FALSE) %>%
-              filter(contains_peat == FALSE) %>%
-              select(plot_id, stock_below_ground),
-            so_plot_c_stocks %>%
-              filter(use_stock_topsoil == FALSE) %>%
-              filter(contains_peat == FALSE) %>%
-              select(plot_id, stock_below_ground)) %>%
+  plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(contains_peat == FALSE) %>%
+  filter(!is.na(stock_below_ground)) %>%
   pull(stock_below_ground) %>%
   summary
 
 min_below_ground
 
+plot_c_stocks %>%
+  filter(survey_form == "so_som") %>%
+  filter(contains_peat == FALSE) %>%
+  filter(!is.na(stock_below_ground)) %>%
+  pull(stock_below_ground) %>%
+  summary
+
+
 # Below-ground mineral C stocks until 30
 
 min_below_ground_topsoil <-
-  bind_rows(s1_plot_c_stocks %>%
-              filter(contains_peat == FALSE) %>%
-              select(plot_id, stock_below_ground_topsoil),
-            so_plot_c_stocks %>%
-              filter(contains_peat == FALSE) %>%
-              select(plot_id, stock_below_ground_topsoil)) %>%
+  plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(contains_peat == FALSE) %>%
+  filter(!is.na(stock_below_ground_topsoil)) %>%
   pull(stock_below_ground_topsoil) %>%
   summary
+
+
 
 as.numeric(min_below_ground_topsoil["Median"] /
              min_below_ground["Median"] * 100)
@@ -875,14 +895,10 @@ as.numeric(min_below_ground_topsoil["Median"] /
 # Below-ground peat C stocks until 100
 
 peat_below_ground <-
-  bind_rows(s1_plot_c_stocks %>%
-              filter(use_stock_topsoil == FALSE) %>%
-              filter(contains_peat == TRUE) %>%
-              select(plot_id, stock_below_ground),
-            so_plot_c_stocks %>%
-              filter(use_stock_topsoil == FALSE) %>%
-              filter(contains_peat == TRUE) %>%
-              select(plot_id, stock_below_ground)) %>%
+  plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(contains_peat == TRUE) %>%
+  filter(!is.na(stock_below_ground)) %>%
   pull(stock_below_ground) %>%
   summary
 
@@ -891,14 +907,13 @@ peat_below_ground
 # Below-ground peat C stocks until 30
 
 peat_below_ground_topsoil <-
-  bind_rows(s1_plot_c_stocks %>%
-              filter(contains_peat == TRUE) %>%
-              select(plot_id, stock_below_ground_topsoil),
-            so_plot_c_stocks %>%
-              filter(contains_peat == TRUE) %>%
-              select(plot_id, stock_below_ground_topsoil)) %>%
+  plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(contains_peat == TRUE) %>%
+  filter(!is.na(stock_below_ground_topsoil)) %>%
   pull(stock_below_ground_topsoil) %>%
   summary
+
 
 as.numeric(peat_below_ground_topsoil["Median"] /
              peat_below_ground["Median"] * 100)
@@ -907,18 +922,14 @@ as.numeric(peat_below_ground_topsoil["Median"] /
 
 # Forest floor
 
-bind_rows(s1_plot_c_stocks %>%
-            filter(is.na(unknown_forest_floor) |
-                     unknown_forest_floor == FALSE) %>%
-            mutate(stock_forest_floor =
-                     coalesce(stock_forest_floor, 0)) %>%
-            select(plot_id, stock_forest_floor),
-          so_plot_c_stocks %>%
-            filter(is.na(unknown_forest_floor) |
-                     unknown_forest_floor == FALSE) %>%
-              mutate(stock_forest_floor =
-                       coalesce(stock_forest_floor, 0)) %>%
-            select(plot_id, stock_forest_floor)) %>%
+plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(!is.na(stock_forest_floor)) %>%
+  pull(stock_forest_floor) %>%
+  summary
+
+plot_c_stocks %>%
+  filter(survey_form == "so_som") %>%
   filter(!is.na(stock_forest_floor)) %>%
   pull(stock_forest_floor) %>%
   summary
@@ -1037,7 +1048,8 @@ plot_c_stocks <-
   group_by(plot_id, survey_form,
            # partner_short, partner_code,
            code_country, code_plot,
-           latitude_dec, longitude_dec, mat, map, slope, altitude,
+           latitude_dec, longitude_dec, x_etrs89, y_etrs89,
+           mat, map, slope, altitude,
            wrb_ref_soil_group, eftc, humus_form, parent_material,
            biogeographical_region, main_tree_species, bs_class) %>%
   reframe(
@@ -1257,7 +1269,81 @@ ggsave(filename = paste0("patchwork", ".png"),
 
 
 
+### Biogeographical region ----
 
+# stock
+
+graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock)) %>%
+                 filter(!is.na(biogeographical_region)) %>%
+                 filter(survey_form == "s1_som"),
+               response = "stock",
+               group = "biogeographical_region",
+               src_survey = "s1",
+               path_export = paste0(dir, "graphs/"),
+               x_max = 500,
+               number_of_groups = 6,
+               aspect.ratio = 0.5)
+
+suppressWarnings({
+  data_summary <- rcompanion_groupwiseMean(
+    group = "biogeographical_region",
+    var = "stock",
+    data = plot_c_stocks %>%
+      filter(!is.na(stock)) %>%
+      filter(!is.na(biogeographical_region)) %>%
+      filter(survey_form == "s1_som"),
+    conf = 0.95,
+    digits = 5,
+    R = 2000,
+    traditional = TRUE,
+    bca = FALSE,
+    na.rm = TRUE) %>%
+    mutate(Trad.lower = ifelse(
+      Trad.lower < 0, 0, Trad.lower)) %>%
+    arrange(desc(Mean))
+})
+
+
+
+# stock_topsoil
+
+graph_interval(data = plot_c_stocks %>%
+                 filter(!is.na(stock_topsoil)) %>%
+                 filter(!is.na(biogeographical_region)) %>%
+                 filter(survey_form == "s1_som"),
+               response = "stock_topsoil",
+               group = "biogeographical_region",
+               src_survey = "s1",
+               path_export = paste0(dir, "graphs/"),
+               x_max = 300,
+               number_of_groups = 9,
+               aspect.ratio = 0.7)
+
+suppressWarnings({
+  data_summary <- rcompanion_groupwiseMean(
+    group = "biogeographical_region",
+    var = "stock_topsoil",
+    data = plot_c_stocks %>%
+      filter(!is.na(stock_topsoil)) %>%
+      filter(!is.na(biogeographical_region)) %>%
+      filter(survey_form == "s1_som"),
+    conf = 0.95,
+    digits = 5,
+    R = 2000,
+    traditional = TRUE,
+    bca = FALSE,
+    na.rm = TRUE) %>%
+    mutate(Trad.lower = ifelse(
+      Trad.lower < 0, 0, Trad.lower)) %>%
+    arrange(desc(Mean))
+})
+
+plot_c_stocks %>%
+  filter(!is.na(stock_topsoil)) %>%
+  filter(survey_form == "s1_som") %>%
+  pull(stock_topsoil) %>%
+  hist
 
 
 
@@ -1267,6 +1353,7 @@ ggsave(filename = paste0("patchwork", ".png"),
 ### 8.3.1. Mean ----
 
 source("./src/functions/map_icpf2.R")
+source("./src/functions/map_icpf.R")
 source("./src/functions/as_sf.R")
 
 data_s1_full <- plot_c_stocks %>%
@@ -1564,4 +1651,161 @@ graph_interval(data = plot_c_stocks %>%
                number_of_groups = 13,
                aspect.ratio = 1,
                return = TRUE)
+
+
+
+
+## 8.3. Map summarised per WRB RSG ----
+
+graph_interval(data = plot_c_stocks %>%
+                 filter(survey_form == "s1_som") %>%
+                 filter(!is.na(stock_topsoil)),
+               response = "stock_topsoil",
+               group = "wrb_ref_soil_group",
+               path_export = paste0(dir, "graphs/"),
+               x_max = 400,
+               number_of_groups = 12,
+               aspect.ratio = 0.7)
+
+
+abundant_plots <- plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(!is.na(stock_topsoil)) %>%
+  group_by(wrb_ref_soil_group) %>%
+  reframe(n = n()) %>%
+  ungroup() %>%
+  arrange(desc(n)) %>%
+  mutate(
+    cumulative_n = cumsum(n),
+    cumulative_percentage = round((cumulative_n / sum(n)) * 100)
+  ) %>%
+  filter(cumulative_percentage <= 95) %>%
+  pull(wrb_ref_soil_group)
+
+
+
+suppressWarnings({
+  data_summary <- rcompanion_groupwiseMean(
+    group = "wrb_ref_soil_group",
+    var = "stock_topsoil",
+    data = plot_c_stocks %>%
+      filter(survey_form == "s1_som") %>%
+      filter(!is.na(stock_topsoil)) %>%
+      filter(wrb_ref_soil_group %in% abundant_plots),
+    conf = 0.95,
+    digits = 5,
+    R = 2000,
+    traditional = TRUE,
+    bca = FALSE,
+    na.rm = TRUE) %>%
+    mutate(Trad.lower = ifelse(
+      Trad.lower < 0, 0, Trad.lower)) %>%
+    arrange(desc(Mean))
+})
+
+
+
+data_sf <- plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(!is.na(stock_topsoil)) %>%
+  filter(wrb_ref_soil_group %in% abundant_plots) %>%
+  mutate(
+    wrb_by_stock_cat_num = case_when(
+      wrb_ref_soil_group %in% c("Arenosols", "Regosols") ~ 1,
+      wrb_ref_soil_group %in% c("Luvisols") ~ 2,
+      wrb_ref_soil_group %in% c("Planosols", "Podzols", "Cambisols",
+                                "Stagnosols", "Leptosols") ~ 3,
+      wrb_ref_soil_group %in% c("Umbrisols", "Phaeozems") ~ 4,
+      wrb_ref_soil_group %in% c("Gleysols") ~ 5,
+      wrb_ref_soil_group %in% c("Histosols") ~ 6),
+    wrb_by_stock_cat = case_when(
+      wrb_ref_soil_group %in% c("Arenosols", "Regosols") ~
+        "Arenosols,<br>Regosols",
+      wrb_ref_soil_group %in% c("Luvisols") ~
+        "Luvisols",
+      wrb_ref_soil_group %in% c("Planosols", "Podzols", "Cambisols",
+                                "Stagnosols", "Leptosols") ~
+        "Planosols,<br>Podzols,<br>Cambisols,<br>Stagnosols,<br>Leptosols",
+      wrb_ref_soil_group %in% c("Umbrisols", "Phaeozems") ~
+        "Umbrisols,<br>Phaeozems",
+      wrb_ref_soil_group %in% c("Gleysols") ~
+        "Gleysols",
+      wrb_ref_soil_group %in% c("Histosols") ~
+        "Histosols")) %>%
+  arrange(desc(wrb_by_stock_cat_num)) %>%
+  as_sf
+
+map_icpf(layers = "data_sf",
+         title = paste0("**WRB ref. soil group by SOC stock range** · ",
+                        "ICP Forests (Level I)"),
+         legend_title = NULL,
+         legend_classes = TRUE,
+         variable_cat = "wrb_by_stock_cat",
+         export_name = "wrb_by_stock",
+         export_folder = "other_graphs",
+         point_size = 0.2,
+         biogeo_palette = NULL,
+         count_plots_legend = TRUE,
+         inset_maps_offset_x = 1.1)
+
+
+
+
+
+
+## 8.4. Map SOC stock classes ----
+
+# 0 - 50
+# 50 - 75
+# 75 - 100
+# 100 - 150
+# 150 - 400
+
+
+data_sf <- plot_c_stocks %>%
+  filter(survey_form == "s1_som") %>%
+  filter(!is.na(stock_topsoil)) %>%
+  mutate(
+    stock_topsoil_cat = case_when(
+      stock_topsoil < 50 ~ "0 - 50",
+      stock_topsoil < 75 ~ "50 - 75",
+      stock_topsoil < 100 ~ "75 - 100",
+      stock_topsoil < 150 ~ "100 - 150",
+      TRUE ~ "150 - 400")) %>%
+  arrange(stock_topsoil) %>%
+  as_sf
+
+
+map_icpf(layers = "data_sf",
+         title = paste0("**Forest soil carbon stock** · ",
+                        "ICP Forests (Level I)",
+                        "<br>",
+                        n_distinct(data_sf$plot_id),
+                        " plots ",
+                        "(forest floor + topsoil)<br>",
+                        "Mean over survey period (1985 - 2022)"),
+         legend_title = "**Carbon stock**<br>t C ha<sup>-1</sup>",
+         legend_classes = TRUE,
+         variable_cat = "stock_topsoil_cat",
+         export_name = "stock_topsoil_cat2",
+         export_folder = "other_graphs",
+         point_col = NULL,
+         point_size = 0.2,
+         biogeo_palette = "biogeo_col",
+         count_plots_legend = FALSE,
+         inset_maps_offset_x = 0.4)
+
+write.table(data_sf %>%
+              st_drop_geometry() %>%
+              select(code_country, code_plot,
+                     longitude_dec, latitude_dec,
+                     x_etrs89, y_etrs89,
+                     stock_topsoil, stock_topsoil_cat),
+            file = paste0("./output/other_graphs/",
+                          "data_soc_stocks_topsoil_s1.csv"),
+            row.names = FALSE,
+            na = "",
+            sep = ";",
+            dec = ".")
+
 
