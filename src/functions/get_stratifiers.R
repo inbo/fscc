@@ -31,7 +31,8 @@ get_stratifiers <- function(level) {
   stopifnot(require("tidyverse"),
             require("assertthat"),
             require("sf"),
-            require("geodata"))
+            require("geodata"),
+            require("readxl"))
 
   source("./src/functions/as_sf.R")
   source("./src/functions/get_env.R")
@@ -50,6 +51,10 @@ get_stratifiers <- function(level) {
 
   d_soil_adjective <-
     read.csv2("./data/raw_data/so/adds/dictionaries/d_soil_adjective.csv")
+
+  d_water <-
+    read.csv2("./data/raw_data/so/adds/dictionaries/d_water.csv") %>%
+    select(code, description)
 
   d_humus <-
     read.csv2("./data/raw_data/so/adds/dictionaries/d_humus.csv") %>%
@@ -344,10 +349,10 @@ get_stratifiers <- function(level) {
                              unified_humus, "_",
                              remark)) %>%
     # Filter for the most recent survey_year
-    group_by(plot_id) %>%
+    group_by(plot_id, code_country) %>%
     filter(survey_year == max(survey_year)) %>%
     ungroup() %>%
-    group_by(plot_id) %>%
+    group_by(plot_id, code_country) %>%
     # Sometimes there are different options, e.g. plot_id 60_9
     # No good way to solve this - we just have to pick one
     reframe(soil_wrb =
@@ -406,6 +411,8 @@ get_stratifiers <- function(level) {
                             rename(code_wrb_qualifier_1 = code) %>%
                             rename(wrb_qualifier_1 = description),
                           by = "code_wrb_qualifier_1") %>%
+                filter(!(code_country == 13 &
+                           depth_stock == 99)) %>%
                 select(plot_id, depth_stock, wrb_ref_soil_group,
                        wrb_qualifier_1),
               by = "plot_id") %>%
@@ -535,14 +542,20 @@ get_stratifiers <- function(level) {
         ungroup() %>%
         arrange(code_country, code_plot) %>%
         # Filter for the most abundantly reported depths
-        group_by(plot_id, max_alternative_depth) %>%
+        group_by(plot_id, code_country, max_alternative_depth) %>%
         summarise(count = n(),
                   .groups = "drop") %>%
-        group_by(plot_id) %>%
+        group_by(plot_id, code_country) %>%
         filter(count == max(count)) %>%
         summarise(
-          max_alternative_depth = first(max_alternative_depth)) %>%
+          max_alternative_depth = first(max_alternative_depth),
+          .groups = "drop") %>%
         ungroup() %>%
+        # Multiple Swedish Level II plots have received 99 as rock_depth
+        # which looks like a default value rather than a real depth.
+        # Therefore, better to use 999 than this reported default of 99 cm.
+        filter(!(code_country == 13 &
+                   max_alternative_depth == 99)) %>%
         select(plot_id, max_alternative_depth),
       by = "plot_id") %>%
     # Add depths from French data source and consider them as
@@ -1043,6 +1056,29 @@ get_stratifiers <- function(level) {
     rename(parent_material = description) %>%
     mutate(parent_material = coalesce(parent_material,
                                       parent_material_esd)) %>%
+    # Add water availability
+    left_join(get_env("so_prf") %>%
+                filter(!is.na(code_water) &
+                         code_water != 9) %>%
+                # Filter for records with the most recent change_date
+                # per plot
+                group_by(plot_id) %>%
+                slice_max(order_by =
+                            as.Date(change_date, format = "%Y-%m-%d")) %>%
+                ungroup() %>%
+                group_by(plot_id, code_water) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                filter(count == max(count)) %>%
+                summarise(
+                  code_water = first(code_water)) %>%
+                ungroup() %>%
+                select(plot_id, code_water),
+              by = "plot_id") %>%
+    left_join(d_water %>%
+                rename(water_avail = description),
+              by = join_by("code_water" == "code")) %>%
     # Add main tree species
     left_join(get_env("si_sta") %>%
                 select(plot_id, code_tree_species) %>%
@@ -1190,6 +1226,7 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
+           water_avail,
            wrb_qualifier_1,
            eff_soil_depth_source) %>%
     rename(mat = tavg,
@@ -1965,6 +2002,29 @@ get_stratifiers <- function(level) {
     rename(parent_material = description) %>%
     mutate(parent_material = coalesce(parent_material,
                                       parent_material_esd)) %>%
+    # Add water availability
+    left_join(get_env("s1_prf") %>%
+                filter(!is.na(code_water) &
+                         code_water != 9) %>%
+                # Filter for records with the most recent change_date
+                # per plot
+                group_by(plot_id) %>%
+                slice_max(order_by =
+                            as.Date(change_date, format = "%Y-%m-%d")) %>%
+                ungroup() %>%
+                group_by(plot_id, code_water) %>%
+                summarise(count = n(),
+                          .groups = "drop") %>%
+                group_by(plot_id) %>%
+                filter(count == max(count)) %>%
+                summarise(
+                  code_water = first(code_water)) %>%
+                ungroup() %>%
+                select(plot_id, code_water),
+              by = "plot_id") %>%
+    left_join(d_water %>%
+                rename(water_avail = description),
+              by = join_by("code_water" == "code")) %>%
     # Add main tree species
     left_join(get_env("y1_st1") %>%
                 select(plot_id, code_tree_species) %>%
@@ -2072,6 +2132,7 @@ get_stratifiers <- function(level) {
            biogeo,
            main_tree_species,
            bs_class,
+           water_avail,
            wrb_qualifier_1,
            eff_soil_depth_source) %>%
     rename(mat = tavg,
