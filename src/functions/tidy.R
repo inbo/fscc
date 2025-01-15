@@ -171,7 +171,7 @@ tidy <- function(survey_form,
         which(!grepl("_rt|_loq|_orig|_source", names(.))),
         # Selecting columns with the specified patterns in the desired order
         contains("_source"),
-        # contains("_orig"),
+        contains("_orig"),
         contains("_loq"),
         contains("_rt")) %>%
       select(
@@ -200,7 +200,8 @@ tidy <- function(survey_form,
               contains("date"),
               contains("unique_")) %>%
        relocate(other_obs, .before = date_labor_analyses) %>%
-       relocate(code_line, .before = unique_survey)
+       relocate(code_line, .before = unique_survey) %>%
+       relocate(vert_shift, .after = other_obs)
 
   }
 
@@ -226,7 +227,7 @@ tidy <- function(survey_form,
         which(!grepl("_rt|_loq|_orig|_source", names(.))),
         # Selecting columns with the specified patterns in the desired order
         contains("_source"),
-        # contains("_orig"),
+        contains("_orig"),
         contains("_loq"),
         contains("_rt")) %>%
       select(
@@ -251,7 +252,8 @@ tidy <- function(survey_form,
              contains("date"),
              contains("unique_")) %>%
       relocate(other_obs, .before = date_labor_analyses) %>%
-      relocate(code_line, .before = unique_survey)
+      relocate(code_line, .before = unique_survey) %>%
+      relocate(vert_shift, .after = other_obs)
 
   }
 
