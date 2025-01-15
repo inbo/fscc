@@ -137,18 +137,93 @@ get_derived_variable_inconsistencies <- function(survey_form,
                       abs(.data$layer_limit_superior -
                             .data$layer_limit_inferior),
                       NA_real_),
-        # C to N ratio
+        # C to N ratio (m/m) and other stoichiometric ratios
         # This should be in a plausible range (1 to 100)
+        # -1 if any value below LOQ
         c_to_n_ratio =
           ifelse(!is.na(.data$organic_carbon_total) &
                    !is.na(.data$n_total) &
                    !is.na(.data$organic_carbon_total_loq) &
-                   !is.na(.data$n_total_loq) &
+                   !is.na(.data$n_total_loq),
+                 case_when(
+                   # Both values above LOQ
                    (.data$organic_carbon_total >=
                       .data$organic_carbon_total_loq) &
+                     (.data$n_total >=
+                        .data$n_total_loq) ~
+                     # Stoichiometric ratio (m/m)
+                     round(.data$organic_carbon_total / .data$n_total, 2),
+                   # -1 if any value below LOQ
+                   TRUE ~ -1),
+                 NA_real_),
+        c_to_p_ratio =
+          ifelse(!is.na(.data$organic_carbon_total) &
+                   !is.na(.data$extrac_p) &
+                   !is.na(.data$organic_carbon_total_loq) &
+                   !is.na(.data$extrac_p_loq),
+                 case_when(
+                   (.data$organic_carbon_total >=
+                      .data$organic_carbon_total_loq) &
+                     (.data$extrac_p >=
+                        .data$extrac_p_loq) ~
+                     round(.data$organic_carbon_total /
+                             (1E-3 * .data$extrac_p), 2),
+                   TRUE ~ -1),
+                 NA_real_),
+        n_to_p_ratio =
+          ifelse(!is.na(.data$n_total) &
+                   !is.na(.data$extrac_p) &
+                   !is.na(.data$n_total_loq) &
+                   !is.na(.data$extrac_p_loq),
+                 case_when(
                    (.data$n_total >=
-                      .data$n_total_loq),
-                 round(.data$organic_carbon_total / .data$n_total, 2),
+                      .data$n_total_loq) &
+                     (.data$extrac_p >=
+                        .data$extrac_p_loq) ~
+                     round(.data$n_total /
+                             (1E-3 * .data$extrac_p), 2),
+                   TRUE ~ -1),
+                 NA_real_),
+        c_to_s_ratio =
+          ifelse(!is.na(.data$organic_carbon_total) &
+                   !is.na(.data$extrac_s) &
+                   !is.na(.data$organic_carbon_total_loq) &
+                   !is.na(.data$extrac_s_loq),
+                 case_when(
+                   (.data$organic_carbon_total >=
+                      .data$organic_carbon_total_loq) &
+                     (.data$extrac_s >=
+                        .data$extrac_s_loq) ~
+                     round(.data$organic_carbon_total /
+                             (1E-3 * .data$extrac_s), 2),
+                   TRUE ~ -1),
+                 NA_real_),
+        n_to_s_ratio =
+          ifelse(!is.na(.data$n_total) &
+                   !is.na(.data$extrac_s) &
+                   !is.na(.data$n_total_loq) &
+                   !is.na(.data$extrac_s_loq),
+                 case_when(
+                   (.data$n_total >=
+                      .data$n_total_loq) &
+                     (.data$extrac_s >=
+                        .data$extrac_s_loq) ~
+                     round(.data$n_total /
+                             (1E-3 * .data$extrac_s), 2),
+                   TRUE ~ -1),
+                 NA_real_),
+        p_to_s_ratio =
+          ifelse(!is.na(.data$extrac_p) &
+                   !is.na(.data$extrac_s) &
+                   !is.na(.data$extrac_p_loq) &
+                   !is.na(.data$extrac_s_loq),
+                 case_when(
+                   (.data$extrac_p >=
+                      .data$extrac_p_loq) &
+                     (.data$extrac_s >=
+                        .data$extrac_s_loq) ~
+                     round(.data$extrac_p / .data$extrac_s, 2),
+                   TRUE ~ -1),
                  NA_real_),
         # Sum base cations
         # This should be smaller or equal to CEC (exch_cec)
