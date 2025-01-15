@@ -14,7 +14,8 @@ gapfill_from_old_data <- function(survey_form,
                                                  "coarse_fragment_vol",
                                                  "part_size_clay",
                                                  "part_size_silt",
-                                                 "part_size_sand")) {
+                                                 "part_size_sand",
+                                                 "code_texture_class")) {
 
   source("./src/functions/get_env.R")
   source("./src/functions/assign_env.R")
@@ -426,7 +427,8 @@ gapfill_from_old_data <- function(survey_form,
                               "coarse_fragment_vol",
                               "part_size_clay",
                               "part_size_silt",
-                              "part_size_sand")))
+                              "part_size_sand",
+                              "code_texture_class")))
 
     # Check for "_orig" columns and create if not existing
     for (col in parameters) {
@@ -705,6 +707,7 @@ gapfill_from_old_data <- function(survey_form,
                part_size_clay_orig = part_size_clay,
                part_size_silt_orig = part_size_silt,
                part_size_sand_orig = part_size_sand,
+               code_texture_class_orig = code_texture_class,
                n_total_orig = n_total,
                extrac_p_orig = extrac_p,
                extrac_s_orig = extrac_s,
@@ -740,6 +743,7 @@ gapfill_from_old_data <- function(survey_form,
                part_size_clay_afscdb = part_size_clay,
                part_size_silt_afscdb = part_size_silt,
                part_size_sand_afscdb = part_size_sand,
+               code_texture_class_afscdb = code_texture_class,
                bulk_density_source = ifelse(!is.na(.data$bulk_density),
                                             "FSCDB.LII.2. (2012)",
                                             NA_character_),
@@ -787,7 +791,11 @@ gapfill_from_old_data <- function(survey_form,
                                               NA_character_),
                part_size_sand_source = ifelse(!is.na(.data$part_size_sand),
                                               "FSCDB.LII.2. (2012)",
-                                              NA_character_)) %>%
+                                              NA_character_),
+               code_texture_class_source =
+                 ifelse(!is.na(.data$code_texture_class),
+                        "FSCDB.LII.2. (2012)",
+                        NA_character_)) %>%
         left_join(partner_codes,
                   by = "plot_id") %>%
         mutate(partner_code = ifelse(!is.na(.data$partner_code),
@@ -1304,7 +1312,12 @@ gapfill_from_old_data <- function(survey_form,
                               "coarse_fragment_vol",
                               "part_size_clay",
                               "part_size_silt",
-                              "part_size_sand")))
+                              "part_size_sand",
+                              "code_texture_class")))
+
+
+
+
 
     # Check for "_orig" columns and create if not existing
     for (col in parameters) {
@@ -1323,6 +1336,15 @@ gapfill_from_old_data <- function(survey_form,
     }
 
 
+    ### Select parameters reported in old data
+
+    parameters_orig <- parameters
+
+    parameters <-
+      parameters_orig[which(parameters_orig %in% names(s1_som_fscdb))]
+
+
+
 
     ### Compile ----
 
@@ -1338,8 +1360,6 @@ gapfill_from_old_data <- function(survey_form,
     assertthat::assert_that(
       length(unique(s1_som_existing_rec$unique_layer_repetition)) ==
         nrow(s1_som_existing_rec))
-
-
 
 
 
@@ -1385,7 +1405,7 @@ gapfill_from_old_data <- function(survey_form,
     process_parameter <- function(df, param) {
       # Create source column name
       source_col <- paste0(param, "_source")
-      afscdb_col <- paste0(param, "_afscdb")
+      fscdb_col <- paste0(param, "_fscdb")
 
       # Create a new dataframe with mutated columns
       df %>%
@@ -1393,12 +1413,12 @@ gapfill_from_old_data <- function(survey_form,
           !!source_col := case_when(
             !is.na(!!sym(source_col)) ~ !!sym(source_col),
             !is.na(!!sym(param)) ~ "som (same year)",
-            !is.na(!!sym(afscdb_col)) ~ "FSCDB.LI (2002)",
+            !is.na(!!sym(fscdb_col)) ~ "FSCDB.LI (2002)",
             TRUE ~ NA_character_
           ),
           !!param := coalesce(
             !!sym(param),
-            !!sym(afscdb_col)
+            !!sym(fscdb_col)
           )
         )
     }
@@ -1511,6 +1531,7 @@ gapfill_from_old_data <- function(survey_form,
                part_size_clay_orig = part_size_clay,
                part_size_silt_orig = part_size_silt,
                part_size_sand_orig = part_size_sand,
+               code_texture_class_orig = code_texture_class,
                n_total_orig = n_total,
                extrac_p_orig = extrac_p,
                extrac_s_orig = extrac_s,
@@ -1549,15 +1570,16 @@ gapfill_from_old_data <- function(survey_form,
                organic_carbon_total_fscdb = organic_carbon_total,
                n_total_fscdb = n_total,
                extrac_p_fscdb = extrac_p,
-               extrac_s_fscdb = extrac_s,
-               rea_fe_fscdb = rea_fe,
-               rea_al_fscdb = rea_al,
-               exch_ca_fscdb = exch_ca,
+               # extrac_s_fscdb = extrac_s,
+               # rea_fe_fscdb = rea_fe,
+               # rea_al_fscdb = rea_al,
+               # exch_ca_fscdb = exch_ca,
                organic_layer_weight_fscdb = organic_layer_weight,
                coarse_fragment_vol_fscdb = coarse_fragment_vol,
                part_size_clay_fscdb = part_size_clay,
                part_size_silt_fscdb = part_size_silt,
                part_size_sand_fscdb = part_size_sand,
+               code_texture_class_fscdb = code_texture_class,
                bulk_density_source = ifelse(!is.na(.data$bulk_density),
                                             "FSCDB.LI (2002)",
                                             NA_character_),
@@ -1605,7 +1627,11 @@ gapfill_from_old_data <- function(survey_form,
                                               NA_character_),
                part_size_sand_source = ifelse(!is.na(.data$part_size_sand),
                                               "FSCDB.LI (2002)",
-                                              NA_character_))
+                                              NA_character_),
+               code_texture_class_source =
+                 ifelse(!is.na(.data$code_texture_class),
+                        "FSCDB.LI (2002)",
+                        NA_character_))
 
       if (!(all(colnames(df) %in% colnames(s1_som_fscdb_to_add)))) {
         missing_cols <- colnames(df)[
@@ -1618,7 +1644,7 @@ gapfill_from_old_data <- function(survey_form,
         all(colnames(df) %in% colnames(s1_som_fscdb_to_add)),
         msg = paste0("The columns ", as_character_summary(missing_cols),
                      " of 'df' are still missing in ",
-                     "'so_som_afscdb_to_add'.\n"))
+                     "'s1_som_fscdb_to_add'.\n"))
 
       # Reorder the columns in so_som_afscdb_to_add to match df
       s1_som_fscdb_to_add <- s1_som_fscdb_to_add %>%
