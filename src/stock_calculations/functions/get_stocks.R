@@ -81,14 +81,6 @@ get_stocks <- function(survey_form,
     survey_forms <- paste0(code_survey,
                            c("_som", "_pfh"))
 
-    # Some parameters only appear in "som"
-
-    if (!parameter %in% names(get_env(paste0(code_survey, "_pfh")))) {
-
-      survey_forms <- paste0(code_survey,
-                             c("_som"))
-    }
-
   }
 
   if (length(unlist(str_split(survey_form, "_"))) == 2) {
@@ -108,11 +100,21 @@ get_stocks <- function(survey_form,
   if (add_stratifiers == TRUE) {
 
     if (code_survey == "s1") {
-      df_strat <- get_stratifiers(level = "LI")
+
+      if (exists("s1_strat")) {
+        df_strat <- get_env("s1_strat")
+      } else {
+        df_strat <- get_stratifiers(level = "LI")
+      }
     }
 
     if (code_survey == "so") {
-      df_strat <- get_stratifiers(level = "LII")
+
+      if (exists("so_strat")) {
+        df_strat <- get_env("so_strat")
+      } else {
+        df_strat <- get_stratifiers(level = "LII")
+      }
     }
 
     df_strat <- df_strat %>%
@@ -264,9 +266,24 @@ get_stocks <- function(survey_form,
   parameter_orig <- parameter
   parameter <- parameter_table$som_parameter[ind]
 
+  loq_org <- read.csv2("./data/additional_data/ranges_qaqc.csv") %>%
+    filter(parameter_som == parameter) %>%
+    pull(LOQ_org)
+
+  loq_mineral <- read.csv2("./data/additional_data/ranges_qaqc.csv") %>%
+    filter(parameter_som == parameter) %>%
+    pull(LOQ_mineral)
 
 
 
+  # Some parameters only appear in "som"
+
+  if (length(survey_forms) == 2 &&
+      is.na(parameter_table$pfh_parameter[ind])) {
+
+    survey_forms <- paste0(code_survey,
+                           c("_som"))
+  }
 
 
   # Create dir to save data ----
@@ -430,6 +447,32 @@ get_stocks <- function(survey_form,
     df$parameter_for_stock_source <- NA
   }
 
+  if (paste0(parameter, "_loq") %in% names(df)) {
+
+    names(df)[which(names(df) == paste0(parameter, "_loq"))] <-
+      "parameter_for_stock_loq"
+
+    if (any(is.na(df$parameter_for_stock_loq))) {
+
+      df <- df %>%
+        mutate(
+          parameter_for_stock_loq = coalesce(
+            parameter_for_stock_loq,
+            ifelse(
+              layer_type %in% c("forest_floor", "peat"),
+              loq_org,
+              loq_mineral)))
+    }
+
+  } else {
+
+    df <- df %>%
+      mutate(
+        parameter_for_stock_loq = ifelse(
+          layer_type %in% c("forest_floor", "peat"),
+          loq_org,
+          loq_mineral))
+  }
 
 
   assertthat::assert_that(all(na.omit(df[[parameter]]) >= 0))
@@ -442,13 +485,31 @@ get_stocks <- function(survey_form,
   cat(" \nAdd eff_soil_depth\n")
 
     if (code_survey == "s1") {
-      df_soil_depth <- get_stratifiers(level = "LI") %>%
-        select(plot_id, eff_soil_depth, eff_soil_depth_source)
+
+      if (exists("s1_strat")) {
+
+        df_soil_depth <- get_env("s1_strat") %>%
+          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+
+      } else {
+
+        df_soil_depth <- get_stratifiers(level = "LI") %>%
+          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+      }
     }
 
     if (code_survey == "so") {
-      df_soil_depth <- get_stratifiers(level = "LII") %>%
-        select(plot_id, eff_soil_depth, eff_soil_depth_source)
+
+      if (exists("so_strat")) {
+
+        df_soil_depth <- get_env("so_strat") %>%
+          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+
+      } else {
+
+        df_soil_depth <- get_stratifiers(level = "LII") %>%
+          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+      }
     }
 
     df <- df %>%
@@ -807,7 +868,8 @@ get_stocks <- function(survey_form,
            coarse_fragment_vol_max_frac,
            parameter_for_stock,
            parameter_for_stock_min,
-           parameter_for_stock_max) %>%
+           parameter_for_stock_max,
+           parameter_for_stock_loq) %>%
     # Calculate carbon density per cm (t C ha-1 cm-1)
     # Units: (g C/kg fine earth) * (kg fine earth/m3 soil) = g C/m3 soil
     # 1 ha * 1 cm = 100 m * 100 m * 0.01 m = 100 m3
@@ -825,6 +887,10 @@ get_stocks <- function(survey_form,
              (.data$parameter_for_stock_max * density_convert_factor *
                 .data$bulk_density_max *
                 (1 - .data$coarse_fragment_vol_min_frac)) / 10000) %>%
+    mutate(density_loq =
+             (.data$parameter_for_stock_loq * density_convert_factor *
+                .data$bulk_density *
+                (1 - .data$coarse_fragment_vol_frac)) / 10000) %>%
     # Organic layers (peat) with known organic_layer_weight
     mutate(density_org =
              ifelse(layer_type == "peat" &
@@ -847,13 +913,22 @@ get_stocks <- function(survey_form,
                        .data$organic_layer_weight_max) /
                       (.data$layer_thickness * 100),
                     NA_integer_)) %>%
+    mutate(density_loq_org =
+             ifelse(layer_type == "peat" &
+                      !is.na(.data$organic_layer_weight),
+                    (.data$parameter_for_stock_loq * density_convert_factor *
+                       .data$organic_layer_weight) /
+                      (.data$layer_thickness * 100),
+                    NA_integer_)) %>%
     mutate(density = coalesce(density_org, density),
            density_min = coalesce(density_min_org, density_min),
-           density_max = coalesce(density_max_org, density_max)) %>%
+           density_max = coalesce(density_max_org, density_max),
+           density_loq = coalesce(density_loq_org, density_loq)) %>%
     select(-coarse_fragment_vol,
            -density_org,
            -density_min_org,
-           -density_max_org)
+           -density_max_org,
+           -density_loq_org)
 
   # Update overview of plot potentials
 
@@ -1098,6 +1173,12 @@ get_stocks <- function(survey_form,
                                   df_sub_selected = df_sub_selected,
                                   parameter_name = "bulk_density")
 
+      coarse_fragment_vol_frac_i <-
+        harmonise_layer_to_depths(limit_sup = limit_sup,
+                                  limit_inf = limit_inf,
+                                  df_sub_selected = df_sub_selected,
+                                  parameter_name = "coarse_fragment_vol_frac")
+
       df_profile_i <- df_profile_i %>%
         mutate(diff_with_limit_sup = limit_sup - round(.data$depth_bottom))
 
@@ -1130,13 +1211,16 @@ get_stocks <- function(survey_form,
                depth_avg = mean(c(limit_sup, limit_inf)),
                layer_thickness = diff(c(limit_sup, limit_inf)),
                bulk_density = bulk_density_i,
+               coarse_fragment_vol_frac = coarse_fragment_vol_frac_i,
                density = density_i,
                density_min = density_min_i,
                density_max = density_max_i) %>%
         mutate(across(c("organic_layer_weight", "organic_layer_weight_min",
-                        "organic_layer_weight_max", "coarse_fragment_vol_frac",
+                        "organic_layer_weight_max", #"coarse_fragment_vol_frac",
                         "coarse_fragment_vol_min_frac",
                         "coarse_fragment_vol_max_frac",
+                        "bulk_density_min",
+                        "bulk_density_max",
                         "parameter_for_stock", "parameter_for_stock_min",
                         "parameter_for_stock_max"),
                       ~ NA_real_))
@@ -1204,7 +1288,17 @@ get_stocks <- function(survey_form,
                     193.34,
                     2.136))
 
+  source("./src/functions/bulk_density_ptf.R")
+
+  subsoil_toc <- 3.52 # g C kg-1 (based on LI)
+  subsoil_bulk_density <- bd_ptf(subsoil_toc) # 1359 kg m-3
+  subsoil_coarse_fragment_vol_frac  <- 0.1357 # mean based on LI; median: 0.0125
+
     # Currently only for a few parameters
+
+
+
+
 
     if (!parameter %in% subsoil_densities_table$parameter) {
 
@@ -1373,16 +1467,20 @@ get_stocks <- function(survey_form,
                        depth_bottom = limit_inf,
                        depth_avg = mean(c(limit_sup, limit_inf)),
                        layer_thickness = diff(c(limit_sup, limit_inf)),
-                       bulk_density = NA,
+                       bulk_density = subsoil_bulk_density,
+                       coarse_fragment_vol_frac =
+                         subsoil_coarse_fragment_vol_frac,
                        density = density_i,
                        density_min = density_min_i,
                        density_max = density_max_i) %>%
                 mutate(across(c("organic_layer_weight",
                                 "organic_layer_weight_min",
                                 "organic_layer_weight_max",
-                                "coarse_fragment_vol_frac",
+                                # "coarse_fragment_vol_frac",
                                 "coarse_fragment_vol_min_frac",
                                 "coarse_fragment_vol_max_frac",
+                                "bulk_density_min",
+                                "bulk_density_max",
                                 "parameter_for_stock",
                                 "parameter_for_stock_min",
                                 "parameter_for_stock_max"),
@@ -1503,6 +1601,9 @@ get_stocks <- function(survey_form,
              density,
              density_min,
              density_max,
+             density_loq,
+             bulk_density,
+             coarse_fragment_vol_frac,
              depth_stock,
              gapfilled_post_layer1) %>%
       # Only calculate carbon stocks based on layers
@@ -1609,6 +1710,7 @@ get_stocks <- function(survey_form,
                      variab_name = "density",
                      parameter_name = parameter,
                      survey_form = survey_form_i,
+                     use_splines = TRUE,
                      density_per_three_cm = density_per_three_cm,
                      graph = graph)
 
@@ -1616,6 +1718,161 @@ get_stocks <- function(survey_form,
         filter(is.na(.data$gapfilled_post_layer1)) %>%
         pull(depth_bottom) %>%
         max()
+
+
+
+
+      # Calculate the mass_fine_earth (until 100 cm or eff_soil_depth
+      # if shallower)
+      # and the mass_fine_earth_topsoil (until 30 cm or eff_soil_depth
+      # if shallower)
+
+      # To do so, we won't use splines but LOCF or NOCB.
+      # First, we need to add layers for missing depth ranges
+
+      # Define the depth range to cover
+      target_depth_range <- seq(0, 100)
+
+      depth_range <- prof %>%
+        mutate(depth_sequence =
+                 purrr::pmap(list(round(depth_top),
+                                  round(depth_bottom)), seq, by = 1)) %>%
+        pull(depth_sequence) %>%
+        unlist %>%
+        unique
+
+      # Remove "bordering values"
+      depth_range <- depth_range[-(c(which(diff(depth_range) != 1),
+                                     which(diff(depth_range) != 1) + 1,
+                                     length(depth_range)))]
+
+      # Specify the depth range with missing density data
+
+      depth_range_missing <-
+        target_depth_range[!target_depth_range %in% depth_range]
+
+      if (!identical(depth_range_missing, numeric(0)) &&
+          !identical(depth_range_missing, integer(0))) {
+
+        if (length(depth_range_missing) == 1) {
+          depth_range_missing <- numeric(0)
+        } else {
+
+          if (diff(depth_range_missing)[1] > 1) {
+            depth_range_missing <- depth_range_missing[-1]
+          }
+
+          if (!identical(depth_range_missing, numeric(0)) &&
+              !identical(depth_range_missing, integer(0)) &&
+              length(depth_range_missing) == 1) {
+            depth_range_missing <- numeric(0)
+          }
+
+          if ((!identical(depth_range_missing, numeric(0))) &&
+              (depth_range_missing[length(depth_range_missing)] == 100 &&
+               depth_range_missing[length(depth_range_missing) - 1] < 99)) {
+            depth_range_missing <-
+              depth_range_missing[-length(depth_range_missing)]
+          }
+        }
+      }
+
+      # Add layers if needed
+
+      if (!identical(depth_range_missing, numeric(0)) &&
+          !identical(depth_range_missing, integer(0))) {
+
+        ind_gap_i <- which(diff(depth_range_missing) > 1)
+
+        # if one layer is missing
+
+        if (identical(ind_gap_i, integer(0))) {
+
+          prof <- bind_rows(
+            prof,
+            prof[which(prof$depth_bottom == depth_range_missing[1]), ] %>%
+              mutate(
+                code_layer = "X",
+                depth_top = depth_range_missing[1],
+                depth_bottom =
+                  depth_range_missing[length(depth_range_missing)]))
+
+        } else {
+
+          # if multiple layers are missing
+
+          for (j in seq_len(length(ind_gap_i) + 1)) {
+
+            if (j == 1) {
+              depth_top_j <- depth_range_missing[1]
+            } else {
+              depth_top_j <- depth_range_missing[ind_gap_i[j - 1] + 1]
+            }
+
+            if (j == (length(ind_gap_i) + 1)) {
+              depth_bottom_j <- depth_range_missing[length(depth_range_missing)]
+            } else {
+              depth_bottom_j <- depth_range_missing[ind_gap_i[j]]
+            }
+
+            prof <- bind_rows(
+              prof,
+              # There should always be a layer above it since the presence of
+              # the upper mineral layer is a criterium for stocks
+              prof[which(prof$depth_bottom == depth_top_j), ] %>%
+                mutate(
+                  code_layer = "X",
+                  depth_top = depth_top_j,
+                  depth_bottom = depth_bottom_j))
+
+          } # End of for loop over extra layers
+        }
+
+        prof <- prof %>%
+          arrange(depth_top)
+
+      } # End of "if extra layers are needed"
+
+      prof <- prof %>%
+        filter(depth_top < depth_stock_i) %>%
+        mutate(depth_bottom = ifelse(
+          depth_bottom > depth_stock_i,
+          depth_stock_i,
+          depth_bottom))
+
+      assertthat::assert_that(all(!is.na(prof$bulk_density)))
+      assertthat::assert_that(all(!is.na(prof$coarse_fragment_vol_frac)))
+
+      # mass_fine_earth (tot depth_stock) in kg fine earth m-2
+
+      prof <- prof %>%
+        mutate(
+          layer_thickness = (depth_bottom - depth_top),
+          bulk_density_total_soil =
+            bulk_density * (1 - coarse_fragment_vol_frac),
+          mass_fine_earth =
+            layer_thickness * (1E-2) * bulk_density_total_soil)
+
+      mass_fine_earth_i <- round(sum(prof$mass_fine_earth), 2)
+
+      # mass_fine_earth_topsoil (tot 30 cm) in kg fine earth m-2
+
+      prof <- prof %>%
+        filter(depth_top < min(c(30, depth_stock_i))) %>%
+        mutate(depth_bottom = ifelse(
+          depth_bottom > min(c(30, depth_stock_i)),
+          min(c(30, depth_stock_i)),
+          depth_bottom)) %>%
+        mutate(
+          layer_thickness = (depth_bottom - depth_top),
+          bulk_density_total_soil =
+            bulk_density * (1 - coarse_fragment_vol_frac),
+          mass_fine_earth =
+            layer_thickness * (1E-2) * bulk_density_total_soil)
+
+      mass_fine_earth_topsoil_i <- round(sum(prof$mass_fine_earth), 2)
+
+
 
       # use_stock_topsoil_i <- ifelse(max_obs_depth < 30 &
       #                                 max_obs_depth < 0.8 * depth_stock_i,
@@ -1636,6 +1893,8 @@ get_stocks <- function(survey_form,
                    obs_depth = max_obs_depth,
                    # use_stock_topsoil = use_stock_topsoil_i,
                    depth_stock = depth_stock_i,
+                   mass_fine_earth = mass_fine_earth_i, # kg m-2
+                   mass_fine_earth_topsoil = mass_fine_earth_topsoil_i, # kg m-2
                    profile_stock_output_i)
 
       profile_stocks_below_ground <-
@@ -1689,7 +1948,8 @@ get_stocks <- function(survey_form,
   ## 2.4. Aggregate below-ground per plot ----
 
   parameters <- c("stock_below_ground",
-                  "stock_below_ground_topsoil")
+                  "stock_below_ground_topsoil",
+                  "stock_below_ground_1cm")
 
   grouping_cols <- c("survey_form", "partner_short", "partner_code",
                      "code_country", "code_plot",
@@ -1726,6 +1986,10 @@ get_stocks <- function(survey_form,
             round(mean(obs_depth, na.rm = TRUE), 1),
           depth_stock_avg =
             round(mean(depth_stock, na.rm = TRUE), 2),
+          mass_fine_earth =
+            round(mean(mass_fine_earth, na.rm = TRUE), 2),
+          mass_fine_earth_topsoil =
+            round(mean(mass_fine_earth_topsoil, na.rm = TRUE), 2),
           contains_peat =
             any(contains_peat == TRUE),
           # use_stock_topsoil =
@@ -1804,9 +2068,6 @@ get_stocks <- function(survey_form,
 
   # TOC data below LOQ for the forest floor are highly implausible
 
-  loq <- read.csv2("./data/additional_data/ranges_qaqc.csv") %>%
-    filter(parameter_som == parameter) %>%
-    pull(LOQ_org)
 
 
 
@@ -1861,17 +2122,17 @@ get_stocks <- function(survey_form,
     mutate(
       parameter_for_stock_min = ifelse(
         !is.na(parameter_for_stock) &
-          parameter_for_stock < loq,
+          parameter_for_stock < loq_org,
         NA_real_,
         parameter_for_stock_min),
       parameter_for_stock_max = ifelse(
         !is.na(parameter_for_stock) &
-          parameter_for_stock < loq,
+          parameter_for_stock < loq_org,
         NA_real_,
         parameter_for_stock_max),
       parameter_for_stock = ifelse(
         !is.na(parameter_for_stock) &
-          parameter_for_stock < loq,
+          parameter_for_stock < loq_org,
         NA_real_,
         parameter_for_stock))
 
@@ -1999,7 +2260,9 @@ get_stocks <- function(survey_form,
                    stock_forest_floor_min =
                      round(sum(df_profile_i$stock_layer_min), 2),
                    stock_forest_floor_max =
-                     round(sum(df_profile_i$stock_layer_max), 2))
+                     round(sum(df_profile_i$stock_layer_max), 2),
+                   mass_forest_floor =
+                     round(sum(df_profile_i$organic_layer_weight), 2))
 
       } else {
 
@@ -2030,7 +2293,8 @@ get_stocks <- function(survey_form,
                      stock_forest_floor_min = NA_real_,
                        # round(sum(df_profile_i$stock_layer_min, na.rm = TRUE),
                        #       2),
-                     stock_forest_floor_max = NA_real_)
+                     stock_forest_floor_max = NA_real_,
+                     mass_forest_floor = NA_real_)
 
 
       }
@@ -2089,6 +2353,10 @@ get_stocks <- function(survey_form,
         ifelse(any(!is.na(stock_forest_floor)),
                round(mean(stock_forest_floor, na.rm = TRUE), 2),
                NA_real_),
+      mass_forest_floor =
+        ifelse(any(!is.na(mass_forest_floor)),
+               round(mean(mass_forest_floor, na.rm = TRUE), 2),
+               NA_real_),
       nlay_forest_floor_min =
         min(nlay_forest_floor, na.rm = TRUE),
       nlay_forest_floor_max =
@@ -2141,7 +2409,12 @@ get_stocks <- function(survey_form,
                 relocate(density_min, .after = density) %>%
                 relocate(density_max, .after = density_min) %>%
                 mutate(repetition = as.character(repetition),
-                       gapfilled_post_layer1 = NA_character_)) %>%
+                       gapfilled_post_layer1 = NA_character_,
+                       parameter_for_stock_loq = NA_real_,
+                       density_loq = NA_real_) %>%
+                relocate(parameter_for_stock_loq,
+                         .after = parameter_for_stock_max) %>%
+                relocate(density_loq, .after = density_max)) %>%
     mutate(profile_id_form = paste0(survey_form_i, "_",
                                     profile_id)) %>%
     relocate(profile_id_form, .after = profile_id) %>%
@@ -2192,8 +2465,27 @@ get_stocks <- function(survey_form,
              rowSums(select(., stock_below_ground_topsoil_max,
                             stock_forest_floor_max),
                      na.rm = TRUE),
+           stock_forest_floor_proxy =
+             rowSums(select(., stock_below_ground_1cm, stock_forest_floor),
+                     na.rm = TRUE),
+           stock_forest_floor_proxy_min =
+             rowSums(select(., stock_below_ground_1cm_min,
+                            stock_forest_floor_min),
+                     na.rm = TRUE),
+           stock_forest_floor_proxy_max =
+             rowSums(select(., stock_below_ground_1cm_max,
+                            stock_forest_floor_max),
+                     na.rm = TRUE),
            nlay = rowSums(select(., nlay_below_ground, nlay_forest_floor),
-                          na.rm = TRUE))
+                          na.rm = TRUE)) %>%
+    select(-contains("stock_below_ground_1cm")) %>%
+    relocate(obs_depth, depth_stock, forest_floor_thickness,
+             mass_fine_earth, mass_fine_earth_topsoil, mass_forest_floor,
+             nlay, nlay_below_ground, nlay_forest_floor, forest_floor_layers,
+             rmse_mpspline,
+             .after = stock_forest_floor_proxy_max) %>%
+    relocate(starts_with("stock_") & matches("\\d+$"), .after = last_col()) %>%
+    relocate(starts_with("density_"), .after = last_col())
 
 
   # Save output
@@ -2256,6 +2548,17 @@ get_stocks <- function(survey_form,
              sum(c(stock_below_ground_topsoil_max,
                    stock_forest_floor_max),
                  na.rm = TRUE),
+           stock_forest_floor_proxy =
+             sum(c(stock_below_ground_1cm, stock_forest_floor),
+                 na.rm = TRUE),
+           stock_forest_floor_proxy_min =
+             sum(c(stock_below_ground_1cm_min,
+                   stock_forest_floor_min),
+                 na.rm = TRUE),
+           stock_forest_floor_proxy_max =
+             sum(c(stock_below_ground_1cm_max,
+                   stock_forest_floor_max),
+                 na.rm = TRUE),
            nlay_min =
              sum(c(nlay_below_ground_min,
                    nlay_forest_floor_min),
@@ -2264,6 +2567,7 @@ get_stocks <- function(survey_form,
              sum(c(nlay_below_ground_max,
                    nlay_forest_floor_max),
                  na.rm = TRUE)) %>%
+    select(-contains("stock_below_ground_1cm")) %>%
     mutate_all(function(x) ifelse(is.nan(x), NA, x)) %>%
     arrange(partner_short,
             code_plot,
@@ -2274,14 +2578,16 @@ get_stocks <- function(survey_form,
     relocate(contains("stock_below_ground"), .after = stock_topsoil_max) %>%
     relocate(contains("stock_forest_floor"),
              .after = stock_below_ground_topsoil_max) %>%
+    relocate(contains("stock_forest_floor_proxy"),
+             .after = stock_forest_floor_max) %>%
     # relocate(use_stock_topsoil, .after = survey_year) %>%
     relocate(contains_peat, .after = survey_year) %>%
     # relocate(known_forest_floor, .after = use_stock_topsoil) %>%
     # relocate(contains_peat, .after = known_forest_floor) %>%
-    relocate(contains("nlay"), .after = stock_forest_floor_max) %>%
+    relocate(contains("nlay"), .after = stock_forest_floor_proxy_max) %>%
     relocate(contains("nlay_below_ground"), .after = nlay_max) %>%
     relocate(contains("nlay_forest_floor"), .after = nlay_below_ground_max) %>%
-    relocate(depth_stock_avg, .after = stock_forest_floor_max) %>%
+    relocate(depth_stock_avg, .after = stock_forest_floor_proxy_max) %>%
     relocate(obs_depth_avg, .after = depth_stock_avg) %>%
     relocate(rmse_mpspline_max, .after = forest_floor_layers_unique)
 
@@ -2633,17 +2939,6 @@ if (length(survey_forms) == 2) {
 
   # Create graphs per plot ----
 
-  # !!!!!! To do:
-  # make sure that x axis starts from 0 (e.g. so_som 7_12)
-  # lower dpi
-  # only draw graphs for profiles which have an actual stock calculated
-  # positive depths
-  # include estimated c density ff
-  # add line at 30 cm if "use_topsoil"
-  # als stock forest floor is NA, dan geen stock forest floor gebruiken
-  # (i.e. ignore NA - zie 13_1607 in s1)
-
-
   # Calculate the estimated thickness of forest floor layers (and the
   # resulting variable density) based on pedotransfer bulk density
   # estimates for forest floor layers.
@@ -2761,7 +3056,8 @@ if (length(survey_forms) == 2) {
     names_to = "depth",
     names_prefix = "density_",
     values_to = "density") %>%
-    mutate(depth = as.numeric(depth)) %>%
+    mutate(depth = as.numeric(depth),
+           repetition = as.character(repetition)) %>%
     select(survey_form, code_country, code_plot, plot_id, survey_year,
            repetition, profile_id, profile_id_form, depth_stock,
            stock, stock_below_ground, stock_below_ground_topsoil,
@@ -2829,7 +3125,7 @@ if (length(survey_forms) == 2) {
 
   ## Evaluate over plot_ids ----
 
-  for (i in seq_along(unique(profile_stocks$plot_id))) {
+ for (i in seq_along(unique(profile_stocks$plot_id))) {
 
     plot_id_i <- unique(profile_stocks$plot_id)[i]
 
@@ -3120,7 +3416,7 @@ if (length(survey_forms) == 2) {
       p_j <- p_j +
         labs(fill = NULL,
              title = survey_years_i[j],
-             subtitle = paste0("C stock",
+             subtitle = paste0("stock",
                                ": *",
                                round(stock_j$stock_final),
                                "* ", unit_density_per_cm_markdown, "<br>",
