@@ -133,7 +133,7 @@ compare_ranks <- function(df, additional_info) {
 
 # 1. Input level ----
 
-level <- "LII"
+level <- "LI"
 
 
 
@@ -864,6 +864,15 @@ plot_ids <- coord_sources %>%
 
 coord_harmonised <- NULL
 
+if (!isTRUE(getOption("knitr.in.progress"))) {
+
+  progress_bar <-
+    txtProgressBar(min = 0,
+                   max = length(plot_ids),
+                   style = 3)
+}
+
+
 for (i in seq_along(plot_ids)) {
 
   coord_sources_i <- coord_sources %>%
@@ -1295,10 +1304,18 @@ for (i in seq_along(plot_ids)) {
     }
 
   }
+
+  # Update the progress bar
+  if (!isTRUE(getOption("knitr.in.progress"))) {
+    setTxtProgressBar(progress_bar, i)
+  }
+
+} # End of loop over plot_ids
+
+
+if (!isTRUE(getOption("knitr.in.progress"))) {
+  close(progress_bar)
 }
-
-
-
 
 
 
