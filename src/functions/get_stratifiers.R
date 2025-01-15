@@ -233,6 +233,32 @@ get_stratifiers <- function(level) {
       .default = NA))
 
 
+
+  # Retrieve data for vertical shift profiles
+
+  if (!"layer_limit_inferior_orig" %in% names(get_env("so_som")) ||
+      !"layer_limit_superior_orig" %in% names(get_env("so_som"))) {
+    df_vert_shift <- read.csv("./data/layer1_data/so/so_som.csv",
+                              sep = ";")
+  } else {
+    df_vert_shift <- get_env("so_som")
+  }
+
+
+  # Retrieve data from pfh
+
+  if ("layer_number" %in% get_env("so_pfh")) {
+    df_so_pfh <- get_env("so_pfh")
+  } else {
+    df_so_pfh <- read.csv("./data/layer1_data/so/so_pfh.csv",
+                          sep = ";")
+  }
+
+
+
+
+
+
   # Only for Level II:
   # There are some additional French profile data which have never been
   # submitted. This includes data on the "depth of the soil that can be
@@ -392,6 +418,30 @@ get_stratifiers <- function(level) {
     n_distinct(get_env("data_availability_so")$plot_id) ==
       nrow(get_env("data_availability_so")))
 
+
+  vert_shifts <- df_vert_shift %>%
+    mutate(
+      diff_to_move = case_when(
+        str_starts(.data$vert_shift, "vertical shift") ~
+          0 - as.numeric(str_extract(.data$vert_shift,
+                                     "(?<=becomes )[\\-0-9\\.]+")),
+        TRUE ~ 0)) %>%
+    group_by(unique_survey, plot_id, survey_year,
+             diff_to_move) %>%
+    summarise(count = n(),
+              .groups = "drop") %>%
+    group_by(unique_survey, plot_id, survey_year) %>%
+    filter(count == max(count)) %>%
+    ungroup() %>%
+    arrange(plot_id) %>%
+    select(-count, -survey_year)
+
+
+
+
+
+
+
   # Estimate the exact "effective soil depth"
 
   so_eff_soil_depth_sources <- get_env("data_availability_so") %>%
@@ -413,6 +463,13 @@ get_stratifiers <- function(level) {
                           by = "code_wrb_qualifier_1") %>%
                 filter(!(code_country == 13 &
                            depth_stock == 99)) %>%
+                # For this plot, by checking the different profiles,
+                # the depth of the pfh profile seems to most correct.
+                mutate(
+                  depth_stock = ifelse(
+                    plot_id == "7_10",
+                    80,
+                    depth_stock)) %>%
                 select(plot_id, depth_stock, wrb_ref_soil_group,
                        wrb_qualifier_1),
               by = "plot_id") %>%
@@ -435,7 +492,20 @@ get_stratifiers <- function(level) {
         mutate(eff_soil_depth_orig = ifelse(.data$eff_soil_depth_orig == 0,
                                             NA,
                                             .data$eff_soil_depth_orig)) %>%
-        filter(!is.na(eff_soil_depth)) %>%
+        left_join(
+          vert_shifts %>%
+            select(-plot_id),
+          by = "unique_survey") %>%
+        arrange(plot_id) %>%
+        mutate(
+          eff_soil_depth_orig = ifelse(
+            !is.na(eff_soil_depth_orig) & diff_to_move != 0,
+            eff_soil_depth_orig - diff_to_move,
+            eff_soil_depth_orig)) %>%
+        filter(!is.na(eff_soil_depth_orig)) %>%
+        # For this plot, by checking the different profiles, the depth of the
+        # pfh profile actually seems to most correct.
+        filter(plot_id != "7_10") %>%
         arrange(code_country, code_plot) %>%
         # Filter for records with the most recent change_date
         # per plot
@@ -459,7 +529,7 @@ get_stratifiers <- function(level) {
     # Add the upper depth limit of any zone with consecutive R horizons
     # at the bottom of the profile in so_pfh, aggregated per plot_id
     left_join(
-      get_env("so_pfh") %>%
+      df_so_pfh %>%
         arrange(unique_survey_profile, layer_number) %>%
         # Create a group for consecutive layers within each profile
         group_by(unique_survey_profile, plot_id) %>%
@@ -583,7 +653,7 @@ get_stratifiers <- function(level) {
           select(unique_survey_profile, plot_id, layer_number,
                  layer_limit_superior, layer_limit_inferior,
                  coarse_fragment_vol),
-        get_env("so_pfh") %>%
+        df_so_pfh %>%
           # Check if the column "coarse_fragment_vol" is missing
           mutate(
             coarse_fragment_vol =
@@ -648,7 +718,7 @@ get_stratifiers <- function(level) {
     # Add the lowest depth of the deepest "so_pfh" profile
     # (excluding R horizons) per plot
     left_join(
-      get_env("so_pfh") %>%
+      df_so_pfh %>%
         # Remove any horizons containing "R"
         filter(!(grepl("R", horizon_master, ignore.case = TRUE))) %>%
         group_by(unique_survey_profile, plot_id) %>%
@@ -1243,7 +1313,7 @@ get_stratifiers <- function(level) {
       select(-uncertain_soil_group_options)
   }
 
-}
+} # end of "if LII"
 
 
 
@@ -1274,6 +1344,29 @@ get_stratifiers <- function(level) {
                                             sum_acid_cations),
                       NA))
   }
+
+
+    # Retrieve data for vertical shift profiles
+
+    if (!"layer_limit_inferior_orig" %in% names(get_env("s1_som")) ||
+        !"layer_limit_superior_orig" %in% names(get_env("s1_som"))) {
+      df_vert_shift <- read.csv("./data/layer1_data/s1/s1_som.csv",
+                                sep = ";")
+    } else {
+      df_vert_shift <- get_env("s1_som")
+    }
+
+
+
+    # Retrieve data from pfh
+
+    if ("layer_number" %in% get_env("s1_pfh")) {
+      df_s1_pfh <- get_env("s1_pfh")
+    } else {
+      df_s1_pfh <- read.csv("./data/layer1_data/s1/s1_pfh.csv",
+                            sep = ";")
+    }
+
 
 
   # Retrieve manually harmonised WRB and EFTC and aggregate per plot
@@ -1348,6 +1441,27 @@ get_stratifiers <- function(level) {
     n_distinct(get_env("data_availability_s1")$plot_id) ==
       nrow(get_env("data_availability_s1")))
 
+  vert_shifts <- df_vert_shift %>%
+    mutate(
+      diff_to_move = case_when(
+        str_starts(vert_shift, "vertical shift") ~
+          0 - as.numeric(str_extract(vert_shift, "(?<=becomes )[\\-0-9\\.]+")),
+        TRUE ~ 0)) %>%
+    group_by(unique_survey, plot_id, survey_year,
+             diff_to_move) %>%
+    summarise(count = n(),
+              .groups = "drop") %>%
+    group_by(unique_survey, plot_id, survey_year) %>%
+    filter(count == max(count)) %>%
+    ungroup() %>%
+    arrange(plot_id) %>%
+    select(-count, -survey_year)
+
+
+
+
+
+
   # Estimate the exact "effective soil depth"
 
   s1_eff_soil_depth_sources <- get_env("data_availability_s1") %>%
@@ -1374,7 +1488,7 @@ get_stratifiers <- function(level) {
     # Add originally reported effective soil depths aggregated per plot_id
     left_join(
       get_env("s1_prf") %>%
-        # In case s1_prf has already been harmonised with s1_prf_adds,
+        # In case so_prf has already been harmonised with so_prf_adds,
         # then the original soil depth data have been copied to
         # a column eff_soil_depth_orig. Else, such column does not exist, and
         # eff_soil_depth is supposed to contain the original values.
@@ -1389,7 +1503,17 @@ get_stratifiers <- function(level) {
         mutate(eff_soil_depth_orig = ifelse(.data$eff_soil_depth_orig == 0,
                                             NA,
                                             .data$eff_soil_depth_orig)) %>%
-        filter(!is.na(eff_soil_depth)) %>%
+        left_join(
+          vert_shifts %>%
+            select(-plot_id),
+          by = "unique_survey") %>%
+        arrange(plot_id) %>%
+        mutate(
+          eff_soil_depth_orig = ifelse(
+            !is.na(eff_soil_depth_orig) & diff_to_move != 0,
+            eff_soil_depth_orig - diff_to_move,
+            eff_soil_depth_orig)) %>%
+        filter(!is.na(eff_soil_depth_orig)) %>%
         arrange(code_country, code_plot) %>%
         # Filter for records with the most recent change_date
         # per plot
@@ -1413,7 +1537,7 @@ get_stratifiers <- function(level) {
     # Add the upper depth limit of any zone with consecutive R horizons
     # at the bottom of the profile in s1_pfh, aggregated per plot_id
     left_join(
-      get_env("s1_pfh") %>%
+      df_s1_pfh %>%
         arrange(unique_survey_profile, layer_number) %>%
         # Create a group for consecutive layers within each profile
         group_by(unique_survey_profile, plot_id) %>%
@@ -1523,7 +1647,7 @@ get_stratifiers <- function(level) {
           select(unique_survey_profile, plot_id, layer_number,
                  layer_limit_superior, layer_limit_inferior,
                  coarse_fragment_vol),
-        get_env("s1_pfh") %>%
+        df_s1_pfh %>%
           # Check if the column "coarse_fragment_vol" is missing
           mutate(
             coarse_fragment_vol =
@@ -1588,7 +1712,7 @@ get_stratifiers <- function(level) {
     # Add the lowest depth of the deepest "s1_pfh" profile
     # (excluding R horizons) per plot
     left_join(
-      get_env("s1_pfh") %>%
+      df_s1_pfh %>%
         # Remove any horizons containing "R"
         filter(!(grepl("R", horizon_master, ignore.case = TRUE))) %>%
         group_by(unique_survey_profile, plot_id) %>%
@@ -2150,7 +2274,7 @@ get_stratifiers <- function(level) {
   }
 
 
-}
+} # End of "if LI"
 
 return(df_strat)
 

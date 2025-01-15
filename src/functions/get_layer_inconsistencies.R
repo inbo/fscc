@@ -250,6 +250,8 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
     df <- data_frame
   }
 
+  df$vert_shift <- "no shift"
+
   pfh <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_pfh"))
 
   if (!"unique_survey_profile" %in% names(pfh)) {
@@ -263,40 +265,40 @@ if (unlist(strsplit(survey_form, "_"))[2] == "som") {
 
   # Retrieve prf for information about the eff_soil_depth
 
-  if (unlist(strsplit(survey_form, "_"))[1] == "so") {
-
-    assertthat::assert_that(file.exists(paste0("./data/additional_data/",
-                                               "SO_PRF_ADDS.xlsx")),
-                            msg = paste0("'./data/additional_data/",
-                                         "SO_PRF_ADDS.xlsx' ",
-                                         "does not exist."))
-
-    # This file was created by Nathalie in 2023
-
-    prf <-
-      openxlsx::read.xlsx(paste0("./data/additional_data/",
-                                 "SO_PRF_ADDS.xlsx"),
-                          sheet = 1) %>%
-      rename(plot_id = PLOT_ID) %>%
-      mutate(eff_soil_depth = as.numeric(DEPTHSTOCK))
-
-  }
-
-
-  if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
-
-    prf <- read.csv("./data/additional_data/S1_PRF_ADDS.csv",
-                    sep = ";") %>%
-      rename(plot_id = PLOTID) %>%
-      mutate(eff_soil_depth = as.numeric(STOCKDEPTH))
-
-  }
-
-  prf_agg <- prf %>%
-    group_by(plot_id) %>%
-    # Sometimes there are different options,
-    # No good way to solve this - we just have to pick one
-    summarise(eff_soil_depth = median(eff_soil_depth, na.rm = TRUE))
+  # if (unlist(strsplit(survey_form, "_"))[1] == "so") {
+  #
+  #   assertthat::assert_that(file.exists(paste0("./data/additional_data/",
+  #                                              "SO_PRF_ADDS.xlsx")),
+  #                           msg = paste0("'./data/additional_data/",
+  #                                        "SO_PRF_ADDS.xlsx' ",
+  #                                        "does not exist."))
+  #
+  #   # This file was created by Nathalie in 2023
+  #
+  #   prf <-
+  #     openxlsx::read.xlsx(paste0("./data/additional_data/",
+  #                                "SO_PRF_ADDS.xlsx"),
+  #                         sheet = 1) %>%
+  #     rename(plot_id = PLOT_ID) %>%
+  #     mutate(eff_soil_depth = as.numeric(DEPTHSTOCK))
+  #
+  # }
+  #
+  #
+  # if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+  #
+  #   prf <- read.csv("./data/additional_data/S1_PRF_ADDS.csv",
+  #                   sep = ";") %>%
+  #     rename(plot_id = PLOTID) %>%
+  #     mutate(eff_soil_depth = as.numeric(STOCKDEPTH))
+  #
+  # }
+  #
+  # prf_agg <- prf %>%
+  #   group_by(plot_id) %>%
+  #   # Sometimes there are different options,
+  #   # No good way to solve this - we just have to pick one
+  #   summarise(eff_soil_depth = median(eff_soil_depth, na.rm = TRUE))
 
 
 
@@ -327,7 +329,14 @@ if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
     filter(survey_form == survey_form_input) %>%
     filter(parameter == "organic_carbon_total") %>%
     # Outside plausible range
-    filter(rule_id == "FSCC_14") %>%
+    {
+      if ("rule_id" %in% colnames(.)) {
+        filter(., rule_id == "FSCC_14")
+      } else if ("rule_ID" %in% colnames(.)) {
+        filter(., rule_ID == "FSCC_14")
+      }
+    } %>%
+    # filter(rule_id == "FSCC_14") %>%
     # "The reported value is extreme but correct"
     filter(code_nfc_action_taken == 1) %>%
     pull(code_line)
@@ -3559,7 +3568,7 @@ if (df_sub$layer_type[1] == "forest_floor" &&
                                   df_sub$layer_limit_superior[2])))
   } else {
 
-    # If there is a considerable gap, e.g. in "7_2007_10_2"
+    # If there is a considerable gap, e.g. in "7_2007_10_2" (so_som)
 
     # Consider the below-ground layer limit as reference
     # and move the forest floor layers to the below-ground
@@ -3601,6 +3610,9 @@ if (diff_to_move != 0) {
     df$layer_limit_inferior[vec] <- df$layer_limit_inferior[vec] - diff_to_move
     df$layer_limit_superior[vec] <- df$layer_limit_superior[vec] - diff_to_move
 
+    df$vert_shift[vec] <- paste0("vertical shift of profile: 0 cm becomes ",
+                                 (0 - diff_to_move), " cm.")
+
   }
 }
 
@@ -3638,6 +3650,35 @@ if (df$layer_limit_inferior[which(df$unique_layer_repetition ==
 }
 }
 
+
+
+# Export current dataset to get harmonised effective soil depths ----
+# (adjusted for any vertical shifts)
+
+assign_env(survey_form, df)
+
+source("~/ICP Forests - data/fscc/src/functions/get_stratifiers.R")
+
+if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+
+  if (exists("s1_strat")) {
+    df_strat <- get_env("s1_strat")
+  } else {
+    df_strat <- get_stratifiers(level = "LI")
+  }
+
+} else
+  if (unlist(strsplit(survey_form, "_"))[1] == "so") {
+
+    if (exists("so_strat")) {
+      df_strat <- get_env("so_strat")
+    } else {
+      df_strat <- get_stratifiers(level = "LII")
+    }
+  }
+
+
+
 # Final dataset preparations ----
 
 df <- df %>%
@@ -3673,7 +3714,8 @@ df <- df %>%
          prev_layer_limit_inferior = lag(.data$layer_limit_inferior),
          next_layer_limit_superior = lead(.data$layer_limit_superior)) %>%
   ungroup() %>%
-  left_join(prf_agg,
+  left_join(df_strat %>%
+              select(plot_id, eff_soil_depth),
             by = "plot_id") %>%
   rowwise() %>%
   mutate(layer_limit_superior =
@@ -3828,48 +3870,72 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       df <- data_frame
     }
 
+    df$vert_shift <- "no shift"
+
+
     # prf for eff_soil_depth
 
-    if (unlist(strsplit(survey_form, "_"))[1] == "so") {
+    # if (unlist(strsplit(survey_form, "_"))[1] == "so") {
+    #
+    #   assertthat::assert_that(file.exists(paste0("./data/additional_data/",
+    #                                              "SO_PRF_ADDS.xlsx")),
+    #                           msg = paste0("'./data/additional_data/",
+    #                                        "SO_PRF_ADDS.xlsx' ",
+    #                                        "does not exist."))
+    #
+    #   # This file was created by Nathalie on 17 Oct 2023
+    #   prf <-
+    #     openxlsx::read.xlsx(paste0("./data/additional_data/",
+    #                                "SO_PRF_ADDS.xlsx"),
+    #                         sheet = 1) %>%
+    #     rename(plot_id = PLOT_ID) %>%
+    #     mutate(eff_soil_depth = as.numeric(DEPTHSTOCK))
+    # }
+    #
+    # if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
+    #
+    #   prf <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_prf")) %>%
+    #     rowwise() %>%
+    #     mutate(eff_soil_depth = ifelse(is.na(.data$eff_soil_depth) &
+    #                                      any(!is.na(c(.data$rooting_depth,
+    #                                                   .data$rock_depth,
+    #                                                   .data$obstacle_depth))),
+    #                                    # Maximum of these three depths
+    #                                    max(c(.data$rooting_depth,
+    #                                          .data$rock_depth,
+    #                                          .data$obstacle_depth),
+    #                                        na.rm = TRUE),
+    #                                    .data$eff_soil_depth)) %>%
+    #     ungroup()
+    # }
+    #
+    # prf_agg <- prf %>%
+    #   group_by(plot_id) %>%
+    #   # Sometimes there are different options,
+    #   # No good way to solve this - we just have to pick one
+    #   summarise(eff_soil_depth = median(eff_soil_depth, na.rm = TRUE))
 
-      assertthat::assert_that(file.exists(paste0("./data/additional_data/",
-                                                 "SO_PRF_ADDS.xlsx")),
-                              msg = paste0("'./data/additional_data/",
-                                           "SO_PRF_ADDS.xlsx' ",
-                                           "does not exist."))
 
-      # This file was created by Nathalie on 17 Oct 2023
-      prf <-
-        openxlsx::read.xlsx(paste0("./data/additional_data/",
-                                   "SO_PRF_ADDS.xlsx"),
-                            sheet = 1) %>%
-        rename(plot_id = PLOT_ID) %>%
-        mutate(eff_soil_depth = as.numeric(DEPTHSTOCK))
-    }
+
+    source("~/ICP Forests - data/fscc/src/functions/get_stratifiers.R")
 
     if (unlist(strsplit(survey_form, "_"))[1] == "s1") {
 
-      prf <- get_env(paste0(unlist(strsplit(survey_form, "_"))[1], "_prf")) %>%
-        rowwise() %>%
-        mutate(eff_soil_depth = ifelse(is.na(.data$eff_soil_depth) &
-                                         any(!is.na(c(.data$rooting_depth,
-                                                      .data$rock_depth,
-                                                      .data$obstacle_depth))),
-                                       # Maximum of these three depths
-                                       max(c(.data$rooting_depth,
-                                             .data$rock_depth,
-                                             .data$obstacle_depth),
-                                           na.rm = TRUE),
-                                       .data$eff_soil_depth)) %>%
-        ungroup()
-    }
+      if (exists("s1_strat")) {
+        df_strat <- get_env("s1_strat")
+      } else {
+        df_strat <- get_stratifiers(level = "LI")
+      }
 
-    prf_agg <- prf %>%
-      group_by(plot_id) %>%
-      # Sometimes there are different options,
-      # No good way to solve this - we just have to pick one
-      summarise(eff_soil_depth = median(eff_soil_depth, na.rm = TRUE))
+    } else
+      if (unlist(strsplit(survey_form, "_"))[1] == "so") {
 
+        if (exists("so_strat")) {
+          df_strat <- get_env("so_strat")
+        } else {
+          df_strat <- get_stratifiers(level = "LII")
+        }
+      }
 
 
 
@@ -3961,7 +4027,14 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       filter(survey_form == survey_form_input) %>%
       filter(parameter == "horizon_c_organic_total") %>%
       # Outside plausible range
-      filter(rule_id == "FSCC_14") %>%
+      {
+        if ("rule_id" %in% colnames(.)) {
+          filter(., rule_id == "FSCC_14")
+        } else if ("rule_ID" %in% colnames(.)) {
+          filter(., rule_ID == "FSCC_14")
+        }
+      } %>%
+      # filter(rule_id == "FSCC_14") %>%
       # "The reported value is extreme but correct"
       filter(code_nfc_action_taken == 1) %>%
       pull(code_line)
@@ -5681,7 +5754,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
               # Check if the profile depth is lower than the current lowest
               # depth
 
-              eff_soil_depth_i <- prf_agg %>%
+              eff_soil_depth_i <- df_strat %>%
                 filter(plot_id == unique(pull(df[vec, ], plot_id))) %>%
                 pull(eff_soil_depth)
 
@@ -5746,7 +5819,7 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
 
     if (!identical(vec_r, integer(0))) {
 
-      eff_soil_depth_i <- prf_agg %>%
+      eff_soil_depth_i <- df_strat %>%
         filter(plot_id == unique(pull(df[vec, ], plot_id))) %>%
         pull(eff_soil_depth)
 
@@ -6721,6 +6794,9 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
       df$horizon_limit_low[vec] <- df$horizon_limit_low[vec] - diff_to_move
       df$horizon_limit_up[vec] <- df$horizon_limit_up[vec] - diff_to_move
 
+      df$vert_shift[vec] <- paste0("vertical shift of profile: 0 cm becomes ",
+                                   (0 - diff_to_move), " cm.")
+
     }
     }
     }
@@ -6797,7 +6873,8 @@ assign_env(paste0("list_layer_inconsistencies_", survey_form),
              prev_horizon_limit_low = lag(.data$horizon_limit_low),
              next_horizon_limit_up = lead(.data$horizon_limit_up)) %>%
       ungroup() %>%
-      left_join(prf_agg,
+      left_join(df_strat %>%
+                  select(plot_id, eff_soil_depth),
                 by = "plot_id") %>%
       rowwise() %>%
       mutate(horizon_limit_up =
