@@ -32,9 +32,11 @@ soilspline <- function(id,
                        variab_min = NULL,
                        variab_max = NULL,
                        variab_source = NULL,
+                       variab_loq = NULL,
                        max_depth_stock,
                        parameter_name,
                        survey_form = NULL,
+                       use_splines = TRUE,
                        graph = TRUE) {
 
   # Prepare packages
@@ -85,6 +87,44 @@ soilspline <- function(id,
 
   assertthat::assert_that(min(depth_top) == 0)
 
+
+  # Define loq
+
+  if (is.null(variab_loq)) {
+
+    loq_half <- 0
+
+  } else {
+
+    loq_half <- data.frame(
+      depth_top,
+      depth_bottom,
+      variab_loq) %>%
+      filter(depth_top < max_depth_stock) %>%
+      mutate(
+        depth_bottom = ifelse(
+          depth_bottom > max_depth_stock,
+          max_depth_stock,
+          depth_bottom)) %>%
+      mutate(
+        layer_thickness = depth_bottom - depth_top) %>%
+      arrange(variab_loq) %>%
+      mutate(
+        cum_thickness_per_incr_loq = cumsum(layer_thickness))
+
+    # This means that, if you sort the different loqs and consider them
+    # as a function of the thickness they represent, the loq at the 0.95
+    # quantile towards the total thickness, is selected.
+
+    # This means we are not using the maximum loq, but almost.
+
+    limit_loq <- 0.95 * max(loq_half$cum_thickness_per_incr_loq)
+
+    loq_half <- loq_half %>%
+      filter(cum_thickness_per_incr_loq >= limit_loq) %>%
+      slice_head(n = 1) %>%
+      pull(variab_loq) * 0.5
+  }
 
 
   # Fit a spline using mpspline function (mpspline2 package) ----
@@ -139,25 +179,64 @@ soilspline <- function(id,
                depth_bottom,
                variab)
 
-  if (nrow(prof_input) == 1) {
+  thicknesses <- prof_input %>%
+    mutate(layer_thickness = depth_bottom - depth_top)
+
+
+  # No splines in some exceptional cases
+
+  if (
+    # E.g. very shallow profile
+    nrow(prof_input) == 1 ||
+    # Upper layer of more than 30 cm
+    prof_input$depth_bottom[1] >= 30 ||
+    # Upper layer of more than 20 cm and only two layers
+    (prof_input$depth_bottom[1] >= 20 &&
+     nrow(prof_input) == 2) ||
+    # if the upper layer occupies >= 75 % of the depth range
+    # of the original data
+    (thicknesses$layer_thickness[1] >=
+     0.75 * sum(thicknesses$layer_thickness)) ||
+    # Exceptionally, e.g. to test the methodology
+    (use_splines == FALSE)) {
+
+
+    mpspline_output <- list(
+      est_1cm = unlist(
+        apply(prof_input, 1, function(row) {
+          # Generate depth indices for the row
+          depths <- seq(from = round(as.numeric(row["depth_top"])) + 1,
+                        to = round(as.numeric(row["depth_bottom"])),
+                        # To make it 1 cm intervals
+                        by = 1)
+          # Assign the corresponding variab value
+          rep(as.numeric(row["variab"]), length(depths))
+        })
+      ),
+      est_err = NA)
 
     # Spline with one layer (e.g. in very shallow profile)
-
-    suppressMessages({
-
-      mpspline_output <- mpspline_one(site = prof_input,
-                                      var_name = "variab",
-                                      lam = 0.1,
-                                      # constrains the maximum predicted value
-                                      # to a realistic number. Defaults
-                                      # to 1000:
-                                      vhigh = 2600)
-    })
+    # suppressMessages({
+    #
+    #   mpspline_output <- mpspline_one(site = prof_input,
+    #                                   var_name = "variab",
+    #                                   lam = 0.1,
+    #                                   # constrains the minimum to 50 %
+    #                                   # of a representative density LOQ
+    #                                   vlow = loq_half,
+    #                                   # constrains the maximum predicted value
+    #                                   # to a realistic number. Defaults
+    #                                   # to 1000:
+    #                                   vhigh = 2600)
+    # })
   } else {
 
     mpspline_output <- mpspline_one(site = prof_input,
                                     var_name = "variab",
                                     lam = 0.1,
+                                    # constrains the minimum to 50 %
+                                    # of a representative density LOQ
+                                    vlow = loq_half,
                                     # constrains the maximum predicted value
                                     # to a realistic number. Defaults
                                     # to 1000:
@@ -169,6 +248,9 @@ soilspline <- function(id,
   # Extrapolate the mass-preserving spline output to depth max_depth_stock ----
   # (i.e. effective soil depth; max 100 cm)
   # using the spline function (stats package)
+
+  # This spline works well to extrapolate, even if we do not use mpspline_one
+  # (exceptionally)
 
   x <- mpspline_output$est_1cm[seq_len(max(depth_bottom))]
 
@@ -188,8 +270,8 @@ soilspline <- function(id,
   spline_output <- spline_output$y
 
   # Output variable should not be below 0
-  spline_output <- ifelse(spline_output < 0,
-                          0,
+  spline_output <- ifelse(spline_output < loq_half,
+                          loq_half,
                           spline_output)
 
 
@@ -200,26 +282,43 @@ soilspline <- function(id,
 
     ## Min ----
 
-    if (nrow(prof_input) == 1) {
+    prof_input_min <- data.frame(id,
+                                 depth_top,
+                                 depth_bottom,
+                                 variab_min)
 
-      suppressMessages({
+    thicknesses <- prof_input_min %>%
+      mutate(layer_thickness = depth_bottom - depth_top)
 
-        mpspline_output_min <- mpspline_one(site = data.frame(id,
-                                                              depth_top,
-                                                              depth_bottom,
-                                                              variab_min),
-                                            var_name = "variab_min",
-                                            lam = 0.1,
-                                            vhigh = 2600)
-      })
+    if (nrow(prof_input_min) == 1 ||
+        prof_input_min$depth_bottom[1] >= 30 ||
+        (prof_input_min$depth_bottom[1] >= 20 &&
+         nrow(prof_input_min) == 2) ||
+        (thicknesses$layer_thickness[1] >=
+         0.75 * sum(thicknesses$layer_thickness)) ||
+        # Exceptionally, e.g. to test the methodology
+        (use_splines == FALSE)) {
+
+      mpspline_output_min <- list(
+        est_1cm = unlist(
+          apply(prof_input_min, 1, function(row) {
+            # Generate depth indices for the row
+            depths <- seq(from = round(as.numeric(row["depth_top"])) + 1,
+                          to = round(as.numeric(row["depth_bottom"])),
+                          # To make it 1 cm intervals
+                          by = 1)
+            # Assign the corresponding variab value
+            rep(as.numeric(row["variab_min"]), length(depths))
+          })
+        ),
+        est_err = NA)
+
     } else {
 
-      mpspline_output_min <- mpspline_one(site = data.frame(id,
-                                                            depth_top,
-                                                            depth_bottom,
-                                                            variab_min),
+      mpspline_output_min <- mpspline_one(site = prof_input_min,
                                           var_name = "variab_min",
                                           lam = 0.1,
+                                          vlow = 0,
                                           vhigh = 2600)
     }
 
@@ -236,26 +335,44 @@ soilspline <- function(id,
 
     ## Max ----
 
-    if (nrow(prof_input) == 1) {
+    prof_input_max <- data.frame(id,
+                                 depth_top,
+                                 depth_bottom,
+                                 variab_max)
 
-      suppressMessages({
+    thicknesses <- prof_input_max %>%
+      mutate(layer_thickness = depth_bottom - depth_top)
 
-        mpspline_output_max <- mpspline_one(site = data.frame(id,
-                                                              depth_top,
-                                                              depth_bottom,
-                                                              variab_max),
-                                            var_name = "variab_max",
-                                            lam = 0.1,
-                                            vhigh = 2600)
-      })
+    if (nrow(prof_input_max) == 1 ||
+        prof_input_max$depth_bottom[1] >= 30 ||
+        (prof_input_max$depth_bottom[1] >= 20 &&
+         nrow(prof_input_max) == 2) ||
+        (thicknesses$layer_thickness[1] >=
+         0.75 * sum(thicknesses$layer_thickness)) ||
+        # Exceptionally, e.g. to test the methodology
+        (use_splines == FALSE)) {
+
+      mpspline_output_max <- list(
+        est_1cm = unlist(
+          apply(prof_input_max, 1, function(row) {
+            # Generate depth indices for the row
+            depths <- seq(from = round(as.numeric(row["depth_top"])) + 1,
+                          to = round(as.numeric(row["depth_bottom"])),
+                          # To make it 1 cm intervals
+                          by = 1)
+            # Assign the corresponding variab value
+            rep(as.numeric(row["variab_max"]), length(depths))
+          })
+        ),
+        est_err = NA)
+
+
     } else {
 
-      mpspline_output_max <- mpspline_one(site = data.frame(id,
-                                                            depth_top,
-                                                            depth_bottom,
-                                                            variab_max),
+      mpspline_output_max <- mpspline_one(site = prof_input_max,
                                           var_name = "variab_max",
                                           lam = 0.1,
+                                          vlow = 2 * loq_half,
                                           vhigh = 2600)
     }
 
@@ -266,8 +383,8 @@ soilspline <- function(id,
              method = "natural",
              xout = seq_len(max_depth_stock))$y
 
-    spline_output_max <- ifelse(spline_output_max < 0,
-                                0,
+    spline_output_max <- ifelse(spline_output_max < 2 * loq_half,
+                                2 * loq_half,
                                 spline_output_max)
 
     # Create a list to store multiple results
