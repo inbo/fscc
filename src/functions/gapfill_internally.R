@@ -47,6 +47,15 @@ gapfill_internally <- function(survey_form,
       rename(organic_carbon_total_source = horizon_c_organic_total_source) %>%
       rename(n_total = horizon_n_total) %>%
       rename(n_total_source = horizon_n_total_source) %>%
+      rename(exch_ca = horizon_exch_ca) %>%
+      # Conditionally rename horizon_exch_ca_source if it exists
+      {
+        if ("horizon_exch_ca_source" %in% colnames(.)) {
+          rename(., exch_ca_source = horizon_exch_ca_source)
+        } else {
+          .
+        }
+      } %>%
       rename(unique_survey_repetition = unique_survey_profile)
 
   }
@@ -1512,9 +1521,6 @@ gapfill_internally <- function(survey_form,
 
 
 
-
-
-
   # . ----
   # Gap-fill concentrations in forest floor ----
 
@@ -1525,6 +1531,17 @@ gapfill_internally <- function(survey_form,
     # It makes sense to gap-fill this across survey forms as long as the
     # survey years are roughly the same (+- three years), since
     # concentrations of organic layers are typically more similar.
+
+    # Define the parameters
+    parameters_chem <- c(
+      "organic_carbon_total", "n_total",
+      "extrac_p", "extrac_s", "rea_fe", "rea_al", "exch_ca")
+
+    if (survey_form_type == "pfh") {
+
+      parameters_chem <- parameters_chem[which(parameters_chem %in% names(df))]
+
+    }
 
 
     # 1. Add data to df ----
@@ -1538,11 +1555,14 @@ gapfill_internally <- function(survey_form,
     cat(paste0(" \nAdd 'som' forest floor analytical data to '",
                survey_form, "'.\n"))
 
+
     df <- depth_join(df1 = df,
                      df2 = df2,
-                     parameters = NULL,
+                     parameters = parameters_chem,
                      prefix_parameters_in_df1 = "som_",
                      mode = "time_specific_ff_concentrations")
+
+
 
     # pfh
 
@@ -1557,14 +1577,32 @@ gapfill_internally <- function(survey_form,
       rename(n_total = horizon_n_total) %>%
       rename(n_total_source = horizon_n_total_source) %>%
       rename(exch_ca = horizon_exch_ca) %>%
-      rename(exch_ca_source = horizon_exch_ca_source)
+      # Conditionally rename horizon_exch_ca_source if it exists
+      {
+        if ("horizon_exch_ca_source" %in% colnames(.)) {
+          rename(., exch_ca_source = horizon_exch_ca_source)
+        } else {
+          .
+        }
+      }
+
+    if (survey_form_type == "som") {
+
+      parameters_chem_pfh <-
+        parameters_chem[which(parameters_chem %in% names(df2))]
+
+    } else {
+
+      parameters_chem_pfh <- parameters_chem
+
+    }
 
     cat(paste0(" \nAdd 'pfh' forest floor analytical data to '",
                survey_form, "'.\n"))
 
     df <- depth_join(df1 = df,
                      df2 = df2,
-                     parameters = NULL,
+                     parameters = parameters_chem_pfh,
                      prefix_parameters_in_df1 = "pfh_",
                      mode = "time_specific_ff_concentrations")
 
@@ -1588,10 +1626,25 @@ gapfill_internally <- function(survey_form,
     #   count_all_ff_nona < count_distinct_bg_up
 
 
-    # Define the parameters
-    parameters_chem <- c(
-      "organic_carbon_total", "n_total",
-      "extrac_p", "extrac_s", "rea_fe", "rea_al", "exch_ca")
+
+
+    # Check for "_orig" columns and create if not existing
+    for (col in parameters_chem) {
+      orig_col <- paste0(col, "_orig")
+      if (!orig_col %in% names(df)) {
+        df[[orig_col]] <- df[[col]]
+      }
+    }
+
+    # Check for "_source" columns and create with NA if not existing
+    for (col in parameters_chem) {
+      source_col <- paste0(col, "_source")
+      if (!source_col %in% names(df)) {
+        df[[source_col]] <- ifelse(!is.na(df[[col]]), "som (layer 0)", NA)
+      }
+    }
+
+
 
     # Generalized gap-fill processing function
     process_gapfill <- function(df, param) {
@@ -1662,16 +1715,24 @@ gapfill_internally <- function(survey_form,
       )
     }
 
-    # Filter parameters to only those that exist in df
-    existing_params <- parameters_chem[parameters_chem %in% names(df)]
+    # # Filter parameters to only those that exist in df
+    # existing_params <- parameters_chem[parameters_chem %in% names(df)]
+
+    # # Apply the function to existing parameters only
+    # profs_gapfill <- lapply(existing_params, function(param) {
+    #   process_gapfill(df, param)
+    # })
+    #
+    # # Name the list elements
+    # names(profs_gapfill) <- existing_params
 
     # Apply the function to existing parameters only
-    profs_gapfill <- lapply(existing_params, function(param) {
+    profs_gapfill <- lapply(parameters_chem, function(param) {
       process_gapfill(df, param)
     })
 
     # Name the list elements
-    names(profs_gapfill) <- existing_params
+    names(profs_gapfill) <- parameters_chem
 
 
 
@@ -2016,7 +2077,14 @@ gapfill_internally <- function(survey_form,
       rename(horizon_n_total = n_total) %>%
       rename(horizon_n_total_source = n_total_source) %>%
       rename(horizon_exch_ca = exch_ca) %>%
-      rename(horizon_exch_ca_source = exch_ca_source) %>%
+      # Conditionally rename horizon_exch_ca_source if it exists
+      {
+        if ("exch_ca_source" %in% colnames(.)) {
+          rename(., horizon_exch_ca_source = exch_ca_source)
+        } else {
+          .
+        }
+      } %>%
       rename(unique_survey_profile = unique_survey_repetition)
 
   }
