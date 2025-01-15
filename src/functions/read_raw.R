@@ -1332,7 +1332,7 @@ if (code_survey %in% c("s1", "so")) {
 
     assertthat::assert_that(isFALSE(
       any(grepl("so|s1", updated_coords_overview$sources_database_update))),
-      msg = paste0("There are any updates in the soil survey, ",
+      msg = paste0("There are any coordinate updates in the soil survey, ",
                    "so better to rerun the script to harmonise coordinates."))
 
   }
