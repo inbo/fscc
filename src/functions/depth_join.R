@@ -19,12 +19,16 @@
 #' to be added to the parameter names in `df1` (e.g. the source of the data
 #' in `df2`). Default is `NULL`.
 #' @param mode A character string representing the mode in which the dataframes
-#' should be joined. There are two options: "constant_physical_parameters"
+#' should be joined. These are the options: "constant_physical_parameters"
 #' (default; this joins physical parameters regardless of the survey year in
 #'  any relevant layers); or "time_specific_ff_concentrations" (this joins
 #'  analytical parameters which are specific for a certain survey year, only
 #'  in the forest floor); or "most_recent" (which selects the most recent
-#'  data to join)
+#'  data to join, separately for each target layer); or "best_year" (which
+#'  selects the best year, i.e. covering the biggest depth range after 2000 or
+#'  alternatively the most recent survey year, for the whole target profile;
+#'  and further gap-fills any missing data below 40 cm from other survey
+#'  years)
 #'
 #' @return A dataframe representing the joined data.
 #'
@@ -236,7 +240,7 @@ depth_join <- function(df1,
 
     df1[[col_name]] <- NA
 
-    if (mode == "most_recent") {
+    if (mode == "most_recent" || mode == "best_year") {
 
       col_name_year <- paste0(col_name, "_year")
       df1[[col_name_year]] <- NA
@@ -418,12 +422,12 @@ depth_join <- function(df1,
           paste0(prefix_parameters_in_df1, parameter_j)
         }
 
-        if (mode == "most_recent") {
+        if (mode == "most_recent" || mode == "best_year") {
 
           col_name_year_j <- paste0(col_name, "_year")
           most_recent_j <- NA
+          best_year_j <- NA
         }
-
 
 
         value_j <- NA
@@ -451,6 +455,102 @@ depth_join <- function(df1,
           df2_j <- df2_j %>%
             filter(survey_year == most_recent_j)
         }
+
+        # "best_year":
+        # Select the best survey_year with data for this parameter
+        # Take the survey year covering the biggest depth range after 2000
+        # Else, if all equal,
+        # Take the survey year with the max number of
+        # unique observations per layer after 2000
+        # Else, if no data after 2000,
+        # Take the most recent survey year
+
+        if (mode == "best_year") {
+
+          decimals <- case_when(
+            grepl("^ph_", parameter_j) ~ 1,
+            TRUE ~ 0)
+
+          selection_crit_j <- df2 %>%
+            filter(plot_id == plot_id_i) %>%
+            mutate(year_layer = paste0(survey_year, "_", code_layer)) %>%
+            group_by(year_layer, layer_limit_superior, layer_limit_inferior,
+                     survey_year) %>%
+            reframe(count_unique =
+                      n_distinct(round(!!sym(parameter_j), decimals))) %>%
+            ungroup() %>%
+            group_by(survey_year) %>%
+            reframe(top = min(layer_limit_superior, na.rm = TRUE),
+                    bottom = max(layer_limit_inferior, na.rm = TRUE),
+                    count = max(count_unique)) %>%
+            ungroup() %>%
+            # Truncate to decimeters to avoid little differences in
+            # forest floor
+            mutate(depth_range = 10 * trunc(0.1 * (.data$bottom - .data$top)))
+
+          after_2000_j <-
+            selection_crit_j[selection_crit_j$survey_year >= 2000, ]
+
+          best_year_j <- if (any(selection_crit_j$survey_year >= 2000)) {
+            # If all survey years have data covering the same depth range
+            if (length(unique(after_2000_j$depth_range)) == 1) {
+              # Use year with max number of repetitions
+              after_2000_j %>%
+                filter(count == max(.data$count)) %>%
+                pull(survey_year) %>%
+                max
+            } else {
+              # Use year with max depth range
+              after_2000_j %>%
+                filter(depth_range == max(.data$depth_range)) %>%
+                pull(survey_year) %>%
+                max
+            }
+          } else {
+            # If no survey years are after 2000, find the most recent survey year
+            max(selection_crit_j$survey_year)
+          }
+
+          # Filter source data for best year
+
+          # If the target layer is below 40 cm, just take the most recent
+          # data, because reanalysis is then not required in the
+          # manual, since chemical variables are assumed to be constant
+          # in the subsoil, so the year doesn't matter.
+
+          if (limit_sup_i >= 40) {
+
+            # take best_year_j if possible
+
+            df2_selected_sub <- df2_selected %>%
+              filter(.data$survey_year == best_year_j)
+
+            # if best_year_j gives no results
+
+            if (nrow(df2_selected_sub) == 0) {
+
+              best_year_j <- max(df2_selected$survey_year)
+
+              df2_selected_sub <- df2_selected %>%
+                filter(survey_year == best_year_j)
+
+            }
+
+            df2_selected <- df2_selected_sub
+
+          } else {
+
+            # Above 40 cm
+
+            df2_selected <- df2_selected %>%
+              filter(.data$survey_year == best_year_j)
+          }
+
+          if (nrow(df2_selected) == 0) {
+            next # Go to next layer
+          }
+        } # End of 'if "best_year"'
+
 
 
 
@@ -509,7 +609,9 @@ depth_join <- function(df1,
 
           # If time_specific_ff_concentrations/most_recent mode
 
-          if (mode %in% c("time_specific_ff_concentrations", "most_recent")) {
+          if (mode %in% c("time_specific_ff_concentrations",
+                          "most_recent",
+                          "best_year")) {
 
             if (nrow(df2_j) == 1) {
 
@@ -586,6 +688,10 @@ depth_join <- function(df1,
           df1[[col_name_year_j]][i] <- most_recent_j
         }
 
+        if (mode == "best_year") {
+          df1[[col_name_year_j]][i] <- best_year_j
+        }
+
 
       } # End of evaluation parameters
 
@@ -603,7 +709,9 @@ depth_join <- function(df1,
     # Depth-based approach in the assumption that bulk density remains unchanged
 
     if (!is_ff_i &&
-        mode %in% c("constant_physical_parameters", "most_recent")) {
+        mode %in% c("constant_physical_parameters",
+                    "most_recent",
+                    "best_year")) {
 
       df2_sub <- df2 %>%
         filter(plot_id == plot_id_i) %>%
@@ -649,10 +757,11 @@ depth_join <- function(df1,
           paste0(prefix_parameters_in_df1, parameter_j)
         }
 
-        if (mode == "most_recent") {
+        if (mode == "most_recent" || mode == "best_year") {
 
           col_name_year_j <- paste0(col_name, "_year")
           most_recent_j <- NA
+          best_year_j <- NA
         }
 
 
@@ -676,6 +785,105 @@ depth_join <- function(df1,
           df2_j <- df2_j %>%
             filter(survey_year == most_recent_j)
         }
+
+        # "best_year":
+        # Select the best survey_year with data for this parameter
+        # Take the survey year covering the biggest depth range after 2000
+        # Else, if all equal,
+        # Take the survey year with the max number of
+        # unique observations per layer after 2000
+        # Else, if no data after 2000,
+        # Take the most recent survey year
+
+        if (mode == "best_year") {
+
+          decimals <- case_when(
+            grepl("^ph_", parameter_j) ~ 1,
+            TRUE ~ 0)
+
+          selection_crit_j <- df2 %>%
+            filter(plot_id == plot_id_i) %>%
+            mutate(year_layer = paste0(survey_year, "_", code_layer)) %>%
+            group_by(year_layer, layer_limit_superior, layer_limit_inferior,
+                     survey_year) %>%
+            reframe(count_unique =
+                      n_distinct(round(!!sym(parameter_j), decimals))) %>%
+            ungroup() %>%
+            group_by(survey_year) %>%
+            reframe(top = min(layer_limit_superior, na.rm = TRUE),
+                    bottom = max(layer_limit_inferior, na.rm = TRUE),
+                    count = max(count_unique)) %>%
+            ungroup() %>%
+            # Truncate to decimeters to avoid little differences in
+            # forest floor
+            mutate(depth_range = 10 * trunc(0.1 * (.data$bottom - .data$top)))
+
+          after_2000_j <-
+            selection_crit_j[selection_crit_j$survey_year >= 2000, ]
+
+          best_year_j <- if (any(selection_crit_j$survey_year >= 2000)) {
+            # If all survey years have data covering the same depth range
+            if (length(unique(after_2000_j$depth_range)) == 1) {
+              # Use year with max number of repetitions
+              after_2000_j %>%
+                filter(count == max(.data$count)) %>%
+                pull(survey_year) %>%
+                max
+            } else {
+              # Use year with max depth range
+              after_2000_j %>%
+                filter(depth_range == max(.data$depth_range)) %>%
+                pull(survey_year) %>%
+                max
+            }
+          } else {
+            # If no survey years are after 2000, find the most recent survey year
+            max(selection_crit_j$survey_year)
+          }
+
+          # Filter source data for best year
+
+          # If the target layer is below 40 cm, just take the most recent
+          # data, because reanalysis is then not required in the
+          # manual, since chemical variables are assumed to be constant
+          # in the subsoil, so the year doesn't matter.
+
+          if (limit_sup_i >= 40) {
+
+            # take best_year_j if possible
+
+            df2_j_sub <- df2_j %>%
+              filter(.data$survey_year == best_year_j)
+
+            # if best_year_j gives no results
+
+            if (nrow(df2_j_sub) == 0) {
+
+              best_year_j <- max(df2_j$survey_year)
+
+              df2_j_sub <- df2_j %>%
+                filter(survey_year == best_year_j)
+
+            }
+
+            df2_j <- df2_j_sub
+
+          } else {
+
+            # Above 40 cm
+
+            df2_j <- df2_j %>%
+              filter(.data$survey_year == best_year_j)
+          }
+
+
+        } # End of 'if "best_year"'
+
+
+         if (nrow(df2_j) == 0) {
+            next # Go to next layer
+          }
+
 
 
         if (nrow(df2_j) == 1) {
@@ -751,6 +959,10 @@ depth_join <- function(df1,
 
         if (mode == "most_recent") {
           df1[[col_name_year_j]][i] <- most_recent_j
+        }
+
+        if (mode == "best_year") {
+          df1[[col_name_year_j]][i] <- best_year_j
         }
 
         } # End of evaluation parameters
