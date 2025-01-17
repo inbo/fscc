@@ -95,6 +95,10 @@ add_uncertainties_chem <- function(survey_form,
 
   if (survey_form_type == "pfh") {
 
+    parameters <- uncertainties$parameter_pfh[
+      which(uncertainties$parameter_som %in% parameters &
+              !is.na(uncertainties$parameter_pfh))]
+
     parameters <- parameters[which(parameters %in% names(df))]
 
     assertthat::assert_that(
@@ -134,6 +138,18 @@ add_uncertainties_chem <- function(survey_form,
         molar_mass = c(1.008, 39.098, 40.078,
                        24.305, 22.990, 26.982,
                        55.845, 54.938))
+
+      if (survey_form_type == "pfh") {
+
+        cation_data <- uncertainties %>%
+          select(parameter_som, parameter_pfh) %>%
+          rename(par = parameter_som) %>%
+          left_join(cation_data,
+                    by = "par") %>%
+          select(-par) %>%
+          rename(par = parameter_pfh) %>%
+          filter(!is.na(par))
+      }
 
       assert_that(parameter_i %in% cation_data$par)
 
