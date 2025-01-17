@@ -97,7 +97,9 @@ read_processed <- function(survey_forms = NULL,
       "stand_rotation", "code_plot_status", "code_nfi_status",
       "cc_tree_number", "azimuth", "distance",
       "latitude_dec", "longitude_dec",
-      "layer_thickness", "c_to_n_ratio", "sum_base_cations", "sum_acid_cations",
+      "layer_thickness", "c_to_n_ratio", "c_to_p_ratio", "n_to_p_ratio",
+      "c_to_s_ratio", "n_to_s_ratio", "p_to_s_ratio",
+      "sum_base_cations", "sum_acid_cations",
       "bulk_density_layer_weight", "organic_layer_weight_bd")
 
 # Define vectors with survey forms and codes to read ----
@@ -378,6 +380,10 @@ cat(paste0("Most recent data were found in the '",
 
     if ("pfh_id" %in% vec_df) {
       vec_df <- vec_df[which(vec_df != "pfh_id")]
+    }
+
+    if (any(grepl("code_texture_class", vec_df))) {
+      vec_df <- vec_df[which(!grepl("code_texture_class", vec_df))]
     }
 
     vec_df <- vec_df[which(!vec_df %in%
