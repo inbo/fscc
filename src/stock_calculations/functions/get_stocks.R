@@ -36,6 +36,7 @@ get_stocks <- function(survey_form,
                        constant_subsoil = TRUE,
                        exclude_ol = TRUE,
                        graph = FALSE,
+                       use_splines = TRUE,
                        density_per_three_cm = FALSE,
                        add_stratifiers = TRUE,
                        add_plausible_fscc = TRUE,
@@ -1872,6 +1873,22 @@ get_stocks <- function(survey_form,
 
       mass_fine_earth_topsoil_i <- round(sum(prof$mass_fine_earth), 2)
 
+      # mass_fine_earth_1cm (tot 1 cm) in kg fine earth m-2
+
+      prof <- prof %>%
+        filter(depth_top < min(c(1, depth_stock_i))) %>%
+        mutate(depth_bottom = ifelse(
+          depth_bottom > min(c(1, depth_stock_i)),
+          min(c(1, depth_stock_i)),
+          depth_bottom)) %>%
+        mutate(
+          layer_thickness = (depth_bottom - depth_top),
+          bulk_density_total_soil =
+            bulk_density * (1 - coarse_fragment_vol_frac),
+          mass_fine_earth =
+            layer_thickness * (1E-2) * bulk_density_total_soil)
+
+      mass_fine_earth_1cm_i <- round(sum(prof$mass_fine_earth), 2)
 
 
       # use_stock_topsoil_i <- ifelse(max_obs_depth < 30 &
@@ -1895,6 +1912,7 @@ get_stocks <- function(survey_form,
                    depth_stock = depth_stock_i,
                    mass_fine_earth = mass_fine_earth_i, # kg m-2
                    mass_fine_earth_topsoil = mass_fine_earth_topsoil_i, # kg m-2
+                   mass_fine_earth_1cm = mass_fine_earth_1cm_i, # kg m-2
                    profile_stock_output_i)
 
       profile_stocks_below_ground <-
@@ -1990,6 +2008,8 @@ get_stocks <- function(survey_form,
             round(mean(mass_fine_earth, na.rm = TRUE), 2),
           mass_fine_earth_topsoil =
             round(mean(mass_fine_earth_topsoil, na.rm = TRUE), 2),
+          mass_fine_earth_1cm =
+            round(mean(mass_fine_earth_1cm, na.rm = TRUE), 2),
           contains_peat =
             any(contains_peat == TRUE),
           # use_stock_topsoil =
@@ -2476,11 +2496,18 @@ get_stocks <- function(survey_form,
              rowSums(select(., stock_below_ground_1cm_max,
                             stock_forest_floor_max),
                      na.rm = TRUE),
+           mass_forest_floor_proxy =
+             ifelse(!is.na(mass_forest_floor),
+                    rowSums(select(., mass_fine_earth_1cm, mass_forest_floor),
+                            na.rm = TRUE),
+                    mass_fine_earth_1cm),
            nlay = rowSums(select(., nlay_below_ground, nlay_forest_floor),
                           na.rm = TRUE)) %>%
-    select(-contains("stock_below_ground_1cm")) %>%
+    select(-contains("stock_below_ground_1cm"),
+           -mass_fine_earth_1cm) %>%
     relocate(obs_depth, depth_stock, forest_floor_thickness,
-             mass_fine_earth, mass_fine_earth_topsoil, mass_forest_floor,
+             mass_fine_earth, mass_fine_earth_topsoil, mass_forest_floor_proxy,
+             mass_forest_floor,
              nlay, nlay_below_ground, nlay_forest_floor, forest_floor_layers,
              rmse_mpspline,
              .after = stock_forest_floor_proxy_max) %>%
@@ -2559,6 +2586,11 @@ get_stocks <- function(survey_form,
              sum(c(stock_below_ground_1cm_max,
                    stock_forest_floor_max),
                  na.rm = TRUE),
+           mass_forest_floor_proxy =
+             ifelse(!is.na(mass_forest_floor),
+                    rowSums(select(., mass_fine_earth_1cm, mass_forest_floor),
+                            na.rm = TRUE),
+                    mass_fine_earth_1cm),
            nlay_min =
              sum(c(nlay_below_ground_min,
                    nlay_forest_floor_min),
@@ -2567,7 +2599,8 @@ get_stocks <- function(survey_form,
              sum(c(nlay_below_ground_max,
                    nlay_forest_floor_max),
                  na.rm = TRUE)) %>%
-    select(-contains("stock_below_ground_1cm")) %>%
+    select(-contains("stock_below_ground_1cm"),
+           -mass_fine_earth_1cm) %>%
     mutate_all(function(x) ifelse(is.nan(x), NA, x)) %>%
     arrange(partner_short,
             code_plot,
