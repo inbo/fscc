@@ -1,7 +1,10 @@
 
-add_dec_coord_columns <- function(data_frame) {
+add_dec_coord_columns <- function(data_frame,
+                                  incl_etrs89 = TRUE) {
 
   source("./src/functions/dec_coordinate.R")
+  source("./src/functions/as_sf.R")
+
 
   assertthat::assert_that("longitude" %in% names(data_frame) &&
                             "latitude" %in% names(data_frame))
@@ -36,6 +39,23 @@ add_dec_coord_columns <- function(data_frame) {
            latitude_dec = as.numeric(latitude_dec)) %>%
     select(-latitude_dec_error,
            -longitude_dec_error)
+
+
+  if (incl_etrs89 == TRUE) {
+
+    coordinate_list <- df_added %>%
+      as_sf # EPSG 3035 (ETRS89 / LAEA Europe)
+
+    # Extract the transformed coordinates
+    coords_epsg3035 <- st_coordinates(coordinate_list)
+
+    # Add the ETRS89 coordinates as new columns to the original dataframe
+    df_added <- coordinate_list %>%
+      mutate(x_etrs89 = coords_epsg3035[, 1],
+             y_etrs89 = coords_epsg3035[, 2]) %>%
+      st_drop_geometry()
+  }
+
 
   return(df_added)
 
