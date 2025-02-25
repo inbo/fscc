@@ -88,11 +88,44 @@ map_icpf <- function(layers,
                      point_size = 0.6,
                      point_col = NULL,
                      biogeo_palette = "biogeo_col",
+                     mode = "dark_light",
                      with_logo = FALSE,
                      count_plots_legend = FALSE,
                      return = FALSE,
                      inset_maps_offset_x = 0,
                      width = 6.81) {
+
+
+
+  if (mode == "dark") {
+
+    # Dark mode
+
+    col_panel <- "black"
+    col_sea <- "#677D83" #"#727878"
+    col_background <- "#2D2E2E"
+    col_background_plot <- col_background
+    col_front <- "white"
+
+  } else if (mode == "dark_light") {
+
+    col_panel <- "white"
+    col_sea <- "#D8E0E0"
+    col_background <- "#2D2E2E"
+    col_background_plot <- "white"
+    col_front <- "black"
+
+  } else {
+
+    # Light mode
+
+    col_panel <- "white"
+    col_sea <- "#D8E0E0"
+    col_background <- "white"
+    col_background_plot <- "white"
+    col_front <- "black"
+  }
+
 
   # Load packages ----
 
@@ -181,6 +214,15 @@ map_icpf <- function(layers,
 
   country_border_col <- "black"
 
+  # Number of categories
+
+  if (!is.null(variable_cat)) {
+
+    n_cat <- get(layers[1], envir = .GlobalEnv) %>%
+      pull(!!sym(variable_cat)) %>%
+      n_distinct
+  }
+
   if (is.null(point_col)) {
 
     if (!is.null(biogeo_palette)) {
@@ -192,10 +234,11 @@ map_icpf <- function(layers,
 
        point_col <- point_col[seq_len(length(layers))]
 
-       if (grepl("stock", variable_cat) && grepl("cat", variable_cat)) {
+       if (#grepl("stock", variable_cat) &&
+         grepl("cat", variable_cat)) {
 
-         point_col <- colorRampPalette(c("white", "black"))(7)
-         point_col <- viridisLite::magma(7, direction = -1)
+         point_col <- colorRampPalette(c("white", "black"))(n_cat + 2)
+         point_col <- viridisLite::magma(n_cat + 2, direction = -1)
          point_col <- point_col[seq(2, length(point_col) - 1)]
 
        }
@@ -260,6 +303,8 @@ map_icpf <- function(layers,
                         "darkorange4",
                         "#B7B7B7")
 
+        point_col <- viridisLite::magma(n_cat + 2, direction = -1)
+        point_col <- point_col[seq(1, length(point_col) - 2)]
       }
 
       country_border_col <- "#3a494a"
@@ -317,8 +362,12 @@ map_icpf <- function(layers,
       layers_part1 <- get_env(layers) %>%
         filter(!.data[[variable_cat]] %in% c("Other", "Unknown")) %>%
         group_by(.data[[variable_cat]]) %>%
-        reframe(count = n()) %>%
-        arrange(desc(count))
+        reframe(count = n()) # %>%
+       # arrange(desc(count))
+
+      layers_part1 <- get_env(layers) %>%
+        distinct(.data[[variable_cat]]) %>%
+        left_join(layers_part1)
     }
 
     legend_classes_col <- bind_rows(
@@ -400,7 +449,7 @@ map_icpf <- function(layers,
   background_col <- "#7D9191"
 
   # Define the panel background colours (i.e. colour of the sea)
-  sea_col <- "#D8E0E0"
+  sea_col <- col_sea # "#D8E0E0"
 
   # Define colour palette biogeographical regions
   biogeo_col <- c("#14293a",
@@ -419,7 +468,7 @@ map_icpf <- function(layers,
     background_col <- "#222222"
     background_col <- "white" # "#222222"
       #"black" # "#293333" #"#203233" #"#14293a"
-    sea_col <- "#C2CECE"   #"#a1b3b3"
+    sea_col <- col_sea #"#C2CECE"   #"#a1b3b3"
   }
 
 
@@ -475,7 +524,7 @@ map_icpf <- function(layers,
   base_map <-
     ggplot() +
     # Map the fill colour of the countries (outside of Europe)
-    geom_sf(data = world_spat, color = NA, fill = background_col) +
+    geom_sf(data = world_spat, color = NA, fill = col_background) +
     # Give title to plot (input argument)
     ggtitle(title)
 
@@ -507,12 +556,14 @@ map_icpf <- function(layers,
   base_map <- base_map +
     # Customise the theme of the plot
     theme(
+      plot.background = element_rect(fill = col_background_plot,
+                                     colour = col_background_plot),
       # # Set the size of the legend title to 10
       # legend.title = element_text(size = 10),
       # Set the font family to "sans" and colour to black for text elements
-      text = element_text(family = "sans", color = "black"),
+      text = element_text(family = "sans", color = col_front),
       # Black coordinates
-      axis.text = element_text(color = "black"),
+      axis.text = element_text(color = col_front),
       # Set the size of the plot title to 10 and make it bold
       legend.title = element_markdown(lineheight = 1.4,
                                       colour = col_front,
@@ -526,9 +577,12 @@ map_icpf <- function(layers,
       panel.background = element_rect(fill = sea_col),
       # Set the color of major grid lines (i.e. coordinate lines)
       # in the plot to white
-      panel.grid.major = element_line(color = "white"),
+      panel.grid.major = element_line(color = col_panel),
       # Remove the grey background underneat the legend keys
       legend.key = element_blank(),
+      legend.background = element_rect(fill = col_background_plot),
+      legend.text = element_text(size = 10,
+                                 colour = col_front),
       plot.margin = margin(t = 0.5,  # Set top margin of the plot to 0.5 cm
                            r = 0.5,  # Set right margin of the plot to 0.5 cm
                            b = 0.5,  # Set bottom margin of the plot to 0.5 cm
@@ -662,7 +716,7 @@ map_icpf <- function(layers,
 
   azores_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col)
+    geom_sf(data = world_spat, color = NA, fill = col_background)
 
   if (!is.null(biogeo_palette)) {
 
@@ -678,7 +732,7 @@ map_icpf <- function(layers,
 
   azores_map <- azores_map +
     theme(legend.title = element_text(size = 10),
-          text = element_text(family = "sans", color = "black"),
+          text = element_text(family = "sans", color = col_front),
           # Adjust the margins around the plot title
           plot.title = element_text(size = 10, face = "bold",
                                     margin = margin(0, 0, 0, 0)),
@@ -761,7 +815,7 @@ map_icpf <- function(layers,
 
   canary_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col)
+    geom_sf(data = world_spat, color = NA, fill = col_background)
 
   if (!is.null(biogeo_palette)) {
 
@@ -777,7 +831,7 @@ map_icpf <- function(layers,
 
   canary_map <- canary_map +
     theme(legend.title = element_text(size = 10),
-          text = element_text(family = "sans", color = "black"),
+          text = element_text(family = "sans", color = col_front),
           plot.title = element_text(size = 10,
                                     face = "bold",
                                     margin = margin(0, 0, 0, 0)),
@@ -853,7 +907,7 @@ map_icpf <- function(layers,
 
   cyprus_map <-
     ggplot() +
-    geom_sf(data = world_spat, color = NA, fill = background_col)
+    geom_sf(data = world_spat, color = NA, fill = col_background)
 
   if (!is.null(biogeo_palette)) {
 
@@ -869,7 +923,7 @@ map_icpf <- function(layers,
 
   cyprus_map <- cyprus_map +
     theme(legend.title = element_text(size = 10),
-          text = element_text(family = "sans", color = "black"),
+          text = element_text(family = "sans", color = col_front),
           plot.title = element_text(size = 10,
                                     face = "bold",
                                     # Leave 2 pt of margin below the title
