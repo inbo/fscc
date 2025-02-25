@@ -461,8 +461,8 @@ map_icpf <- function(layers,
                   "#0097a5",
                   "#c99800",
                   "#00001f",
-                  "#33002d",
-                  "#556400")
+                  "#33002d")
+                 # "#556400")
 
   if (is.null(biogeo_palette)) {
     background_col <- "#222222"
