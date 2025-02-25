@@ -286,7 +286,7 @@ map_icpf <- function(layers,
                         "#B7B7B7") # Other
       } else {
 
-        # Define colour palette biogeographical regions
+        # Define colour palette categorical non-continuous (e.g. EFTC)
         point_col <- c("green4",
                         "dodgerblue2",
                         "#E31A1C",
@@ -453,7 +453,6 @@ map_icpf <- function(layers,
 
   # Define colour palette biogeographical regions
   biogeo_col <- c("#14293a",
-                #  "#556400",
                   "#6b9c6c",
                   "#005f0e",
                   "#004a30",
@@ -462,7 +461,8 @@ map_icpf <- function(layers,
                   "#0097a5",
                   "#c99800",
                   "#00001f",
-                  "#33002d")
+                  "#33002d",
+                  "#556400")
 
   if (is.null(biogeo_palette)) {
     background_col <- "#222222"
