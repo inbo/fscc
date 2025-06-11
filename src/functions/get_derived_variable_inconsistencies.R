@@ -235,15 +235,17 @@ get_derived_variable_inconsistencies <- function(survey_form,
                    !is.na(.data$exch_ca_loq) &
                    !is.na(.data$exch_mg_loq) &
                    !is.na(.data$exch_k_loq) &
-                   !is.na(.data$exch_na_loq) &
-                   # If only one value is above LOQ, but this value
-                   # is significantly higher,
-                   # it could still be justifiable to calculate a sum???
-                   rowSums(cbind(.data$exch_ca, .data$exch_mg,
-                                 .data$exch_k, .data$exch_na) >
-                             cbind(.data$exch_ca_loq, .data$exch_mg_loq,
-                                   .data$exch_k_loq,
-                                   .data$exch_na_loq)) >= 2,
+                   !is.na(.data$exch_na_loq),
+                   # # If only one value is above LOQ, but this value
+                   # # is significantly higher,
+                   # # it could still be justifiable to calculate a sum???
+                   # rowSums(cbind(.data$exch_ca, .data$exch_mg,
+                   #               .data$exch_k, .data$exch_na) >
+                   #           cbind(.data$exch_ca_loq, .data$exch_mg_loq,
+                   #                 .data$exch_k_loq,
+                   #                 .data$exch_na_loq)) >= 2,
+                 # Sum the values directly, using 50% of the LOQ where
+                 # values are below the LOQ
                  round(.data$exch_ca + .data$exch_mg +
                          .data$exch_k + .data$exch_na, 2),
                  NA_real_),
@@ -257,15 +259,17 @@ get_derived_variable_inconsistencies <- function(survey_form,
                    !is.na(.data$exch_al_loq) &
                    !is.na(.data$exch_fe_loq) &
                    !is.na(.data$exch_mn_loq) &
-                   !is.na(.data$free_h_loq) &
-                   # If only one value is above LOQ, but this value
-                   # is significantly higher,
-                   # it could still be justifiable to calculate a sum???
-                   rowSums(cbind(.data$exch_al, .data$exch_fe,
-                                 .data$exch_mn, .data$free_h) >
-                             cbind(.data$exch_al_loq, .data$exch_fe_loq,
-                                   .data$exch_mn_loq,
-                                   .data$free_h_loq)) >= 2,
+                   !is.na(.data$free_h_loq),
+                   # # If only one value is above LOQ, but this value
+                   # # is significantly higher,
+                   # # it could still be justifiable to calculate a sum???
+                   # rowSums(cbind(.data$exch_al, .data$exch_fe,
+                   #               .data$exch_mn, .data$free_h) >
+                   #           cbind(.data$exch_al_loq, .data$exch_fe_loq,
+                   #                 .data$exch_mn_loq,
+                   #                 .data$free_h_loq)) >= 2,
+                 # Sum the values directly, using 50% of the LOQ where
+                 # values are below the LOQ
                  round(.data$exch_al + .data$exch_fe +
                          .data$exch_mn + .data$free_h, 2),
                  NA_real_),
@@ -296,7 +300,8 @@ get_derived_variable_inconsistencies <- function(survey_form,
                    !is.na(.data$part_size_clay),
                  .data$part_size_clay + .data$part_size_silt +
                    .data$part_size_sand,
-                 NA_real_))
+                 NA_real_)) %>%
+      ungroup()
 
   }
 
@@ -350,18 +355,18 @@ get_derived_variable_inconsistencies <- function(survey_form,
                    !is.na(.data$horizon_exch_ca_loq) &
                    !is.na(.data$horizon_exch_mg_loq) &
                    !is.na(.data$horizon_exch_k_loq) &
-                   !is.na(.data$horizon_exch_na_loq) &
-                   # If only one value is above LOQ, but this value
-                   # is significantly higher,
-                   # it could still be justifiable to calculate a sum???
-                   rowSums(cbind(.data$horizon_exch_ca,
-                                 .data$horizon_exch_mg,
-                                 .data$horizon_exch_k,
-                                 .data$horizon_exch_na) >
-                             cbind(.data$horizon_exch_ca_loq,
-                                   .data$horizon_exch_mg_loq,
-                                   .data$horizon_exch_k_loq,
-                                   .data$horizon_exch_na_loq)) >= 2,
+                   !is.na(.data$horizon_exch_na_loq),
+                   # # If only one value is above LOQ, but this value
+                   # # is significantly higher,
+                   # # it could still be justifiable to calculate a sum???
+                   # rowSums(cbind(.data$horizon_exch_ca,
+                   #               .data$horizon_exch_mg,
+                   #               .data$horizon_exch_k,
+                   #               .data$horizon_exch_na) >
+                   #           cbind(.data$horizon_exch_ca_loq,
+                   #                 .data$horizon_exch_mg_loq,
+                   #                 .data$horizon_exch_k_loq,
+                   #                 .data$horizon_exch_na_loq)) >= 2,
                  round(.data$horizon_exch_ca + .data$horizon_exch_mg +
                          .data$horizon_exch_k + .data$horizon_exch_na, 2),
                  NA_real_),
@@ -411,6 +416,7 @@ get_derived_variable_inconsistencies <- function(survey_form,
                  round(as.numeric((.data$coarse_fragment_aid /
                                (1 + .data$coarse_fragment_aid)) * 100), 3),
                  NA)) %>%
+      ungroup() %>%
       # Coarse fragments: average volume of class
       # Convert volumetric coarse fragment codes to actual average vol %
       left_join(d_soil_coarse_fragments,
