@@ -1,12 +1,19 @@
 
 overlay_tif <- function(sf1,
-                        path_tif,
+                        path_tif = NULL,
+                        spat_raster = NULL,
                         values_to_avoid = NULL,
                         buffer_radius = 2000,
                         buffer_radius_max = 5000,
                         map = FALSE) {
 
-  assertthat::assert_that(file.exists(path_tif))
+  assertthat::assert_that(!(identical(path_tif, NULL) &&
+                              identical(spat_raster, NULL)))
+
+  if (!identical(path_tif, NULL)) {
+    assertthat::assert_that(file.exists(path_tif))
+  }
+
 
   # Define required packages
   stopifnot(require("sf"),
@@ -20,7 +27,15 @@ overlay_tif <- function(sf1,
 
   # 1. Import tif ----
 
-  tif <- terra::rast(path_tif)
+  if (!identical(path_tif, NULL)) {
+
+    tif <- terra::rast(path_tif)
+
+  } else {
+
+    tif <- spat_raster
+  }
+
 
   if (terra::crs(tif, proj = TRUE) == terra::crs("EPSG:4326", proj = TRUE)) {
 
