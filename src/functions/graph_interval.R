@@ -37,6 +37,9 @@ graph_interval <- function(data,
   } else if (shorter_var_name == "extrac_p") {
     var_name <- "Extractable phosphorus"
     unit_pre <- "kg"
+  } else if (shorter_var_name == "extrac_s") {
+    var_name <- "Extractable sulphur"
+    unit_pre <- "kg"
   }
 
   if (shorter_var_name == "c") {
@@ -45,6 +48,8 @@ graph_interval <- function(data,
     var_letter <- "N"
   } else if (shorter_var_name == "extrac_p") {
     var_letter <- "P"
+  } else if (shorter_var_name == "extrac_s") {
+    var_letter <- "S"
   }
 
   if (src_survey == "s1_so") {
