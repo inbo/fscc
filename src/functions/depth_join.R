@@ -28,7 +28,8 @@
 #'  selects the best year, i.e. covering the biggest depth range after 2000 or
 #'  alternatively the most recent survey year, for the whole target profile;
 #'  and further gap-fills any missing data below 40 cm from other survey
-#'  years)
+#'  years); or "time_specific_concentrations" (this joins analytical parameters
+#'  which are specific for a certain survey year)
 #'
 #' @return A dataframe representing the joined data.
 #'
@@ -54,7 +55,8 @@ depth_join <- function(df1,
     all(c("code_layer", "layer_limit_superior", "layer_limit_inferior",
           "plot_id", "layer_type") %in% names(df1)))
 
-  if (mode == "time_specific_ff_concentrations") {
+  if (mode %in% c("time_specific_ff_concentrations",
+                  "time_specific_concentrations")) {
     assertthat::assert_that("survey_year" %in% names(df1) &&
                               "survey_year" %in% names(df2))
   }
@@ -128,7 +130,8 @@ depth_join <- function(df1,
 
     }
 
-    if (mode == "time_specific_ff_concentrations") {
+    if (mode %in% c("time_specific_ff_concentrations",
+                    "time_specific_concentrations")) {
       possible_parameters <- c("organic_carbon_total",
                                "n_total",
                                "extrac_p",
@@ -340,7 +343,8 @@ depth_join <- function(df1,
 
 
 
-      if (mode == "time_specific_ff_concentrations") {
+      if (mode %in% c("time_specific_ff_concentrations",
+                      "time_specific_concentrations")) {
 
         survey_year_i <- df1$survey_year[i]
 
@@ -599,10 +603,10 @@ depth_join <- function(df1,
           # Bulk density, so no need to weight it
 
           value_j <- if (any(is.na(df2_j$layer_thickness))) {
-            round(mean(df2_j[[parameter_j]]), 1)
+            round(mean(df2_j[[parameter_j]]), 2)
           } else {
             round(weighted.mean(df2_j[[parameter_j]],
-                                w = df2_j$layer_thickness), 1)
+                                w = df2_j$layer_thickness), 2)
           }
           }
 
@@ -610,12 +614,13 @@ depth_join <- function(df1,
           # If time_specific_ff_concentrations/most_recent mode
 
           if (mode %in% c("time_specific_ff_concentrations",
+                          "time_specific_concentrations",
                           "most_recent",
                           "best_year")) {
 
             if (nrow(df2_j) == 1) {
 
-              value_j <- round(df2_j[[parameter_j]], 1)
+              value_j <- round(df2_j[[parameter_j]], 2)
             }
 
             if (nrow(df2_j) > 1) {
@@ -633,7 +638,7 @@ depth_join <- function(df1,
                         !is.na(layer_thickness),
                       # kg m-2
                       round(.data$bulk_density * (.data$layer_thickness * 1e-2),
-                            1),
+                            2),
                       NA_real_))
               }
 
@@ -675,7 +680,7 @@ depth_join <- function(df1,
               }
 
               value_j <- round(weighted.mean(df2_j[[parameter_j]],
-                                             w = df2_j$weights), 1)
+                                             w = df2_j$weights), 2)
 
             }
           } # End of "if time_specific_ff_concentrations"/"most_recent"
@@ -711,7 +716,8 @@ depth_join <- function(df1,
     if (!is_ff_i &&
         mode %in% c("constant_physical_parameters",
                     "most_recent",
-                    "best_year")) {
+                    "best_year",
+                    "time_specific_concentrations")) {
 
       df2_sub <- df2 %>%
         filter(plot_id == plot_id_i) %>%
@@ -743,6 +749,23 @@ depth_join <- function(df1,
       if (nrow(df2_sub) == 0) {
         next # Go to next layer
       }
+
+
+      if (mode %in% c("time_specific_concentrations") &&
+          df1$layer_limit_superior[i] < 40) {
+
+        survey_year_i <- df1$survey_year[i]
+
+        df2_sub <- df2_sub %>%
+          filter(.data$survey_year >= survey_year_i - 3 &
+                   .data$survey_year <= survey_year_i + 3)
+
+        if (nrow(df2_sub) == 0) {
+          next # Go to next layer
+        }
+      }
+
+
 
 
       ## Evaluate for each of the parameters ----
@@ -785,6 +808,30 @@ depth_join <- function(df1,
           df2_j <- df2_j %>%
             filter(survey_year == most_recent_j)
         }
+
+
+        # Time-specific concentrations in subsoil
+
+        if (mode %in% c("time_specific_concentrations") &&
+            df1$layer_limit_superior[i] >= 40) {
+
+          survey_year_i <- df1$survey_year[i]
+
+          df2_j_test <- df2_j %>%
+            filter(.data$survey_year >= survey_year_i - 3 &
+                     .data$survey_year <= survey_year_i + 3)
+
+          # If there are not data for the subsoil in the given year,
+          # you can take data from other survey years, since the subsoil
+          # is considered constant in the manual
+
+          if (nrow(df2_j_test) > 0) {
+
+            df2_j <- df2_j_test
+
+          }
+        }
+
 
         # "best_year":
         # Select the best survey_year with data for this parameter
@@ -895,7 +942,7 @@ depth_join <- function(df1,
 
           } else {
 
-            value_j <- round(df2_j[[parameter_j]], 1)
+            value_j <- round(df2_j[[parameter_j]], 2)
           }
 
         }
@@ -950,7 +997,7 @@ depth_join <- function(df1,
                                       parameter_name =
                                         "parameter_j",
                                       mode = "numeric") %>%
-            round(1)
+            round(2)
         }
 
         } # End of "if >1 rows"
