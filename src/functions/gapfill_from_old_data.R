@@ -49,7 +49,7 @@ gapfill_from_old_data <- function(survey_form,
         mutate_all(~ifelse((.) == "", NA, .)) %>%
         mutate(
           no_data = rowSums(!is.na(across(code_texture_class:extrac_al)))) %>%
-        filter(no_data > 0)
+        filter(no_data > 0 | !is.na(part_size_clay))
 
     } else {
 
@@ -140,6 +140,82 @@ gapfill_from_old_data <- function(survey_form,
       so_som_esp$code_country <- 11
 
 
+
+
+
+      # Import the extra texture data for LII
+
+      assertthat::assert_that(file.exists(
+        paste0("./data/additional_data/partner_comm/",
+               "texture_data_collection_dec2024/so_som_texture.csv")),
+        msg = paste0("'", "./data/additional_data/partner_comm/",
+                     "texture_data_collection_dec2024/so_som_texture.csv", "' ",
+                     "does not exist."))
+
+      so_som_texture <- read.csv(paste0("./data/additional_data/partner_comm/",
+                                        "texture_data_collection_dec2024/",
+                                        "so_som_texture.csv"),
+                                 sep = ";") %>%
+        mutate(unique_layer_repetition = paste0(code_country, "_",
+                                                survey_year, "_",
+                                                code_plot, "_",
+                                                code_layer, "_",
+                                                repetition)) %>%
+        mutate_all(function(x) ifelse((x) == "", NA, x)) %>%
+        # Some Swedish rows (unique_layer_number) are duplicated
+        # because there were texture data
+        # for code_texture_class from one data source
+        # and for particle size distributions from another data source.
+        # Combine.
+        group_by(unique_layer_repetition) %>%
+        summarise(across(everything(), ~ reduce(.x, coalesce)),
+                  .groups = "drop") %>%
+        # To avoid later issues to join with the afscdb data
+        mutate(
+          layer_limit_inferior = ifelse(
+            code_layer == "OFH",
+            NA_real_,
+            layer_limit_inferior))
+
+
+
+
+      # Hungarian data BioSoil plot 1, 3, 10, 19
+
+      so_som_hun <-
+        read_excel(paste0("./data/additional_data/partner_comm/",
+                          "texture_data_collection_dec2024/original/",
+                          "BioSoil_2006_HU/51_2_2006_SOM.xls")) %>%
+        rename_with(tolower) %>%
+        rename_with(~ gsub("extractable", "extrac", .)) %>%
+        rename_with(~ gsub("exchangeable", "exch", .)) %>%
+        rename_with(~ gsub("^total", "tot", .)) %>%
+        rename(n_total = tot_n) %>%
+        rename(free_h = `free_h+_acidity`) %>%
+        rename(layer_limit_superior = layer_limit_sup) %>%
+        rename(layer_limit_inferior = layer_limit_inf) %>%
+        rename_with(~ ifelse(. %in% c("clay", "silt", "sand"),
+                             paste0("part_size_", .),
+                             .)) %>%
+        rename(ph_cacl2 = `ph(cacl2)`) %>%
+        rename(ph_h2o = `ph(h2o)`) %>%
+        mutate(date_labor_analyses = as.Date(date_analysis)) %>%
+        select(-date_analysis) %>%
+        rename(code_texture_class = texture_class) %>%
+        rename(bulk_density = mean_bulk_density) %>%
+        rename(coarse_fragment_vol = volume_coarse_frag) %>%
+        rename(organic_carbon_total = organic_carbon) %>%
+        rename(other_obs = observation) %>%
+        select(where(~ !all(is.na(.)))) %>%
+        mutate(survey_year = 2006,
+               plot_id = paste0(code_country, "_",
+                                code_plot)) %>%
+        # Manually verified: forest floor layers should belong to the same
+        # repetition as the below-ground layers
+        mutate(repetition = 1)
+
+
+
       ## Prepare so_som_afscdb
 
       # Column names in AFSCDB differ from those in so_som
@@ -187,8 +263,8 @@ gapfill_from_old_data <- function(survey_form,
       assertthat::assert_that(file.exists(
         paste0("./data/additional_data/afscdb_LII_2_2/repetitions/",
                "FSCDB_LII_2_2012_SOM.xlsx")),
-        msg = paste0("'", file_path, "' ",
-                     "does not exist."))
+        msg = paste0("'", "./data/additional_data/afscdb_LII_2_2/repetitions/",
+                     "' ", "does not exist."))
 
       so_som_afscdb <-
         openxlsx::read.xlsx(paste0("./data/additional_data/afscdb_LII_2_2/",
@@ -219,6 +295,93 @@ gapfill_from_old_data <- function(survey_form,
         }
       }
 
+      so_som_afscdb <- so_som_afscdb %>%
+        mutate(date_labor_analyses =
+                 # 1900 date system in Excel
+                 as.Date(date_labor_analyses, origin = "1899-12-30"))
+
+      # Add extra rows for Romania
+
+      rows_rom <- so_som_afscdb %>%
+        filter(code_country == 52 &
+                 code_plot == 13 &
+                 survey_year == 2009 &
+                 repetition == 3 &
+                 code_layer == "M01") %>%
+        mutate(across(all_of(c(
+          "layer_limit_superior", "layer_limit_inferior",
+          "subsamples", "date_labor_analyses", "moisture_content",
+          "part_size_clay", "part_size_silt", "part_size_sand",
+          "code_texture_class", "bulk_density",
+          "bulk_density_est", "coarse_fragment_mass",
+          "coarse_fragment_vol", "organic_layer_weight",
+          "ph_cacl2", "ph_h2o", "organic_carbon_total", "n_total",
+          "carbonates", "exch_acidiy", "exch_al", "exch_ca",
+          "exch_fe", "exch_k", "exch_mg", "exch_mn",
+          "exch_na", "free_h", "extrac_al", "extrac_ca",
+          "extrac_cd", "extrac_cr", "extrac_cu", "extrac_fe",
+          "extrac_hg", "extrac_k", "extrac_mg", "extrac_mn",
+          "extrac_na", "extrac_ni", "extrac_p", "extrac_pb",
+          "extrac_s", "extrac_zn", "tot_al", "tot_ca",
+          "tot_fe", "tot_k", "tot_mg", "tot_mn",
+          "tot_na", "rea_al", "rea_fe", "other_obs")),
+                      ~ NA))
+
+      so_som_afscdb <- bind_rows(
+        so_som_afscdb,
+        # M12
+        rows_rom %>%
+          mutate(code_layer = "M12",
+                 layer_limit_superior = 10,
+                 layer_limit_inferior = 20,
+                 organic_carbon_total = 21.1),
+        # M24
+        rows_rom %>%
+          mutate(code_layer = "M24",
+                 layer_limit_superior = 20,
+                 layer_limit_inferior = 40,
+                 organic_carbon_total = 16.8),
+        # M48
+        rows_rom %>%
+          mutate(code_layer = "M48",
+                 layer_limit_superior = 40,
+                 layer_limit_inferior = 80,
+                 organic_carbon_total = 14.39))
+
+
+
+      # Add columns for source
+
+      assertthat::assert_that(all(parameters %in% names(so_som_afscdb)))
+
+      for (col in parameters) {
+
+        source_col <- paste0(col, "_source")
+
+        if (!source_col %in% names(so_som_afscdb)) {
+          so_som_afscdb[[source_col]] <-
+            ifelse(!is.na(so_som_afscdb[[col]]),
+                   "FSCDB.LII (2012)",
+                   NA)
+
+          # Move the source_col after col
+          so_som_afscdb <- so_som_afscdb %>%
+            relocate(all_of(source_col), .after = all_of(col))
+        }
+      }
+
+      # Update layer source for those Romanian records
+
+      so_som_afscdb <- so_som_afscdb %>%
+        mutate(
+          organic_carbon_total_source = ifelse(
+            code_country == 52 &
+              code_plot == 13 &
+              survey_year == 2009 &
+              repetition == 3 &
+              code_layer %in% c("M12", "M24", "M48"),
+            "External data (parter communication)",
+            organic_carbon_total_source))
 
       # Correct a small mistake in Austrian organic_layer_weight
       # for plot 14_17 (copy paste error issue raised by Austrian partner
@@ -238,7 +401,13 @@ gapfill_from_old_data <- function(survey_form,
               code_layer == "OL" & repetition == 4 ~ 80 * 1E-3 * 8,
               code_layer == "OFH" & repetition == 4 ~ 218 * 1E-3 * 8,
               .default = organic_layer_weight),
-            organic_layer_weight))
+            organic_layer_weight),
+          organic_layer_weight_source = ifelse(
+            code_country == 14 & code_plot == 17 &
+              code_layer %in% c("OL", "OFH") &
+              !is.na(organic_layer_weight),
+            "External data (parter communication)",
+            organic_layer_weight_source))
 
 
       # Replace Spanish records by the Spanish records from
@@ -247,15 +416,57 @@ gapfill_from_old_data <- function(survey_form,
       so_som_afscdb <- so_som_afscdb %>%
         filter(code_country != 11)
 
-      # Add missing columns to so_som_esp and fill them with NA
+      # Add missing columns to so_som_esp
+
       for (col in names(so_som_afscdb)) {
         if (!(col %in% names(so_som_esp))) {
-          so_som_esp[[col]] <- NA
+
+          # Source columns
+
+          if (grepl("_source$", col)) {
+
+            so_som_esp[[col]] <-
+              ifelse(!is.na(so_som_esp[[sub("_source$", "", col)]]),
+                     "External data (parter communication)",
+                     NA)
+
+          } else {
+
+            # Other missing columns: fill them with NA
+            so_som_esp[[col]] <- NA
+
+          }
         }
       }
 
-      # Reorder the columns of so_som_esp to match the order of so_som_afscdb
+      # Add missing columns to so_som_hun
+
+      for (col in names(so_som_afscdb)) {
+        if (!(col %in% names(so_som_hun))) {
+
+          # Source columns
+
+          if (grepl("_source$", col)) {
+
+            so_som_hun[[col]] <-
+              ifelse(!is.na(so_som_hun[[sub("_source$", "", col)]]),
+                     "External data (parter communication)",
+                     NA)
+
+          } else {
+
+            # Other missing columns: fill them with NA
+            so_som_hun[[col]] <- NA
+
+          }
+        }
+      }
+
+      # Reorder the columns of so_som_esp and so_som_hun
+      # to match the order of so_som_afscdb
+
       so_som_esp <- so_som_esp[names(so_som_afscdb)]
+      so_som_hun <- so_som_hun[names(so_som_afscdb)]
 
       # Function to convert the class of a column
       convert_class <- function(column, target_class) {
@@ -282,16 +493,75 @@ gapfill_from_old_data <- function(survey_form,
         }
       }
 
-      # Check and convert the data types of each column in so_som_esp
+      # Check and convert the data types of each column
+      # in so_som_esp and so_som_hun
       # to match so_som_afscdb
+
       for (col in names(so_som_afscdb)) {
         target_class <- class(so_som_afscdb[[col]])
         so_som_esp[[col]] <- convert_class(so_som_esp[[col]], target_class)
+        so_som_hun[[col]] <- convert_class(so_som_hun[[col]], target_class)
       }
 
 
-      # Combine the two data frames
-      so_som_afscdb <- bind_rows(so_som_afscdb, so_som_esp)
+      # Combine the data frames
+      so_som_afscdb <- bind_rows(so_som_afscdb,
+                                 so_som_esp,
+                                 so_som_hun) %>%
+        mutate(unique_layer_repetition = paste0(code_country, "_",
+                                                survey_year, "_",
+                                                code_plot, "_",
+                                                code_layer, "_",
+                                                repetition))
+
+
+      # Add external (texture) data
+
+
+      parameters_tex <- c("part_size_clay", "part_size_silt", "part_size_sand",
+                          "bulk_density", "coarse_fragment_vol",
+                          "code_texture_class")
+
+      so_som_afscdb <- so_som_afscdb %>%
+        full_join(
+          so_som_texture %>%
+            select(-country, -partner_short, -partner, -partner_code,
+                   -layer_type, -layer_number, -unique_layer) %>%
+            rename_with(~ paste0(.x, "_ext"),
+                        all_of(parameters_tex)),
+          by = join_by("unique_layer_repetition",
+                       "survey_year", "code_country",
+                       "code_plot", "plot_id", "repetition",
+                       "code_layer",
+                       "layer_limit_superior", "layer_limit_inferior"))
+
+      # Function to process a single parameter
+      process_parameter <- function(df, param) {
+        # Create source column name
+        source_col <- paste0(param, "_source")
+        ext_col <- paste0(param, "_ext")
+
+        # Create a new dataframe with mutated columns
+        df %>%
+          mutate(
+            !!source_col := case_when(
+              !is.na(!!sym(source_col)) ~ !!sym(source_col),
+              !is.na(!!sym(ext_col)) ~ "External data (parter communication)",
+              TRUE ~ NA_character_
+            ),
+            !!param := coalesce(
+              !!sym(param),
+              !!sym(ext_col)
+            )
+          )
+      }
+
+      # Apply the function to all parameters
+      so_som_afscdb <- Reduce(process_parameter, parameters_tex,
+                              init = so_som_afscdb)
+
+      so_som_afscdb <- so_som_afscdb %>%
+        select(-all_of(ends_with("_ext")))
 
 
       write.table(so_som_afscdb,
@@ -400,35 +670,13 @@ gapfill_from_old_data <- function(survey_form,
                         .data$coarse_fragment_vol_from_mass)) %>%
       select(-coarse_fragment_aid,
              -coarse_fragment_vol_from_mass,
-             -coarse_fragment_mass) %>%
-      mutate(date_labor_analyses =
-               # 1900 date system in Excel
-               as.Date(date_labor_analyses, origin = "1899-12-30"))
+             -coarse_fragment_mass)
 
 
 
     ## Gap-fill existing records ----
 
     ### Prepare df ----
-
-    # At the moment, this script is only elaborated for the following parameters
-    # To do: expand for other parameters
-
-    assertthat::assert_that(
-      identical(parameters, c("bulk_density",
-                              "organic_carbon_total",
-                              "n_total",
-                              "extrac_p",
-                              "extrac_s",
-                              "rea_fe",
-                              "rea_al",
-                              "exch_ca",
-                              "organic_layer_weight",
-                              "coarse_fragment_vol",
-                              "part_size_clay",
-                              "part_size_silt",
-                              "part_size_sand",
-                              "code_texture_class")))
 
     # Check for "_orig" columns and create if not existing
     for (col in parameters) {
@@ -476,9 +724,10 @@ gapfill_from_old_data <- function(survey_form,
       left_join(
         so_som_existing_rec %>%
           select(unique_layer_repetition,
-                 all_of(parameters)) %>%
+                 all_of(parameters),
+                 all_of(paste0(parameters, "_source"))) %>%
           rename_with(~ paste0(.x, "_afscdb"),
-                      all_of(parameters)),
+                      all_of(c(parameters, paste0(parameters, "_source")))),
         by = "unique_layer_repetition")
 
 
@@ -499,6 +748,7 @@ gapfill_from_old_data <- function(survey_form,
       # Create source column name
       source_col <- paste0(param, "_source")
       afscdb_col <- paste0(param, "_afscdb")
+      source_afscdb_col <- paste0(param, "_source_afscdb")
 
       # Create a new dataframe with mutated columns
       df %>%
@@ -506,7 +756,7 @@ gapfill_from_old_data <- function(survey_form,
           !!source_col := case_when(
             !is.na(!!sym(source_col)) ~ !!sym(source_col),
             !is.na(!!sym(param)) ~ "som (same year)",
-            !is.na(!!sym(afscdb_col)) ~ "FSCDB.LII (2012)",
+            !is.na(!!sym(afscdb_col)) ~ !!sym(source_afscdb_col),
             TRUE ~ NA_character_
           ),
           !!param := coalesce(
@@ -521,88 +771,8 @@ gapfill_from_old_data <- function(survey_form,
 
 
 
-    # df <- df %>%
-    #   # Bulk density
-    #   mutate(
-    #     bulk_density_source = case_when(
-    #       !is.na(bulk_density_source) ~ bulk_density_source,
-    #       !is.na(.data$bulk_density) ~ "som (same year)",
-    #       !is.na(.data$bulk_density_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     bulk_density = coalesce(
-    #       .data$bulk_density,
-    #       .data$bulk_density_afscdb)) %>%
-    #   # Organic carbon total
-    #   mutate(
-    #     organic_carbon_total_source = case_when(
-    #       !is.na(organic_carbon_total_source) ~ organic_carbon_total_source,
-    #       !is.na(.data$organic_carbon_total) ~ "som (same year)",
-    #       !is.na(.data$organic_carbon_total_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     organic_carbon_total = coalesce(
-    #       .data$organic_carbon_total,
-    #       .data$organic_carbon_total_afscdb)) %>%
-    #   # N total
-    #   mutate(
-    #     n_total_source = case_when(
-    #       !is.na(n_total_source) ~ n_total_source,
-    #       !is.na(.data$n_total) ~ "som (same year)",
-    #       !is.na(.data$n_total_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     n_total = coalesce(
-    #       .data$n_total,
-    #       .data$n_total_afscdb)) %>%
-    #   # Organic layer weight
-    #   mutate(
-    #     organic_layer_weight_source = case_when(
-    #       !is.na(organic_layer_weight_source) ~ organic_layer_weight_source,
-    #       !is.na(.data$organic_layer_weight) ~ "som (same year)",
-    #       !is.na(.data$organic_layer_weight_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     organic_layer_weight = coalesce(
-    #       .data$organic_layer_weight,
-    #       .data$organic_layer_weight_afscdb)) %>%
-    #   # Coarse fragments
-    #   mutate(
-    #     coarse_fragment_vol_source = case_when(
-    #       !is.na(coarse_fragment_vol_source) ~ coarse_fragment_vol_source,
-    #       !is.na(.data$coarse_fragment_vol) ~ "som (same year)",
-    #       !is.na(.data$coarse_fragment_vol_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     coarse_fragment_vol = coalesce(
-    #       .data$coarse_fragment_vol,
-    #       .data$coarse_fragment_vol_afscdb)) %>%
-    #   # Clay
-    #   mutate(
-    #     part_size_clay_source = case_when(
-    #       !is.na(part_size_clay_source) ~ part_size_clay_source,
-    #       !is.na(.data$part_size_clay) ~ "som (same year)",
-    #       !is.na(.data$part_size_clay_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     part_size_clay = coalesce(
-    #       .data$part_size_clay,
-    #       .data$part_size_clay_afscdb)) %>%
-    #   # Silt
-    #   mutate(
-    #     part_size_silt_source = case_when(
-    #       !is.na(part_size_silt_source) ~ part_size_silt_source,
-    #       !is.na(.data$part_size_silt) ~ "som (same year)",
-    #       !is.na(.data$part_size_silt_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     part_size_silt = coalesce(
-    #       .data$part_size_silt,
-    #       .data$part_size_silt_afscdb)) %>%
-    #   # Sand
-    #   mutate(
-    #     part_size_sand_source = case_when(
-    #       !is.na(part_size_sand_source) ~ part_size_sand_source,
-    #       !is.na(.data$part_size_sand) ~ "som (same year)",
-    #       !is.na(.data$part_size_sand_afscdb) ~ "FSCDB.LII (2012)",
-    #       TRUE ~ NA_character_),
-    #     part_size_sand = coalesce(
-    #       .data$part_size_sand,
-    #       .data$part_size_sand_afscdb))
-
+    df <- df %>%
+      select(-ends_with("_source_afscdb"))
 
 
 
@@ -727,9 +897,11 @@ gapfill_from_old_data <- function(survey_form,
                qif_key = NA,
                subsamples = NA,
                other_obs = ifelse(!is.na(.data$other_obs),
-                                  paste0("Record inserted from FSCDB.LII. ",
+                                  paste0("Record inserted from FSCDB.LII/",
+                                         "external data. ",
                                          .data$other_obs),
-                                  "Record inserted from FSCDB.LII."),
+                                  paste0("Record inserted from FSCDB.LII/",
+                                         "external data.")),
                bulk_density_afscdb = bulk_density,
                organic_carbon_total_afscdb = organic_carbon_total,
                n_total_afscdb = n_total,
@@ -744,58 +916,59 @@ gapfill_from_old_data <- function(survey_form,
                part_size_silt_afscdb = part_size_silt,
                part_size_sand_afscdb = part_size_sand,
                code_texture_class_afscdb = code_texture_class,
-               bulk_density_source = ifelse(!is.na(.data$bulk_density),
-                                            "FSCDB.LII.2. (2012)",
-                                            NA_character_),
-               organic_carbon_total_source =
-                 ifelse(!is.na(.data$organic_carbon_total),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               organic_layer_weight_source =
-                 ifelse(!is.na(.data$organic_layer_weight),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               coarse_fragment_vol_source =
-                 ifelse(!is.na(.data$coarse_fragment_vol),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               n_total_source =
-                 ifelse(!is.na(.data$n_total),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               extrac_p_source =
-                 ifelse(!is.na(.data$extrac_p),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               extrac_s_source =
-                 ifelse(!is.na(.data$extrac_s),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               rea_fe_source =
-                 ifelse(!is.na(.data$rea_fe),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               rea_al_source =
-                 ifelse(!is.na(.data$rea_al),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               exch_ca_source =
-                 ifelse(!is.na(.data$exch_ca),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_),
-               part_size_clay_source = ifelse(!is.na(.data$part_size_clay),
-                                              "FSCDB.LII.2. (2012)",
-                                              NA_character_),
-               part_size_silt_source = ifelse(!is.na(.data$part_size_silt),
-                                              "FSCDB.LII.2. (2012)",
-                                              NA_character_),
-               part_size_sand_source = ifelse(!is.na(.data$part_size_sand),
-                                              "FSCDB.LII.2. (2012)",
-                                              NA_character_),
-               code_texture_class_source =
-                 ifelse(!is.na(.data$code_texture_class),
-                        "FSCDB.LII.2. (2012)",
-                        NA_character_)) %>%
+               # bulk_density_source = ifelse(!is.na(.data$bulk_density),
+               #                              "FSCDB.LII.2. (2012)",
+               #                              NA_character_),
+               # organic_carbon_total_source =
+               #   ifelse(!is.na(.data$organic_carbon_total),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # organic_layer_weight_source =
+               #   ifelse(!is.na(.data$organic_layer_weight),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # coarse_fragment_vol_source =
+               #   ifelse(!is.na(.data$coarse_fragment_vol),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # n_total_source =
+               #   ifelse(!is.na(.data$n_total),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # extrac_p_source =
+               #   ifelse(!is.na(.data$extrac_p),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # extrac_s_source =
+               #   ifelse(!is.na(.data$extrac_s),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # rea_fe_source =
+               #   ifelse(!is.na(.data$rea_fe),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # rea_al_source =
+               #   ifelse(!is.na(.data$rea_al),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # exch_ca_source =
+               #   ifelse(!is.na(.data$exch_ca),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_),
+               # part_size_clay_source = ifelse(!is.na(.data$part_size_clay),
+               #                                "FSCDB.LII.2. (2012)",
+               #                                NA_character_),
+               # part_size_silt_source = ifelse(!is.na(.data$part_size_silt),
+               #                                "FSCDB.LII.2. (2012)",
+               #                                NA_character_),
+               # part_size_sand_source = ifelse(!is.na(.data$part_size_sand),
+               #                                "FSCDB.LII.2. (2012)",
+               #                                NA_character_),
+               # code_texture_class_source =
+               #   ifelse(!is.na(.data$code_texture_class),
+               #          "FSCDB.LII.2. (2012)",
+               #          NA_character_)
+               ) %>%
         left_join(partner_codes,
                   by = "plot_id") %>%
         mutate(partner_code = ifelse(!is.na(.data$partner_code),
@@ -833,53 +1006,6 @@ gapfill_from_old_data <- function(survey_form,
       so_som_afscdb_to_add <- so_som_afscdb_to_add %>%
         select(all_of(colnames(df)))
 
-        # select(
-        #   country, partner_short, partner, survey_year,
-        #   code_country, code_plot, code_layer, repetition,
-        #   layer_limit_superior, layer_limit_inferior, subsamples,
-        #   date_labor_analyses, moisture_content,
-        #   part_size_clay, part_size_silt, part_size_sand,
-        #   code_texture_class, bulk_density, coarse_fragment_vol,
-        #   organic_layer_weight,
-        #   ph_cacl2, ph_h2o, organic_carbon_total, n_total,
-        #   carbonates, exch_acidiy, exch_al, exch_ca,
-        #   exch_fe, exch_k, exch_mg, exch_mn,
-        #   exch_na, free_h, extrac_al, extrac_ca,
-        #   extrac_cd, extrac_cr, extrac_cu, extrac_fe,
-        #   extrac_hg, extrac_k, extrac_mg, extrac_mn,
-        #   extrac_na, extrac_ni, extrac_p, extrac_pb,
-        #   extrac_s, extrac_zn, tot_al, tot_ca,
-        #   tot_fe, tot_k, tot_mg, tot_mn,
-        #   tot_na, rea_al, rea_fe, exch_bce,
-        #   exch_ace, exch_cec, elec_cond, ni,
-        #   base_saturation, origin, code_soil_horizon_sample_c, p_ox,
-        #   other_obs, partner_code, q_flag, change_date,
-        #   code_line, line_nr, qif_key, code_plot_orig,
-        #   download_date, layer_type, plot_id, unique_survey,
-        #   unique_survey_repetition,
-        #   unique_survey_layer, unique_layer_repetition, unique_layer,
-        #
-        #   part_size_clay_source, part_size_silt_source,
-        #   part_size_sand_source,
-        #   bulk_density_source,
-        #   coarse_fragment_vol_source,
-        #   organic_layer_weight_source,
-        #   organic_carbon_total_source, n_total_source,
-        #
-        #   code_layer_orig,
-        #   part_size_clay_orig, part_size_silt_orig,
-        #   part_size_sand_orig,
-        #   bulk_density_orig, coarse_fragment_vol_orig,
-        #   organic_layer_weight_orig, organic_carbon_total_orig,
-        #   n_total_orig,
-        #   origin_merged, origin_merge_info,
-        #
-        #   bulk_density_afscdb, organic_carbon_total_afscdb, n_total_afscdb,
-        #   organic_layer_weight_afscdb, coarse_fragment_vol_afscdb,
-        #   part_size_clay_afscdb, part_size_silt_afscdb,
-        #   part_size_sand_afscdb)
-
-      # assertthat::assert_that(all(names(df) == names(so_som_afscdb_to_add)))
 
       df <- rbind(df,
                   so_som_afscdb_to_add)
@@ -1296,28 +1422,6 @@ gapfill_from_old_data <- function(survey_form,
 
     ### Prepare df ----
 
-    # At the moment, this script is only elaborated for the following parameters
-    # To do: expand for other parameters
-
-    assertthat::assert_that(
-      identical(parameters, c("bulk_density",
-                              "organic_carbon_total",
-                              "n_total",
-                              "extrac_p",
-                              "extrac_s",
-                              "rea_fe",
-                              "rea_al",
-                              "exch_ca",
-                              "organic_layer_weight",
-                              "coarse_fragment_vol",
-                              "part_size_clay",
-                              "part_size_silt",
-                              "part_size_sand",
-                              "code_texture_class")))
-
-
-
-
 
     # Check for "_orig" columns and create if not existing
     for (col in parameters) {
@@ -1352,7 +1456,7 @@ gapfill_from_old_data <- function(survey_form,
                "' using a previously harmonised data source ",
                "(FSCDB.LI - Access database version).\n"))
 
-    # Filter for records with matching so_som records
+    # Filter for records with matching s1_som records
 
     s1_som_existing_rec <- s1_som_fscdb %>%
       filter(!is.na(.data$unique_survey_s1_som))
@@ -1534,9 +1638,13 @@ gapfill_from_old_data <- function(survey_form,
                code_texture_class_orig = code_texture_class,
                n_total_orig = n_total,
                extrac_p_orig = extrac_p,
+               extrac_s = NA,
                extrac_s_orig = extrac_s,
+               rea_fe = NA,
                rea_fe_orig = rea_fe,
+               rea_al = NA,
                rea_al_orig = rea_al,
+               exch_ca = NA,
                exch_ca_orig = exch_ca,
                code_layer_orig = code_layer,
                line_nr = NA,
@@ -1547,14 +1655,12 @@ gapfill_from_old_data <- function(survey_form,
                moisture_content = NA,
                ph_h2o = NA,
                exch_al = NA,
-               exch_ca = NA,
                exch_fe = NA,
                exch_k = NA,
                exch_mg = NA,
                exch_mn = NA,
                exch_na = NA,
                extrac_hg = NA,
-               extrac_s = NA,
                free_h = NA,
                tot_al = NA,
                tot_ca = NA,
@@ -1563,8 +1669,6 @@ gapfill_from_old_data <- function(survey_form,
                tot_mg = NA,
                tot_mn = NA,
                tot_na = NA,
-               rea_al = NA,
-               rea_fe = NA,
                other_obs = "Record inserted from FSCDB.LI.",
                bulk_density_fscdb = bulk_density,
                organic_carbon_total_fscdb = organic_carbon_total,
