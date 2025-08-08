@@ -238,7 +238,7 @@ map_icpf <- function(layers,
          grepl("cat", variable_cat)) {
 
          point_col <- colorRampPalette(c("white", "black"))(n_cat + 2)
-         point_col <- viridisLite::magma(n_cat + 2, direction = -1)
+         point_col <- viridisLite::inferno(n_cat + 2, direction = -1)
          point_col <- point_col[seq(2, length(point_col) - 1)]
 
        }
@@ -305,6 +305,17 @@ map_icpf <- function(layers,
 
         point_col <- viridisLite::magma(n_cat + 2, direction = -1)
         point_col <- point_col[seq(1, length(point_col) - 2)]
+
+        if (#grepl("stock", variable_cat) &&
+          grepl("cat", variable_cat)) {
+
+          point_col <- colorRampPalette(c("white", "black"))(n_cat + 2)
+          point_col <- case_when(
+            grepl("dark", mode) ~ viridisLite::inferno(n_cat + 2),
+            TRUE ~ viridisLite::inferno(n_cat + 2, direction = -1))
+          point_col <- point_col[seq(2, length(point_col) - 1)]
+
+        }
       }
 
       country_border_col <- "#3a494a"
@@ -318,7 +329,8 @@ map_icpf <- function(layers,
       point_col <- c("#77203B",
                      "#d44102",
                      "#fabe02",
-                     "#F0F921")
+                     "#ffff69")
+                    # "#F0F921")
 
       country_border_col <- "#3a494a"
 
@@ -408,12 +420,21 @@ map_icpf <- function(layers,
     n_plots <- c(nrow(get(layers[1], envir = .GlobalEnv)),
                  nrow(get(layers[2], envir = .GlobalEnv)),
                  nrow(get(layers[3], envir = .GlobalEnv)))
+
+    if (length(layers) == 4) {
+
+      n_plots <- c(nrow(get(layers[1], envir = .GlobalEnv)),
+                   nrow(get(layers[2], envir = .GlobalEnv)),
+                   nrow(get(layers[3], envir = .GlobalEnv)),
+                   nrow(get(layers[4], envir = .GlobalEnv)))
+    }
     }
 
 
     # Generate adjusted Markdown classes with counts
 
-    if (grepl("eftc", variable_cat)) {
+    if (!identical(variable_cat, NULL) &&
+        grepl("eftc", variable_cat)) {
 
       legend_classes <- mapply(function(cls, col, count) {
         paste0("<span style='color:black;'>",
@@ -445,11 +466,11 @@ map_icpf <- function(layers,
 
   }
 
-  # Define the background fill colour for countries outside of Europe
-  background_col <- "#7D9191"
-
-  # Define the panel background colours (i.e. colour of the sea)
-  sea_col <- col_sea # "#D8E0E0"
+  # # Define the background fill colour for countries outside of Europe
+  # col_background <- "#7D9191"
+  #
+  # # Define the panel background colours (i.e. colour of the sea)
+  # sea_col <- col_sea # "#D8E0E0"
 
   # Define colour palette biogeographical regions
   biogeo_col <- c("#14293a",
@@ -464,12 +485,31 @@ map_icpf <- function(layers,
                   "#33002d")
                  # "#556400")
 
-  if (is.null(biogeo_palette)) {
-    background_col <- "#222222"
-    background_col <- "white" # "#222222"
-      #"black" # "#293333" #"#203233" #"#14293a"
-    sea_col <- col_sea #"#C2CECE"   #"#a1b3b3"
-  }
+  # biogeo_col <- c("#F7EDCAFF",
+  #                 "#8EB155FF",
+  #                 "#497367FF",
+  #                 "#F5DC9AFF",
+  #                 "#2B3F00FF",
+  #                 "#764000FF",
+  #                 "#E19E57FF",
+  #                 "#14293a",
+  #                 "#0097a5",
+  #                 "#6b9c6c")
+                  # "#020570FF",
+                  # "#3165B1FF",
+                  # "#B8F7FEFF")
+
+  biogeo_col <- colorspace::lighten(
+    colorspace::desaturate(biogeo_col, amount = 0.3),
+    amount = 0.8)
+
+
+  # if (is.null(biogeo_palette)) {
+  #   background_col <- "#222222"
+  #   background_col <- "white" # "#222222"
+  #     #"black" # "#293333" #"#203233" #"#14293a"
+  #   sea_col <- col_sea #"#C2CECE"   #"#a1b3b3"
+  # }
 
 
 
@@ -581,7 +621,7 @@ map_icpf <- function(layers,
       # Remove the grey background underneat the legend keys
       legend.key = element_blank(),
       legend.background = element_rect(fill = col_background_plot),
-      legend.text = element_text(size = 10,
+      legend.text = element_text(# size = 10,
                                  colour = col_front),
       plot.margin = margin(t = 0.5,  # Set top margin of the plot to 0.5 cm
                            r = 0.5,  # Set right margin of the plot to 0.5 cm
@@ -606,9 +646,9 @@ map_icpf <- function(layers,
 
     base_map <- base_map +
       theme(legend.text =
-              element_markdown(vjust = -1,
+              element_markdown(vjust = -10,
                                lineheight = 1.2,
-                               margin = margin(b = 5))) +
+                               margin = margin(b = 5, t = 3, l = 5))) +
       # Map the points of the first sf layer
       geom_sf(data = spat_layer_1,
               aes(color = legend_classes[1]),
@@ -1233,18 +1273,13 @@ map_icpf <- function(layers,
 
   # Save map ----
 
-  # Set path name based on input arguments
-  path_folder <- paste0("./output/",
-                 export_folder, "/")
-
   # Create path folder if this does not exist
-  if (!dir.exists(path_folder)) {
-    dir.create(path_folder, recursive = TRUE)
-    }
+  if (!dir.exists(export_folder)) {
+    dir.create(export_folder, recursive = TRUE)
+  }
 
   # Set path name based on input arguments
-  path <- paste0("./output/",
-                 export_folder, "/",
+  path <- paste0(export_folder,
                  export_name, ".png")
 
   # Save as .png

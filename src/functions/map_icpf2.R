@@ -1036,18 +1036,15 @@ map_icpf2 <- function(layers,
 
   # Save map ----
 
-  # Set path name based on input arguments
-  path_folder <- paste0("./output/",
-                        export_folder, "/")
-
   # Create path folder if this does not exist
-  if (!dir.exists(path_folder)) {
-    dir.create(path_folder, recursive = TRUE)
+  if (!dir.exists(export_folder)) {
+    dir.create(export_folder, recursive = TRUE)
   }
 
   # Set path name based on input arguments
   path <- paste0(export_folder,
                  export_name, ".png")
+
 
   # Save as .png
   ggsave(path,
