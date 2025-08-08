@@ -38,6 +38,9 @@ get_stratifiers <- function(level) {
   source("./src/functions/get_env.R")
   source("./src/functions/overlay_tif.R")
 
+  path_worldclim <- "./data/additional_data/shapefiles/worldclim/wc2.1_30s_"
+
+
   ## Import general source data ----
 
   d_forest_type <-
@@ -98,6 +101,12 @@ get_stratifiers <- function(level) {
                           "Black Sea", .data$code)) %>%
     select(code, geometry)
 
+  # Calculate slope (in degrees)
+  slope <- terra::terrain(
+    terra::rast(paste0(path_worldclim,
+                       "elev/wc2.1_30s_elev.tif")),
+    v = "slope",
+    unit = "degrees")
 
 
 
@@ -106,8 +115,6 @@ get_stratifiers <- function(level) {
 
 
   # Get climate data(WorldClim version 2.1; 1970-2000)
-
-  path_worldclim <- "./data/additional_data/shapefiles/worldclim/wc2.1_30s_"
 
   clim_sf <-
     get_env(paste0("coordinates_", code_survey)) %>%
@@ -171,14 +178,16 @@ get_stratifiers <- function(level) {
     as_sf
 
 
-  # Elevation data from worlclim
-  # in meter
+  # Elevation (in meter) and slope (in degrees) data from worlclim
 
   clim_sf <- overlay_tif(sf1 = clim_sf,
                          path_tif = paste0(path_worldclim,
                                            "elev/wc2.1_30s_elev.tif")) %>%
+    overlay_tif(spat_raster = slope) %>%
     st_drop_geometry() %>%
     rename(elev = "wc2.1_30s_elev") %>%
+    mutate(slope = round(slope, 1)) %>%
+    rename(slope_worldclim = slope) %>%
     as_sf
 
 
@@ -245,9 +254,19 @@ get_stratifiers <- function(level) {
   }
 
 
+  # Retrieve data from som
+
+  if ("layer_number" %in% names(get_env("so_som"))) {
+    df_so_som <- get_env("so_som")
+  } else {
+    df_so_som <- read.csv("./data/layer1_data/so/so_som.csv",
+                          sep = ";")
+  }
+
+
   # Retrieve data from pfh
 
-  if ("layer_number" %in% get_env("so_pfh")) {
+  if ("layer_number" %in% names(get_env("so_pfh"))) {
     df_so_pfh <- get_env("so_pfh")
   } else {
     df_so_pfh <- read.csv("./data/layer1_data/so/so_pfh.csv",
@@ -647,7 +666,7 @@ get_stratifiers <- function(level) {
       bind_rows(
         # Combine profiles from "so_som" and "so_pfh" to evaluate
         # the stone content
-        get_env("so_som") %>%
+        df_so_som %>%
           mutate(unique_survey_profile =
                    paste0("so_som_", unique_survey_repetition)) %>%
           select(unique_survey_profile, plot_id, layer_number,
@@ -1205,9 +1224,9 @@ get_stratifiers <- function(level) {
     mutate(
       slope = case_when(
         !is.na(slope) ~ slope,
-        !is.na(slope_copdem30) ~ slope_copdem30,
         code_orientation_pcc == 9 ~ 0,
-        TRUE ~ NA_integer_)) %>%
+        !is.na(slope_copdem30) ~ slope_copdem30,
+        TRUE ~ slope_worldclim)) %>%
     # Add aspect
     mutate(
       code_orientation = coalesce(code_orientation_pcc,
@@ -1356,16 +1375,59 @@ get_stratifiers <- function(level) {
       df_vert_shift <- get_env("s1_som")
     }
 
+    # Retrieve data from som
 
+    if ("layer_number" %in% names(get_env("s1_som"))) {
+      df_s1_som <- get_env("s1_som")
+    } else {
+      df_s1_som <- read.csv("./data/layer1_data/s1/s1_som.csv",
+                            sep = ";")
+    }
 
     # Retrieve data from pfh
 
-    if ("layer_number" %in% get_env("s1_pfh")) {
+    if ("layer_number" %in% names(get_env("s1_pfh"))) {
+
       df_s1_pfh <- get_env("s1_pfh")
+
+      if (!("bulk_density" %in% names(df_s1_pfh))) {
+
+        df_s1_pfh <- df_s1_pfh %>%
+          mutate(bulk_density = coalesce(horizon_bulk_dens_measure,
+                                         horizon_bulk_dens_est))
+
+      }
+
+      if (!("coarse_fragment_vol" %in% names(df_s1_pfh)) &
+          !"coarse_fragment_vol_converted" %in% names(df_s1_pfh) &
+          !"coarse_fragment_vol_avg" %in% names(df_s1_pfh)) {
+
+        d_soil_coarse_fragments <-
+          read.csv2("./data/additional_data/d_soil_coarse_fragments.csv") %>%
+          select(code, coarse_fragment_vol_avg)
+
+        df_s1_pfh <- df_s1_pfh %>%
+          mutate(
+            # Convert coarse fragments to volumetric
+            coarse_fragment_vol = ifelse(
+              !is.na(bulk_density) & !is.na(horizon_coarse_weight),
+              round(
+                (horizon_coarse_weight * bulk_density) /
+                  (2650 - 0.01 * horizon_coarse_weight * (2650 - bulk_density)),
+                3),
+              NA)) %>%
+          # Coarse fragments: average volume of class
+          # Convert volumetric coarse fragment codes to actual average vol %
+          left_join(d_soil_coarse_fragments,
+                    by = join_by(code_horizon_coarse_vol == code))
+
+      }
+
     } else {
       df_s1_pfh <- read.csv("./data/layer1_data/s1/s1_pfh.csv",
                             sep = ";")
     }
+
 
 
 
@@ -1641,7 +1703,7 @@ get_stratifiers <- function(level) {
       bind_rows(
         # Combine profiles from "s1_som" and "s1_pfh" to evaluate
         # the stone content
-        get_env("s1_som") %>%
+        df_s1_som %>%
           mutate(unique_survey_profile =
                    paste0("s1_som_", unique_survey_repetition)) %>%
           select(unique_survey_profile, plot_id, layer_number,
@@ -2197,7 +2259,7 @@ get_stratifiers <- function(level) {
       slope = case_when(
         !is.na(slope) ~ slope,
         code_orientation == 9 ~ 0,
-        TRUE ~ NA_integer_)) %>%
+        TRUE ~ slope_worldclim)) %>%
     # Add aspect
     mutate(
       aspect = case_when(
