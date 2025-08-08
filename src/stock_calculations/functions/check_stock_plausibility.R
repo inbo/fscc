@@ -1,7 +1,7 @@
 
 check_stock_plausibility <- function(data_frame,
                                      parameter = "organic_carbon_total",
-                                     shorter_var_name = "c",
+                                     shorter_var_name = "oc",
                                      survey_form_orig) {
 
   stopifnot(require("tidyverse"),
@@ -76,23 +76,23 @@ check_stock_plausibility <- function(data_frame,
 
     # Retrieve data per profile
 
-    profile_stocks <- get_env(paste0(code_survey, "_profile_c_stocks"))
+    profile_stocks <- get_env(paste0(code_survey, "_profile_oc_stocks"))
 
     # Define plausible limits ----
 
-    if (exists("plot_c_stocks_summ")) {
+    if (exists("plot_oc_stocks_summ")) {
 
-      plaus_range_stock <- get_env("plot_c_stocks_summ") %>%
+      plaus_range_stock <- get_env("plot_oc_stocks_summ") %>%
         pull(stock) %>%
         quantile(c(0.005, 0.995), na.rm = TRUE) %>%
         round(1)
 
-      plaus_range_stock_change <- get_env("plot_c_stocks_summ") %>%
+      plaus_range_stock_change <- get_env("plot_oc_stocks_summ") %>%
         pull(stock_change) %>%
         quantile(c(0.05, 0.95), na.rm = TRUE) %>%
         round(1) # approximately +-5 t C ha-1 year-1
 
-      plaus_range_stock_change_rel <- get_env("plot_c_stocks_summ") %>%
+      plaus_range_stock_change_rel <- get_env("plot_oc_stocks_summ") %>%
         pull(stock_change_rel) %>%
         quantile(c(0.005, 0.995), na.rm = TRUE) %>%
         round(1) # approximately +-10 % year-1
@@ -135,7 +135,7 @@ check_stock_plausibility <- function(data_frame,
         quantile(c(0.005), na.rm = TRUE) %>%
         round(1)
 
-      plaus_range_c_density <- bind_rows(get_env("so_layers"),
+      plaus_range_oc_density <- bind_rows(get_env("so_layers"),
                                          get_env("s1_layers")) %>%
         pull(density) %>%
         quantile(c(0.975), na.rm = TRUE) %>%
@@ -167,7 +167,7 @@ check_stock_plausibility <- function(data_frame,
     plaus_range_olw <- 64
     plaus_range_toc_ff <- c(42, 567)
     plaus_range_toc_bg <- 3
-    plaus_range_c_density <- 8
+    plaus_range_oc_density <- 8
     plaus_range_toc_ff_change <- c(-25, 25)
 
     # Define rules ----
@@ -228,6 +228,12 @@ check_stock_plausibility <- function(data_frame,
                      "unless their humus form is Mull.")
 
     rule_8 <- "Non-OL layers should have a known organic layer weight."
+
+      # Note that OLW is not included in "pfh" survey forms. However, it
+      # is gap-filled based on the layer thickness if possible, and without
+      # this, we can still not consider the total stock as plausible;
+      # hence, we still flag "pfh" plot surveys as implausible if the
+      # forest floor cannot be calculated.
 
     rule_9 <- "Organic layer weight should be below 64 kg m-2 (95 % quantile)."
 
@@ -333,7 +339,7 @@ check_stock_plausibility <- function(data_frame,
           filter(!is.na(density)) %>%
           pull(density)
 
-        if (any(c_dens_j > plaus_range_c_density)) {
+        if (any(c_dens_j > plaus_range_oc_density)) {
 
           df$plaus_total_fscc[j] <- FALSE
           implausible_reasons_j <- paste(rule_3,
@@ -405,8 +411,9 @@ check_stock_plausibility <- function(data_frame,
           # "Rel. annual sequestration rate should be
           # between -10 and 10 % year-1 (99 % quantile)."
 
-          seq_rate_rel_j <- ((df$stock[j_next] - df$stock[j]) /
-                               (df$survey_year[j_next] - df$survey_year[j])) / df$stock[j] * 100
+          seq_rate_rel_j <-
+            ((df$stock[j_next] - df$stock[j]) /
+               (df$survey_year[j_next] - df$survey_year[j])) / df$stock[j] * 100
 
           if (seq_rate_rel_j < plaus_range_stock_change_rel[1] ||
               seq_rate_rel_j > plaus_range_stock_change_rel[2]) {
@@ -476,7 +483,13 @@ check_stock_plausibility <- function(data_frame,
           pull(use_stock_topsoil)
 
 
-        if (any(use_stock_topsoil_j == TRUE)) {
+        # If one repetition is too shallow, while others are fine,
+        # it is still fine to use the subsoil stock
+        # i.e., only flag the plot's stock as implausible if all repetitions
+        # are too shallow
+        # (e.g. 5_22 in Level II)
+
+        if (all(use_stock_topsoil_j == TRUE)) {
 
           df$use_stock_topsoil[j] <- TRUE
           implausible_reasons_j <- paste(rule_6,
@@ -510,7 +523,8 @@ check_stock_plausibility <- function(data_frame,
 
       # If these rules are not met, the forest floor stock is considered
       # implausible, which implies that below-ground stocks (stock_below_ground
-      # and stock_below_ground_topsoil) can still be used if plaus_total_fscc is TRUE.
+      # and stock_below_ground_topsoil) can still be used if plaus_total_fscc
+      # is TRUE.
       # FSCC only recommends not to use the stock data from the forest floor
       # (stock_forest_floor) and total stock (stock and stock_topsoil), as these
       # include forest floor stocks.
@@ -977,6 +991,12 @@ check_stock_plausibility <- function(data_frame,
 
     rule_8 <- "Non-OL layers should have a known organic layer weight."
 
+        # Note that OLW is not included in "pfh" survey forms. However, it
+        # is gap-filled based on the layer thickness if possible, and without
+        # this, we can still not consider the total stock as plausible;
+        # hence, we still flag "pfh" plot surveys as implausible if the
+        # forest floor cannot be calculated.
+
     rule_9 <- paste0("Organic layer weight should be below ", plaus_range_olw,
                      " kg m-2 (95 % quantile).")
 
@@ -1229,7 +1249,7 @@ check_stock_plausibility <- function(data_frame,
           pull(use_stock_topsoil)
 
 
-        if (any(use_stock_topsoil_j == TRUE)) {
+        if (all(use_stock_topsoil_j == TRUE)) {
 
           df$use_stock_topsoil[j] <- TRUE
           implausible_reasons_j <- paste(rule_6,
