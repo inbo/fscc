@@ -94,7 +94,9 @@ create_attribute_catalogue <- function(data_frame,
 
   attr_cat <- dict %>%
     filter(parameter %in% required_par) %>%
-    arrange(parameter)
+    # Arrange following the exact order of the columns in the dataframe
+    arrange(match(parameter, required_par))
+    # arrange(parameter)
 
   if (is.null(path_to_save)) {
 
