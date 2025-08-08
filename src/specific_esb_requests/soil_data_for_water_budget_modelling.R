@@ -9,6 +9,10 @@
 
 # Script initiation date: 16 Apr 2024
 
+# Update 16 April 2025:
+# this script is extended to also summarise LI data in the same format
+# for water budget modelling
+
 # Show "document outline" window of this script in R Studio
 # using Ctrl + Shift + O
 
@@ -26,6 +30,25 @@ stopifnot(require("sf"),
           require("assertthat"),
           require("soiltexture"))
 
+source("./src/functions/get_env.R")
+
+
+# Input level ----
+
+# Only run the line of the ICP Forests level for which you would like
+# to run the script
+
+level <- "LI"
+level <- "LII"
+
+
+if (level == "LI") {
+  code_survey <- "s1"
+}
+if (level == "LII") {
+  code_survey <- "so"
+}
+
 
 # Harmonise and correct data ----
 
@@ -39,83 +62,184 @@ stopifnot(require("sf"),
 
 source("./src/functions/read_raw.R")
 
-read_raw("si", save_to_env = TRUE)
-read_raw("so", save_to_env = TRUE)
-read_raw("sw", save_to_env = TRUE)
+if (level == "LI") {
+
+  read_raw("y1", save_to_env = TRUE)
+  read_raw("s1", save_to_env = TRUE)
+}
+
+if (level == "LII") {
+
+  read_raw("si", save_to_env = TRUE)
+  read_raw("so", save_to_env = TRUE)
+  read_raw("sw", save_to_env = TRUE)
+}
+
 
 
 ## Solve issues with duplicate records ----
 
 source("./src/functions/solve_record_inconsistencies.R")
 
-so_som <- solve_record_inconsistencies(survey_form = "so_som",
-                                       data_frame = so_som,
-                                       solve = TRUE,
-                                       save_to_env = FALSE)
+if (level == "LI") {
 
-so_pfh <- solve_record_inconsistencies(survey_form = "so_pfh",
-                                       data_frame = so_pfh,
-                                       solve = TRUE,
-                                       save_to_env = FALSE)
+  s1_som <- solve_record_inconsistencies(survey_form = "s1_som",
+                                         data_frame = s1_som,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+  s1_pfh <- solve_record_inconsistencies(survey_form = "s1_pfh",
+                                         data_frame = s1_pfh,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+}
+
+
+if (level == "LII") {
+
+  so_som <- solve_record_inconsistencies(survey_form = "so_som",
+                                         data_frame = so_som,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+
+  so_pfh <- solve_record_inconsistencies(survey_form = "so_pfh",
+                                         data_frame = so_pfh,
+                                         solve = TRUE,
+                                         save_to_env = FALSE)
+
+}
 
 
 ## Gap-fill using new data from Partner Inconsistency Reports ----
 
 source("./src/functions/gapfill_from_pir.R")
 
-gapfill_from_pir(code_survey = "si",
-                 save_to_env = TRUE)
-gapfill_from_pir(code_survey = "so",
-                 save_to_env = TRUE)
-gapfill_from_pir(code_survey = "sw",
-                 save_to_env = TRUE)
+
+if (level == "LI") {
+
+  gapfill_from_pir(code_survey = "y1",
+                   save_to_env = TRUE)
+  gapfill_from_pir(code_survey = "s1",
+                   save_to_env = TRUE)
+}
+
+if (level == "LII") {
+
+  gapfill_from_pir(code_survey = "si",
+                   save_to_env = TRUE)
+  gapfill_from_pir(code_survey = "so",
+                   save_to_env = TRUE)
+  gapfill_from_pir(code_survey = "sw",
+                   save_to_env = TRUE)
+}
 
 
 ## Gap-fill using old database sources ----
 
+
 source("./src/functions/gapfill_from_old_data.R")
 
-so_som <- gapfill_from_old_data(survey_form = "so_som",
-                                data_frame = so_som,
-                                save_to_env = FALSE)
+if (level == "LI") {
+
+  s1_som <- gapfill_from_old_data(survey_form = "s1_som",
+                                  data_frame = s1_som,
+                                  save_to_env = FALSE)
+}
+
+if (level == "LII") {
+
+  so_som <- gapfill_from_old_data(survey_form = "so_som",
+                                  data_frame = so_som,
+                                  save_to_env = FALSE)
+}
+
 
 
 ## Automated data corrections: primary keys (survey_year, code_layer) ----
 
 source("./src/functions/get_primary_inconsistencies.R")
 
-get_primary_inconsistencies(code_survey = "si",
-                            save_to_env = TRUE)
-get_primary_inconsistencies(code_survey = "so", solve = TRUE,
-                            save_to_env = TRUE)
-get_primary_inconsistencies(code_survey = "sw",
-                            save_to_env = TRUE)
+if (level == "LI") {
+
+  get_primary_inconsistencies(code_survey = "y1",
+                              save_to_env = TRUE)
+  get_primary_inconsistencies(code_survey = "s1", solve = TRUE,
+                              save_to_env = TRUE)
+
+}
+
+if (level == "LII") {
+
+  get_primary_inconsistencies(code_survey = "si",
+                              save_to_env = TRUE)
+  get_primary_inconsistencies(code_survey = "so", solve = TRUE,
+                              save_to_env = TRUE)
+  get_primary_inconsistencies(code_survey = "sw",
+                              save_to_env = TRUE)
+
+}
 
 
 ## Automated data corrections: range/presence of data ----
 
 source("./src/functions/get_range_inconsistencies.R")
 
-so_som <- get_range_inconsistencies("so_som", so_som,
-                                    solve = TRUE, save_to_env = FALSE)
-so_pfh <- get_range_inconsistencies("so_pfh", so_pfh,
-                                    solve = TRUE, save_to_env = FALSE)
-sw_swc <- get_range_inconsistencies("sw_swc", sw_swc,
-                                    solve = TRUE, save_to_env = FALSE)
-so_prf <- get_range_inconsistencies("so_prf", so_prf,
-                                    save_to_env = FALSE)
-so_pls <- get_range_inconsistencies("so_pls", so_pls,
-                                    save_to_env = FALSE)
+if (level == "LI") {
+
+  s1_som <- get_range_inconsistencies("s1_som", s1_som,
+                                      solve = TRUE, save_to_env = FALSE)
+  s1_pfh <- get_range_inconsistencies("s1_pfh", s1_pfh,
+                                      solve = TRUE, save_to_env = FALSE)
+  s1_prf <- get_range_inconsistencies("s1_prf", s1_prf,
+                                      save_to_env = FALSE)
+  s1_pls <- get_range_inconsistencies("s1_pls", s1_pls,
+                                      save_to_env = FALSE)
+  y1_st1 <- get_range_inconsistencies("y1_st1", y1_st1,
+                                      save_to_env = FALSE)
+}
+
+
+if (level == "LII") {
+
+  so_som <- get_range_inconsistencies("so_som", so_som,
+                                      solve = TRUE, save_to_env = FALSE)
+  so_pfh <- get_range_inconsistencies("so_pfh", so_pfh,
+                                      solve = TRUE, save_to_env = FALSE)
+  sw_swc <- get_range_inconsistencies("sw_swc", sw_swc,
+                                      solve = TRUE, save_to_env = FALSE)
+  so_prf <- get_range_inconsistencies("so_prf", so_prf,
+                                      save_to_env = FALSE)
+  so_pls <- get_range_inconsistencies("so_pls", so_pls,
+                                      save_to_env = FALSE)
+  si_sta <- get_range_inconsistencies("si_sta", si_sta,
+                                      save_to_env = FALSE)
+}
+
 
 
 
 source("./src/functions/harmonise_below_loqs.R")
 
-so_som <- harmonise_below_loqs(survey_form = "so_som",
-                               data_frame = so_som)
+if (level == "LI") {
 
-so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
-                               data_frame = so_pfh)
+  s1_som <- harmonise_below_loqs(survey_form = "s1_som",
+                                 data_frame = s1_som,
+                                 parameters = NULL)
+
+  s1_pfh <- harmonise_below_loqs(survey_form = "s1_pfh",
+                                 data_frame = s1_pfh,
+                                 parameters = NULL,)
+}
+
+if (level == "LII") {
+
+  so_som <- harmonise_below_loqs(survey_form = "so_som",
+                                 data_frame = so_som,
+                                 parameters = NULL)
+
+  so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
+                                 data_frame = so_pfh,
+                                 parameters = NULL)
+}
 
 
 
@@ -125,34 +249,75 @@ so_pfh <- harmonise_below_loqs(survey_form = "so_pfh",
 
 source("./src/functions/get_layer_inconsistencies.R")
 
-so_pfh <- get_layer_inconsistencies(survey_form = "so_pfh",
-                                    data_frame = so_pfh,
-                                    solve = TRUE,
-                                    save_to_env = FALSE)
-so_som <- get_layer_inconsistencies(survey_form = "so_som",
-                                    data_frame = so_som,
-                                    solve = TRUE,
-                                    save_to_env = FALSE)
+if (level == "LI") {
+
+  s1_pfh <- get_layer_inconsistencies(survey_form = "s1_pfh",
+                                      data_frame = s1_pfh,
+                                      solve = TRUE,
+                                      save_to_env = FALSE)
+  s1_som <- get_layer_inconsistencies(survey_form = "s1_som",
+                                      data_frame = s1_som,
+                                      solve = TRUE,
+                                      save_to_env = FALSE)
+}
+
+if (level == "LII") {
+
+  so_pfh <- get_layer_inconsistencies(survey_form = "so_pfh",
+                                      data_frame = so_pfh,
+                                      solve = TRUE,
+                                      save_to_env = FALSE)
+  so_som <- get_layer_inconsistencies(survey_form = "so_som",
+                                      data_frame = so_som,
+                                      solve = TRUE,
+                                      save_to_env = FALSE)
+}
+
 
 
 ## Automated data corrections: derived variables ----
 
 source("./src/functions/get_derived_variable_inconsistencies.R")
 
-so_som <- get_derived_variable_inconsistencies("so_som", so_som,
-                                               save_to_env = FALSE)
-so_pfh <- get_derived_variable_inconsistencies("so_pfh", so_pfh,
-                                               save_to_env = FALSE)
+if (level == "LI") {
+
+  s1_som <- get_derived_variable_inconsistencies("s1_som", s1_som,
+                                                 save_to_env = FALSE)
+  s1_pfh <- get_derived_variable_inconsistencies("s1_pfh", s1_pfh,
+                                                 save_to_env = FALSE)
+}
+
+if (level == "LII") {
+
+  so_som <- get_derived_variable_inconsistencies("so_som", so_som,
+                                                 save_to_env = FALSE)
+  so_pfh <- get_derived_variable_inconsistencies("so_pfh", so_pfh,
+                                                 save_to_env = FALSE)
+
+}
 
 
 ## Additional manual corrections ----
 
 source("./src/functions/apply_additional_manual_corr.R")
 
-so_som <- apply_additional_manual_corr(survey_form = "so_som",
-                                       data_frame = so_som)
-so_pfh <- apply_additional_manual_corr(survey_form = "so_pfh",
-                                       data_frame = so_pfh)
+if (level == "LI") {
+
+  s1_som <- apply_additional_manual_corr(survey_form = "s1_som",
+                                         data_frame = s1_som)
+  s1_pfh <- apply_additional_manual_corr(survey_form = "s1_pfh",
+                                         data_frame = s1_pfh)
+}
+
+if (level == "LII") {
+
+  so_som <- apply_additional_manual_corr(survey_form = "so_som",
+                                         data_frame = so_som)
+  so_pfh <- apply_additional_manual_corr(survey_form = "so_pfh",
+                                         data_frame = so_pfh)
+
+}
+
 
 
 
@@ -167,18 +332,23 @@ source("./src/functions/harmonise_per_plot_layer.R")
 
 som_plot <-
   harmonise_per_plot_layer(
-    survey_form_input = "so_som",
-    data_frame_input = so_som)
+    survey_form_input = paste0(code_survey, "_som"),
+    data_frame_input = get_env(paste0(code_survey, "_som")))
 
 pfh_plot <-
   harmonise_per_plot_layer(
-    survey_form_input = "so_pfh",
-    data_frame_input = so_pfh)
+    survey_form_input = paste0(code_survey, "_pfh"),
+    data_frame_input = get_env(paste0(code_survey, "_pfh")))
 
-swc_plot <-
+if (level == "LII") {
+
+  swc_plot <-
   harmonise_per_plot_layer(
     survey_form_input = "sw_swc",
     data_frame_input = sw_swc)
+
+}
+
 
 
 # Get harmonised stratifiers ----
@@ -188,7 +358,13 @@ swc_plot <-
 
 source("./src/functions/get_stratifiers.R")
 
-so_strat <- get_stratifiers("LII")
+if (level == "LI") {
+  s1_strat <- get_stratifiers("LI")
+}
+
+if (level == "LII") {
+  so_strat <- get_stratifiers("LII")
+}
 
 
 
@@ -225,11 +401,11 @@ for (i in seq_along(unique(df$plot_id))) {
 
   plot_id_i <- unique(df$plot_id)[i]
 
-  humus_form_i <- so_strat %>%
+  humus_form_i <- get_env(paste0(code_survey, "_strat")) %>%
     filter(plot_id == plot_id_i) %>%
     pull(humus_form)
 
-  soil_depth_i <- so_strat %>%
+  soil_depth_i <- get_env(paste0(code_survey, "_strat")) %>%
     filter(plot_id == plot_id_i) %>%
     pull(eff_soil_depth)
 
@@ -753,10 +929,15 @@ df <- depth_join(df1 = df,
                  parameters = NULL,
                  prefix_parameters_in_df1 = "pfh_")
 
+if (level == "LII") {
 
-df <- depth_join(df1 = df,
+  df <- depth_join(df1 = df,
                  df2 = swc_plot,
                  prefix_parameters_in_df1 = "swc_")
+
+}
+
+
 
 
 
@@ -765,7 +946,7 @@ df <- depth_join(df1 = df,
 # Add organic_layer_weight ----
 
 df <- depth_join(df1 = df,
-                 df2 = so_som,
+                 df2 = get_env(paste0(code_survey, "_som")),
                  parameters = "organic_layer_weight",
                  # It only takes data from the most recent survey_year
                  # reported, corresponding with the target depth range
@@ -785,13 +966,13 @@ df <- depth_join(df1 = df,
 # Add total organic carbon content ----
 
 df <- depth_join(df1 = df,
-                 df2 = so_som,
+                 df2 = get_env(paste0(code_survey, "_som")),
                  parameters = "organic_carbon_total",
                  prefix_parameters_in_df1 = "som_",
                  mode = "most_recent")
 
 df <- depth_join(df1 = df,
-                 df2 = so_pfh,
+                 df2 = get_env(paste0(code_survey, "_pfh")),
                  parameters = "horizon_c_organic_total",
                  prefix_parameters_in_df1 = "pfh_",
                  mode = "most_recent")
@@ -824,12 +1005,12 @@ df <- df %>%
 # and the European Soil Database
 
 df <- depth_join(df1 = df,
-                 df2 = so_som,
+                 df2 = get_env(paste0(code_survey, "_som")),
                  parameters = "code_texture_class",
                  prefix_parameters_in_df1 = "som_")
 
 df <- depth_join(df1 = df,
-                 df2 = so_pfh,
+                 df2 = get_env(paste0(code_survey, "_pfh")),
                  parameters = "code_horizon_texture_class",
                  prefix_parameters_in_df1 = "pfh_")
 
@@ -879,6 +1060,14 @@ bd_ol <- get_parameter_stats(parameter = "bulk_density",
 bd_ol <- as.numeric(bd_ol[which(names(bd_ol) == "Mean")])
 
 
+
+if (level == "LI") {
+
+  df <- df %>%
+    mutate(
+      swc_bulk_density = NA,
+      swc_bulk_density_survey_year = NA)
+}
 
 
 bulk_density_columns <-
@@ -1193,7 +1382,7 @@ df <- df %>%
   mutate(all_na = if_all(.cols = all_of(col_names), ~is.na(.x))) %>%
   ungroup()
 
-# Some Hungarian plots contain no data whatsoever. Flag them but
+# Some Hungarian plots contain no data whatsoever in LII. Flag them but
 # do not remove them yet.
 
 empty_plots <- df %>%
@@ -1306,7 +1495,7 @@ table_olw <- df %>%
   filter(layer_type == "forest_floor" &
            is.na(organic_layer_weight)) %>%
   filter(is.na(layer_limit_superior)) %>%
-  left_join(so_strat %>%
+  left_join(get_env(paste0(code_survey, "_strat")) %>%
               select(plot_id,
                      humus_form, wrb_ref_soil_group,
                      eftc, biogeographical_region),
@@ -1315,7 +1504,8 @@ table_olw <- df %>%
          humus_form, wrb_ref_soil_group, eftc, biogeographical_region) %>%
   mutate(
     code_layer_harm = ifelse(
-      code_layer == "OX" | code_layer == "O" | code_layer == "O2",
+      code_layer == "OX" | code_layer == "O" | code_layer == "O2" |
+        !grepl("L", code_layer, ignore.case = TRUE),
       "OFH",
       code_layer),
     key = paste0(code_layer, "_",
@@ -1505,15 +1695,15 @@ assertthat::assert_that(all(is.na(df$layer_limit_superior[vec])))
 
 for (i in vec) {
 
-  so_strat_i <- so_strat %>%
+  strat_i <- get_env(paste0(code_survey, "_strat")) %>%
     filter(plot_id == df$plot_id[i]) %>%
     as.data.frame()
 
   key_i <- paste0(
     df$code_layer[i], "_",
-    so_strat_i$humus_form, "_",
-    so_strat_i$wrb_ref_soil_group, "_",
-    so_strat_i$eftc)
+    strat_i$humus_form, "_",
+    strat_i$wrb_ref_soil_group, "_",
+    strat_i$eftc)
 
   olw_i <- table_olw %>%
     filter(key == key_i) %>%
@@ -1815,13 +2005,19 @@ denmark_toc <-
 
 subsoil_toc <- bind_rows(
   s1_som %>%
+    mutate(profile_id = as.character(repetition)) %>%
     select(plot_id, profile_id,
            layer_limit_superior, layer_limit_inferior, layer_type,
            bulk_density, coarse_fragment_vol, organic_carbon_total),
   s1_pfh %>%
+    rename(profile_id = profile_pit_id) %>%
     rename(layer_limit_superior = horizon_limit_up) %>%
     rename(layer_limit_inferior = horizon_limit_low) %>%
     rename(organic_carbon_total = horizon_c_organic_total) %>%
+    mutate(bulk_density = coalesce(horizon_bulk_dens_measure,
+                                   horizon_bulk_dens_est),
+           coarse_fragment_vol = coalesce(coarse_fragment_vol_converted,
+                                          coarse_fragment_vol_avg)) %>%
     select(plot_id, profile_id,
            layer_limit_superior, layer_limit_inferior, layer_type,
            bulk_density, coarse_fragment_vol, organic_carbon_total),
@@ -2076,7 +2272,7 @@ source("./src/functions/overlay_tif.R")
 
 # Add the texture classes by doing overlays
 
-texture_esd <- coordinates_so %>%
+texture_esd <- get_env(paste0("coordinates_", code_survey)) %>%
   as_sf %>%
   # Surface texture
   # There is also "txsrfse" and "txsubse" with the secondary texture class
@@ -2122,11 +2318,15 @@ texture_esd <- coordinates_so %>%
 # Canary Islands and Cyprus are not in European Soil Database
 # Assert that all other plots received a texture class
 
-assertthat::assert_that(
-  all(texture_esd %>%
-        filter(is.na(tex_srf_esd)) %>%
-        pull(plot_id) %in% c("11_51", "11_52", "11_53",
-                             "66_101", "66_102", "66_103", "66_104")))
+if (level == "LII") {
+
+  assertthat::assert_that(
+    all(texture_esd %>%
+          filter(is.na(tex_srf_esd)) %>%
+          pull(plot_id) %in% c("11_51", "11_52", "11_53",
+                               "66_101", "66_102", "66_103", "66_104")))
+
+}
 
 
 
@@ -2163,10 +2363,16 @@ for (i in seq_along(unique(df$plot_id))) {
 
   if (identical(vec, integer(0))) {
 
-    assertthat::assert_that(
-      any(df %>%
-            filter(plot_id == unique(df$plot_id)[i]) %>%
-            pull(layer_type) == "peat"))
+    if (level == "LII") {
+
+      assertthat::assert_that(
+        any(df %>%
+              filter(plot_id == unique(df$plot_id)[i]) %>%
+              pull(layer_type) == "peat"))
+
+    }
+
+    # Check 13_1562 LI
 
     next
   }
@@ -2287,7 +2493,9 @@ flag_possible <- df %>%
 nrow(flag_possible)
 length(which(pull(flag_possible)))
 
-# 961 / 1843 (i.e. 52 %) of the ESD predictions are possible in combination
+# 961 / 1843 (i.e. 52 %) for Level II
+# 9976 / 16087 (i.e. 62 %) for Level I
+# of the ESD predictions are possible in combination
 # with the ICP Forests classes
 
 
@@ -2301,7 +2509,7 @@ length(which(pull(flag_possible)))
 # Add extra columns
 
 df <- df %>%
-  left_join(data_availability_so %>%
+  left_join(get_env(paste0("data_availability_", code_survey)) %>%
               select(plot_id,
                      code_country, partner_code, code_plot, survey_years),
             by = "plot_id") %>%
@@ -2312,10 +2520,39 @@ df <- df %>%
            .after = layer_limit_inferior)
 
 
+# Level I: some Swedish plots had only forest floor layers originally
+# Better to remove them since we lack below-ground observations
+# even though some have a shallow bedrock
+# (Currently, those plots wrongly received "forest_floor" as layer_type
+#  for below-ground layers)
+
+if (level == "LI") {
+
+  df <- df %>%
+    group_by(plot_id) %>%
+    filter(!(all(layer_type == "forest_floor"))) %>%
+    ungroup()
+}
+
+
+
 # Remove plots without data in so_strat
 
-so_strat <- so_strat %>%
-  filter(plot_id %in% unique(df$plot_id))
+if (level == "LI") {
+
+  s1_strat <- s1_strat %>%
+    filter(plot_id %in% unique(df$plot_id))
+
+}
+
+if (level == "LII") {
+
+  so_strat <- so_strat %>%
+    filter(plot_id %in% unique(df$plot_id))
+
+}
+
+
 
 
 
@@ -2330,13 +2567,13 @@ so_strat <- so_strat %>%
 
 # Export ----
 
-so_data_for_wbm <- df
+data_for_wbm <- df
 output_dir <- paste0("./output/specific_esb_requests/")
 date <- as.character(format(Sys.Date(), format = "%Y%m%d"))
 
 write.table(df,
-            file = paste0(output_dir, date,
-                          "_so_data_for_wbm.csv"),
+            file = paste0(output_dir, date, "_", code_survey,
+                          "_data_for_wbm.csv"),
             row.names = FALSE,
             na = "",
             sep = ";",
@@ -2345,62 +2582,79 @@ write.table(df,
 
 source("./src/functions/create_attribute_catalogue.R")
 
-create_attribute_catalogue(data_frame = "so_data_for_wbm",
+create_attribute_catalogue(data_frame = "data_for_wbm",
                            path_to_save = paste0(output_dir,
-                                                 "so_data_for_wbm_"))
+                                                 "data_for_wbm_"))
 
 
-write.table(so_strat,
-            file = paste0(output_dir, date,
-                          "_so_strat.csv"),
+write.table(get_env(paste0(code_survey, "_strat")),
+            file = paste0(output_dir, date, "_", code_survey,
+                          "_strat.csv"),
             row.names = FALSE,
             na = "",
             sep = ";",
             dec = ".")
 
-create_attribute_catalogue(data_frame = "so_strat",
-                           path_to_save = paste0(output_dir, "so_strat_"))
+if (level == "LI") {
+
+  create_attribute_catalogue(data_frame = "s1_strat",
+                             path_to_save = paste0(output_dir, "s1_strat_"))
+}
+
+if (level == "LII") {
+
+  create_attribute_catalogue(data_frame = "so_strat",
+                             path_to_save = paste0(output_dir, "so_strat_"))
+}
+
+
 
 
 # Number of plots with any information on the requested parameters
 
-so_data_for_wbm %>%
+data_for_wbm %>%
   mutate_all(function(x) ifelse((x == ""), NA, x)) %>%
   group_by(plot_id) %>%
   reframe(any_bd = any(!is.na(bulk_density)),
           any_cf = any(!is.na(coarse_fragment_vol)),
-          any_texture = (!any(layer_type == "mineral")) |
+          any_texture = (!any(layer_type == "mineral") &
+                           any(layer_type == "peat")) |
             (any(!is.na(part_size_clay) &
                    !is.na(part_size_silt) &
                    !is.na(part_size_sand))),
-          any_texture_class = (!any(layer_type == "mineral")) |
+          any_texture_class = (!any(layer_type == "mineral") &
+                                 any(layer_type == "peat")) |
             any(!is.na(texture_class)),
           any_toc = any(!is.na(organic_carbon_total)),
           any_olw = (!any(layer_type == "forest_floor")) |
             any(!is.na(organic_layer_weight))) %>%
-  mutate(all_known = (any_bd &
+  mutate(
+    any_tex_or_class = (any_texture | any_texture_class),
+    all_known = (any_bd &
                         any_cf &
-                        any_texture &
+                   (any_texture | any_texture_class) &
                         any_toc &
                         any_olw)) %>%
   mutate(bd_and_tex = (any_bd & (any_texture | any_texture_class))) %>%
   select(-plot_id) %>%
   summarise(across(everything(), \(x) sum(x, na.rm = TRUE)))
 
-so_data_for_wbm %>%
+data_for_wbm %>%
   mutate_all(function(x) ifelse((x == ""), NA, x)) %>%
   group_by(country, partner_code, plot_id) %>%
-  reframe(any_texture = (!any(layer_type == "mineral")) |
+  reframe(any_texture = (!any(layer_type == "mineral") &
+                           any(layer_type == "peat")) |
             (any(!is.na(part_size_clay) &
                   !is.na(part_size_silt) &
                   !is.na(part_size_sand))),
-          any_texture_class = (!any(layer_type == "mineral")) |
+          any_texture_class = (!any(layer_type == "mineral") &
+                                 any(layer_type == "peat")) |
             any(!is.na(texture_class))) %>%
   filter(!any_texture & !any_texture_class) %>%
   group_by(partner_code, country) %>%
   reframe(count_no_tex = n()) %>%
   left_join(
-    so_data_for_wbm %>%
+    data_for_wbm %>%
       distinct(plot_id, .keep_all = TRUE) %>%
       group_by(partner_code) %>%
       reframe(count_tot = n()),
