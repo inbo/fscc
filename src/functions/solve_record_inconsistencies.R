@@ -459,6 +459,8 @@ df <- df %>%
 ## Spain ----
 
 # Correct Spanish survey years in so_som
+
+# 1. (July 2024; no longer up-to-date after the layer0 update in Jan 2025!)
 # This information is manually verified by comparison of the PCC data
 # with the data in the Spanish database (July 2024)
 
@@ -469,25 +471,35 @@ df <- df %>%
     reframe(count = n(),
             all_90s = all(survey_year < 2000),
             any_96 = any(1996 %in% survey_year)) %>%
-    filter(count == 2 &
+    filter((count == 2 &
              all_90s == TRUE &
-             any_96 == TRUE) %>%
+             any_96 == TRUE) |
+             (count == 1 &
+                any_96 == TRUE &
+                code_plot == 33)) %>%
     arrange(code_plot) %>%
     pull(code_plot)
 
   assertthat::assert_that(
     identical(list_plots_esp,
-              as.integer(c(5, 6, 10, 11, 22, 25, 26, 30, 37))) |
-      nrow(df) < 100)
+              as.integer(c(5, 6, 10, 11, 22, 25, 26, 30, 33, 37))) |
+      nrow(df) < 100 |
+      # Updated in layer 0 in January 2025
+      identical(list_plots_esp, integer(0)))
 
-  df <- df %>%
-    mutate(
-      survey_year = ifelse(
-        code_country == 11 &
-          code_plot %in% list_plots_esp &
-          survey_year == 1996,
-        2008,
-        survey_year))
+  if (!identical(list_plots_esp, integer(0))) {
+
+    df <- df %>%
+      mutate(
+        survey_year = ifelse(
+          code_country == 11 &
+            code_plot %in% list_plots_esp &
+            survey_year == 1996,
+          2008,
+          survey_year))
+
+  }
+
 
 
 
@@ -1372,13 +1384,10 @@ if (solve == TRUE) {
 
 
 
-# Save the survey form ----
+# Save the survey form already for the data_availability table ----
 
-if (save_to_env == TRUE) {
-  assign_env(survey_form, df)
-} else {
-  return(df)
-}
+assign_env(survey_form, df)
+
 
 
 
@@ -1392,10 +1401,14 @@ source("./src/functions/assign_env.R")
 data_availability <-
   get_data_availability(code_survey = unlist(strsplit(survey_form, "_"))[1])
 
-if (save_to_env == TRUE) {
-  assign_env(paste0("data_availability_",
-                    unlist(strsplit(survey_form, "_"))[1]),
-             as_tibble(data_availability))
+assign_env(paste0("data_availability_",
+                  unlist(strsplit(survey_form, "_"))[1]),
+           as_tibble(data_availability))
+
+
+
+if (save_to_env == FALSE) {
+  return(df)
 }
 
 
