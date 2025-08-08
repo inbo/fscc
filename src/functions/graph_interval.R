@@ -3,8 +3,7 @@
 graph_interval <- function(data,
                            response,
                            group,
-                           shorter_var_name = "c",
-                           src_survey = "s1_so",
+                           shorter_var_name = "oc",
                            aspect.ratio = NULL,
                            width = 6.81,
                            mode = "light",
@@ -28,35 +27,25 @@ graph_interval <- function(data,
     col_front <- "black"
   }
 
-  if (shorter_var_name == "c") {
-    var_name <- "Carbon"
-    unit_pre <- "t"
-  } else if (shorter_var_name == "n") {
-    var_name <- "Nitrogen"
-    unit_pre <- "t"
-  } else if (shorter_var_name == "extrac_p") {
-    var_name <- "Extractable phosphorus"
-    unit_pre <- "kg"
-  } else if (shorter_var_name == "extrac_s") {
-    var_name <- "Extractable sulphur"
-    unit_pre <- "kg"
-  }
 
-  if (shorter_var_name == "c") {
-    var_letter <- "C"
-  } else if (shorter_var_name == "n") {
-    var_letter <- "N"
-  } else if (shorter_var_name == "extrac_p") {
-    var_letter <- "P"
-  } else if (shorter_var_name == "extrac_s") {
-    var_letter <- "S"
-  }
+  source("./src/functions/get_par_table.R")
+  parameter_table <- get_par_table()
 
-  if (src_survey == "s1_so") {
+  ind <- which(parameter_table$shorter_name == shorter_var_name)
+
+  assertthat::assert_that(!identical(ind, integer(0)))
+
+  var_letter <- parameter_table$shorter_name_cap[ind]
+  var_name <- parameter_table$full_name[ind]
+  unit_stock <- parameter_table$unit_stock_markdown[ind]
+
+
+  if ((grepl("^s1_", unique(data$survey_form))) &&
+      (grepl("^so_", unique(data$survey_form)))) {
     src_survey_name <- "Level I and Level II"
-  } else if (src_survey == "s1") {
+  } else if (grepl("^s1_", unique(data$survey_form))) {
     src_survey_name <- "Level I"
-  } else if (src_survey == "so") {
+  } else if (grepl("^so_", unique(data$survey_form))) {
     src_survey_name <- "Level II"
   }
 
@@ -64,8 +53,19 @@ graph_interval <- function(data,
     path_export <- "./output/stocks/"
   }
 
+  # Create directory if it doesn't exist
+  if (!dir.exists(path_export)) {
+    dir.create(path_export, recursive = TRUE)
+  }
+
   if (version != "") {
     version <- paste0("_", version)
+  }
+
+  if (src_survey_name %in% c("Level I", "Level II")) {
+    prefix <- paste0(unique(sub("_.*$", "", unique(data$survey_form))), "_")
+  } else {
+    prefix <- ""
   }
 
   stopifnot(require("tidyverse"),
@@ -159,6 +159,12 @@ graph_interval <- function(data,
     group == "eftc" ~ "European Forest Type Cat.",
     .default = str_to_lower(str_replace_all(group, "_", " ")))
 
+  x_label <- case_when(
+    grepl("stock", response) && !grepl("^di_", response) ~
+      paste0("**", var_name, " stock** ",
+             "(mean over time)", " ",
+             "(", unit_stock, ")"),
+    grepl("^di_", response) ~ "**Ratio**")
 
   suppressWarnings({
     data_summary <- rcompanion_groupwiseMean(
@@ -217,11 +223,8 @@ p <- ggplot() +
                      "as a function of **",
                      group_name, "**"),
       subtitle = paste0("(ICP Forests ", src_survey_name, ")"),
-      x = paste0("**", var_name, " stock** ",
-                 "(mean over time)", " ", #"<br>",
-                 "(", unit_pre, " ", var_letter, " ha<sup>-1</sup>)"),
+      x = x_label,
       y = NULL,
-      # "Mean + 95 % conf. int. mean (bootstrapped)"
       caption = caption) +
     theme(
       panel.background = element_rect(fill = col_panel),
@@ -276,16 +279,23 @@ p <- ggplot() +
                            unit = "cm"))
 
 
-  ggsave(filename = paste0(response, "_",
+
+
+
+if (return == TRUE) {
+
+  return(p)
+
+} else {
+
+  ggsave(filename = paste0(prefix,
+                           response, "_",
                            group, version, ".png"),
          plot = p,
          path = path_export,
          dpi = 500,
          width = width)
 
-
-if (return == TRUE) {
-  return(p)
 }
 
 
