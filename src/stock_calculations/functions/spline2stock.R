@@ -36,7 +36,9 @@ spline2stock <- function(prof,
                                 "depth_top",
                                 "depth_bottom",
                                 variab_name,
-                                "depth_stock") %in% names(prof)))
+                                "depth_stock",
+                                "depth_topsoil_stock",
+                                "slope") %in% names(prof)))
 
   source("./src/stock_calculations/functions/soilspline.R")
 
@@ -51,9 +53,21 @@ spline2stock <- function(prof,
 
   assertthat::assert_that(min(prof$depth_top) == 0)
 
+  round_digits <- case_when(
+    get("parameter", .GlobalEnv) == "extrac_n" ~ 3,
+    TRUE ~ 2)
+
   # Fit spline
 
+  # The stock depth until which the splines should be fitted,
+  # should represent the vertical depth (e.g., 100 / cos(slope))
+  # (since soil samples and depths are taken vertically).
+  # Stocks should go until 100 cm perpendicularly,
+  # i.e., until 100 / cos(slope) vertically.
+
   max_depth_stock <- unique(prof$depth_stock)
+  max_depth_topsoil_stock <- unique(prof$depth_topsoil_stock)
+  cos = cos(unique(prof$slope) * pi / 180)
 
   if (any(paste0(variab_name, "_min") %in% names(prof))) {
     variab_min_i <- prof[[paste0(variab_name, "_min")]]
@@ -116,62 +130,74 @@ spline2stock <- function(prof,
   stocks <- data.frame(
     nlay_below_ground = nlay_below_ground,
     # Cumulative carbon stocks from 0 until x cm
-    stock_10 = ifelse(10 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(10)]),
-                              2),
+    stock_10 = ifelse(round(10 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(10 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_20 = ifelse(20 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(20)]),
-                              2),
+    stock_20 = ifelse(round(20 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(20 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_30 = ifelse(30 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(30)]),
-                              2),
+    stock_30 = ifelse(round(30 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(30 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_40 = ifelse(40 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(40)]),
-                              2),
+    stock_40 = ifelse(round(40 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(40 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_50 = ifelse(50 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(50)]),
-                              2),
+    stock_50 = ifelse(round(50 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(50 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_60 = ifelse(60 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(60)]),
-                              2),
+    stock_60 = ifelse(round(60 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(60 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_70 = ifelse(70 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(70)]),
-                              2),
+    stock_70 = ifelse(round(70 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(70 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_80 = ifelse(80 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(80)]),
-                              2),
+    stock_80 = ifelse(round(80 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(80 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_90 = ifelse(90 <= max_depth_stock,
-                        round(sum(spline_output_per_cm[seq_len(90)]),
-                              2),
+    stock_90 = ifelse(round(90 / cos) <= max_depth_stock,
+                        round(sum(spline_output_per_cm[
+                          seq_len(round(90 / cos))]),
+                          round_digits),
                         NA_real_),
-    stock_100 = ifelse(100 <= max_depth_stock,
-                         round(sum(spline_output_per_cm[seq_len(100)]),
-                               2),
+    stock_100 = ifelse(round(100 / cos) <= max_depth_stock,
+                         round(sum(spline_output_per_cm[
+                           seq_len(round(100 / cos))]),
+                           round_digits),
                          NA_real_),
     stock_below_ground =
       ifelse(max_depth_stock >= 1,
-             round(sum(spline_output_per_cm[seq_len(max_depth_stock)]), 2),
+             round(sum(spline_output_per_cm[seq_len(max_depth_stock)]),
+                   round_digits),
              NA_real_),
     stock_below_ground_topsoil =
       ifelse(max_depth_stock >= 1,
-             ifelse(max_depth_stock < 30,
+             ifelse(max_depth_stock < max_depth_topsoil_stock,
                     round(sum(spline_output_per_cm[seq_len(max_depth_stock)]),
-                          2),
-                    round(sum(spline_output_per_cm[seq_len(30)]),
-                          2)),
+                          round_digits),
+                    round(sum(spline_output_per_cm[
+                      seq_len(max_depth_topsoil_stock)]),
+                      round_digits)),
              NA_real_),
     stock_below_ground_1cm =
       ifelse(max_depth_stock >= 1,
              round(sum(spline_output_per_cm[seq_len(1)]),
-                   2),
+                   round_digits),
              NA_real_),
     rmse_mpspline = round(as.numeric(spline_output$rmse_mpspline[1]),
                           3))
@@ -188,40 +214,42 @@ spline2stock <- function(prof,
         stock_below_ground_min =
           ifelse(max_depth_stock > 1,
                  round(sum(spline_output_per_cm_min[seq_len(max_depth_stock)]),
-                       2),
+                       round_digits),
                  NA_real_),
         stock_below_ground_max =
           ifelse(max_depth_stock > 1,
                  round(sum(spline_output_per_cm_max[seq_len(max_depth_stock)]),
-                       2),
+                       round_digits),
                  NA_real_),
         stock_below_ground_topsoil_min =
           ifelse(max_depth_stock > 1,
-                 ifelse(max_depth_stock < 30,
+                 ifelse(max_depth_stock < max_depth_topsoil_stock,
                         round(sum(spline_output_per_cm_min[
                           seq_len(max_depth_stock)]),
-                              2),
-                        round(sum(spline_output_per_cm_min[seq_len(30)]),
-                              2)),
+                          round_digits),
+                        round(sum(spline_output_per_cm_min[
+                          seq_len(max_depth_topsoil_stock)]),
+                          round_digits)),
                  NA_real_),
         stock_below_ground_topsoil_max =
           ifelse(max_depth_stock > 1,
-                 ifelse(max_depth_stock < 30,
+                 ifelse(max_depth_stock < max_depth_topsoil_stock,
                         round(sum(spline_output_per_cm_max[
                           seq_len(max_depth_stock)]),
-                          2),
-                        round(sum(spline_output_per_cm_max[seq_len(30)]),
-                              2)),
+                          round_digits),
+                        round(sum(spline_output_per_cm_max[
+                          seq_len(max_depth_topsoil_stock)]),
+                          round_digits)),
                  NA_real_),
         stock_below_ground_1cm_min =
           ifelse(max_depth_stock >= 1,
                  round(sum(spline_output_per_cm_min[seq_len(1)]),
-                       2),
+                       round_digits),
                  NA_real_),
         stock_below_ground_1cm_max =
           ifelse(max_depth_stock >= 1,
                  round(sum(spline_output_per_cm_max[seq_len(1)]),
-                       2),
+                       round_digits),
                  NA_real_)))
 
   }
@@ -235,12 +263,15 @@ spline2stock <- function(prof,
       stocks$new_col <- NA
 
       if (i <= round(max_depth_stock)) {
-      stocks$new_col <- round(spline_output_per_cm[i], 2)
+      stocks$new_col <- round(spline_output_per_cm[i], round_digits)
       }
 
       names(stocks)[which(names(stocks) == "new_col")] <-
         paste0("density_", i)
     }
+
+    stocks$density_bottom <-
+      round(spline_output_per_cm[length(spline_output_per_cm)], round_digits)
 
   }
 
