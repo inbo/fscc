@@ -68,7 +68,7 @@ get_stocks <- function(survey_form,
   source("./src/functions/get_parameter_stats.R")
   source("./src/functions/get_date_local.R")
   source("./src/stock_calculations/functions/check_stock_plausibility.R")
-
+  source("./src/functions/get_par_table.R")
 
   # Define data ----
 
@@ -129,122 +129,7 @@ get_stocks <- function(survey_form,
 
   # Specify parameter ----
 
-  cation_data <- data.frame(
-    par = c("free_h", "exch_k", "exch_ca",
-            "exch_mg", "exch_na", "exch_al",
-            "exch_fe", "exch_mn"),
-    charge = c(1, 1, 2,
-               2, 1, 3,
-               2, 2),
-    molar_mass = c(1.008, 39.098, 40.078,
-                   24.305, 22.990, 26.982,
-                   55.845, 54.938))
-
-  parameter_table <- data.frame(
-    som_parameter = c(
-      "extrac_pb", "extrac_zn", "part_size_clay", "part_size_silt", "exch_mn",
-      "carbonates", "extrac_al", "exch_mg", "exch_fe", "extrac_na",
-      "exch_ca", "ph_cacl2", "n_total", "extrac_k", "exch_al",
-      "tot_mg", "exch_k", "extrac_s", "organic_carbon_total", "exch_na",
-      "extrac_cr", "extrac_fe", "tot_k", "ph_h2o", "part_size_sand",
-      "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
-      "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
-      "extrac_fe", "tot_ca", "p_ox", "exch_acidiy", "tot_na",
-      "tot_mn", "tot_fe", "tot_al",
-      "moisture_content", "bulk_density", "rea_al", "rea_fe",
-      "organic_layer_weight"),
-    pfh_parameter = c(
-      NA, NA, "horizon_clay", "horizon_silt", NA,
-      "horizon_caco3_total", NA, "horizon_exch_mg", NA, NA,
-      "horizon_exch_ca", NA, "horizon_n_total", NA, NA,
-      NA, "horizon_exch_k", NA, "horizon_c_organic_total", "horizon_exch_na",
-      NA, NA, NA, "horizon_ph", "horizon_sand",
-      NA, NA, NA, NA, NA,
-      NA, NA, NA, NA, NA,
-      NA, NA, NA, NA, NA,
-      NA, NA, NA,
-      NA, "bulk_density", NA, NA,
-      "organic_layer_weight"),
-    unit = c(
-      "mg kg-1", "mg kg-1", "%wt", "%wt", "cmol+ kg-1",
-      "g kg-1", "mg kg-1", "cmol+ kg-1", "cmol+ kg-1", "mg kg-1",
-      "cmol+ kg-1", "-", "g kg-1", "mg kg-1", "cmol+ kg-1",
-      "mg kg-1", "cmol+ kg-1", "mg kg-1", "g kg-1", "cmol+ kg-1",
-      "mg kg-1", "mg kg-1", "mg kg-1", "-", "%wt",
-      "mg kg-1", "cmol+ kg-1", "mg kg-1", "mg kg-1", "mg kg-1",
-      "mg kg-1", "mg kg-1", "mg kg-1", "mg kg-1", "mg kg-1",
-      "mg kg-1", "mg kg-1", "-", "cmol+ kg-1", "mg kg-1",
-      "mg kg-1", "mg kg-1", "mg kg-1",
-      "%wt", "kg m-3", "mg kg-1", "mg kg-1",
-      "kg m-2"),
-    # Only for variables for which stocks can be calculated
-    # unit_density_per_cm = c(
-    #   "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA, "1E4 mol+ ha-1 cm-1",
-    #   "t ha-1 cm-1", "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1",
-    #   "1E4 mol+ ha-1 cm-1",
-    #   "kg ha-1 cm-1",
-    #   "1E4 mol+ ha-1 cm-1", NA, "t ha-1 cm-1", "kg ha-1 cm-1",
-    #   "1E4 mol+ ha-1 cm-1",
-    #   "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "t ha-1 cm-1",
-    #   "1E4 mol+ ha-1 cm-1",
-    #   "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", NA, NA,
-    #   "kg ha-1 cm-1", "1E4 mol+ ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-    #   "kg ha-1 cm-1",
-    #   "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-    #   "kg ha-1 cm-1",
-    #   "kg ha-1 cm-1", "kg ha-1 cm-1", NA, "1E4 mol+ ha-1 cm-1",
-    #   "kg ha-1 cm-1",
-    #   "kg ha-1 cm-1", "kg ha-1 cm-1", "kg ha-1 cm-1",
-    #   NA, NA, "kg ha-1 cm-1", "kg ha-1 cm-1",
-    #   NA),
-    # Only for variables for which stocks can be calculated
-    shorter_name = c(
-      "extrac_pb", "extrac_zn", NA, NA, "exch_mn",
-      "caco3", "extrac_al", "exch_mg", "exch_fe", "extrac_na",
-      "exch_ca", NA, "n", "extrac_k", "exch_al",
-      "tot_mg", "exch_k", "extrac_s", "c", "exch_na",
-      "extrac_cr", "extrac_fe", "tot_k", NA, NA,
-      "extrac_cu", "free_h", "extrac_cd", "extrac_hg", "extrac_ca",
-      "extrac_mg", "extrac_ni", "extrac_p", "extrac_al", "extrac_mn",
-      "extrac_fe", "tot_ca", NA, "exch_acidiy", "tot_na",
-      "tot_mn", "tot_fe", "tot_al",
-      NA, NA, "rea_al", "rea_fe",
-      NA
-    )) %>%
-    mutate(
-      unit_density_per_cm = case_when(
-        # Only calculate for rows for which stocks can be calculated (i.e.
-        # where shorter_var_name is not NA)
-        !is.na(shorter_var_name) & unit == "mg kg-1" ~ "kg ha-1 cm-1",
-        # Important: this needs to be converted!!!!! from "1E4 mol+ ha-1 cm-1"
-        !is.na(shorter_var_name) & unit == "cmol+ kg-1" ~ "kg ha-1 cm-1",
-        !is.na(shorter_var_name) & unit == "g kg-1" ~ "t ha-1 cm-1",
-        TRUE ~ NA_character_
-      )) %>%
-    left_join(
-      cation_data,
-      by = join_by("som_parameter" == "par")) %>%
-    mutate(
-      density_convert_factor = ifelse(
-        unit == "cmol+ kg-1",
-        # Equivalent in mg kg-1 for 1 cmol+ kg-1:
-        1 / # 1 cmol+ kg-1
-          charge * # mol(+) mol-1 cations
-          molar_mass * # g mol-1 cations
-          1E1, # mg cg-1
-        1)) %>%
-    select(-charge, -molar_mass) %>%
-    mutate(
-      unit_markdown = gsub("1E4", "10<sup>4</sup>",
-                           gsub("-1", "<sup>-1</sup>",
-                                gsub("-2", "<sup>-2</sup>",
-                                     gsub("-3", "<sup>-3</sup>", unit)))),
-      unit_density_per_cm_markdown =
-        gsub("1E4", "10<sup>4</sup>",
-             gsub("-1", "<sup>-1</sup>",
-                  gsub("-2", "<sup>-2</sup>",
-                       gsub("-3", "<sup>-3</sup>", unit_density_per_cm)))))
-
+  parameter_table <- get_par_table()
 
   assign_env("parameter_table", parameter_table)
 
@@ -479,23 +364,30 @@ get_stocks <- function(survey_form,
   assertthat::assert_that(all(na.omit(df[[parameter]]) >= 0))
 
 
-  ## 1.2. Add eff_soil_depth if needed ----
 
-  if (!"eff_soil_depth" %in% names(df)) {
 
-  cat(" \nAdd eff_soil_depth\n")
+
+  ## 1.2. Add eff_soil_depth and slope if needed ----
+
+  if (!"eff_soil_depth" %in% names(df) ||
+      !"slope" %in% names(df)) {
+
+    assertthat::assert_that(!"eff_soil_depth" %in% names(df) &&
+                              !"slope" %in% names(df))
+
+  cat(" \nAdd eff_soil_depth and slope\n")
 
     if (code_survey == "s1") {
 
       if (exists("s1_strat")) {
 
         df_soil_depth <- get_env("s1_strat") %>%
-          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+          select(plot_id, eff_soil_depth, eff_soil_depth_source, slope)
 
       } else {
 
         df_soil_depth <- get_stratifiers(level = "LI") %>%
-          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+          select(plot_id, eff_soil_depth, eff_soil_depth_source, slope)
       }
     }
 
@@ -504,12 +396,12 @@ get_stocks <- function(survey_form,
       if (exists("so_strat")) {
 
         df_soil_depth <- get_env("so_strat") %>%
-          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+          select(plot_id, eff_soil_depth, eff_soil_depth_source, slope)
 
       } else {
 
         df_soil_depth <- get_stratifiers(level = "LII") %>%
-          select(plot_id, eff_soil_depth, eff_soil_depth_source)
+          select(plot_id, eff_soil_depth, eff_soil_depth_source, slope)
       }
     }
 
@@ -518,6 +410,10 @@ get_stocks <- function(survey_form,
       left_join(df_soil_depth,
                 by = "plot_id")
   }
+
+
+
+
 
   ## 1.3. Final data preparations ----
 
@@ -540,6 +436,17 @@ get_stocks <- function(survey_form,
                       (.data$eff_soil_depth > 100),
                     100,
                     .data$eff_soil_depth)) %>%
+    # Assume slope is 0 if NA
+    # If reported slope is 99, assume it is 0.
+    # If reported slope is > 30 (not 99), assume it is 30
+    # (since it is unrealistic to do soil sampling on terrains
+    #  with a higher slope than 30 °C)
+    mutate(
+      slope = case_when(
+        is.na(slope) ~ 0,
+        slope == 99 ~ 0,
+        slope > 30 ~ 30,
+        TRUE ~ slope)) %>%
     # If coarse fragments is unknown:
     # Assume it is 0
     # To do: the uncertainty associated with this assumption needs
@@ -568,6 +475,24 @@ get_stocks <- function(survey_form,
            depth_avg = ifelse(!is.na(depth_top) & !is.na(depth_bottom),
                               rowMeans(cbind(depth_top, depth_bottom)),
                               NA))
+
+    # Uncertainty ranges for n_total in LQA seem exaggerated
+    if (parameter == "n_total") {
+
+      df_working <- df_working %>%
+        # Update uncertainty ranges
+        mutate(
+          parameter_for_stock_min = ifelse(
+            !is.na(.data$parameter_for_stock),
+            pmax(.data$parameter_for_stock - 0.95, 0), # 0.5 quantile from LQA
+            NA_integer_),
+          parameter_for_stock_max = ifelse(
+            !is.na(.data$parameter_for_stock),
+            pmin(.data$parameter_for_stock + 0.95, 1000),
+            NA_integer_))
+
+    }
+
 
 
   # As requested by the partner, exclude data for 54_204 in 1997
@@ -787,6 +712,10 @@ get_stocks <- function(survey_form,
 
   ## 1.5. Create function format_stocks ----
 
+  # This will be used to format the output files (adding the short variable
+  # name to the column names, etc)
+
+
   format_stocks <- function(data_frame,
                             var_name = shorter_var_name) {
 
@@ -857,6 +786,7 @@ get_stocks <- function(survey_form,
            depth_avg,
            layer_thickness,
            depth_stock,
+           slope,
            bulk_density,
            bulk_density_min,
            bulk_density_max,
@@ -945,18 +875,21 @@ get_stocks <- function(survey_form,
           max_depth = max(depth_bottom, na.rm = TRUE),
           min_depth = min(depth_top, na.rm = TRUE),
           nlay_below_ground = n(),
-          depth_stock = unique(depth_stock)) %>%
+          depth_stock = unique(depth_stock),
+          slope = unique(slope)) %>%
         ungroup() %>%
         rowwise() %>%
         mutate(
+          depth_stock_vert =
+            round(depth_stock / cos(slope * pi / 180)),
           stock_possible =
             ((nlay_below_ground >= 2 ||
                 # If the soil depth is very shallow, one layer can be reliable,
                 # e.g. so_som 1996_7_12_1
                 (nlay_below_ground == 1 &&
-                   max_depth >= 0.7 * depth_stock)) &&
+                   max_depth >= 0.7 * depth_stock_vert)) &&
                (min_depth == 0) &&
-               (depth_stock > 0))) %>%
+               (depth_stock_vert > 0))) %>%
         ungroup() %>%
         group_by(unique_survey) %>%
         reframe(
@@ -964,13 +897,15 @@ get_stocks <- function(survey_form,
           max_depth = max(max_depth),
           min_depth = min(min_depth),
           depth_stock = unique(depth_stock),
+          slope = unique(slope),
+          depth_stock_vert = unique(depth_stock_vert),
           stock_possible = any(stock_possible)) %>%
         ungroup() %>%
         mutate(
           reason_excl = ifelse(
             stock_possible == FALSE,
             case_when(
-              depth_stock == 0 ~ "Continuous bedrock at 0 cm",
+              depth_stock_vert == 0 ~ "Continuous bedrock at 0 cm",
               min_depth > 0 ~ paste0("Insufficient data to calculate density ",
                                      "in upper below-ground layer"),
               # If not any of these cases, there should simply be insufficient
@@ -1007,6 +942,8 @@ get_stocks <- function(survey_form,
 
 
 
+
+
   ## 2.2. Gap-fill subsoil density data ----
 
 
@@ -1028,7 +965,7 @@ get_stocks <- function(survey_form,
     # Assume that the following depth range can be considered constant
     # (in line with the sampling requirements in ICP Forests)
 
-    target_depth_range <- seq(40, 100, by = 1)
+    target_depth_range <- seq(40, 100, by = 1) # orthogonal to slope gradient
 
     # Set progress bar
     progress_bar <-
@@ -1039,6 +976,18 @@ get_stocks <- function(survey_form,
     for (i in seq_along(unique(df_below_ground$profile_id))) {
 
       prof_id_i <- as.character(unique(df_below_ground$profile_id)[i])
+
+      slope_i <- df_below_ground %>%
+        filter(profile_id == prof_id_i) %>%
+        distinct(slope) %>%
+        pull(slope)
+
+      cos_i <- cos(slope_i * pi / 180)
+
+      # Vertical
+      target_depth_range_i <- seq(round(min(target_depth_range) / cos_i),
+                                  round(max(target_depth_range) / cos_i),
+                                  by = 1)
 
       df_profile_i <- df_below_ground %>%
         filter(profile_id == prof_id_i) %>%
@@ -1064,24 +1013,30 @@ get_stocks <- function(survey_form,
                                      which(diff(depth_range) != 1) + 1,
                                      length(depth_range)))]
 
-      # Update target depth range
-      target_depth_range <- seq(40, 100, by = 1)
-      depth_stock_i <- round(unique(df_profile_i$depth_stock))
-
-      if (depth_stock_i != max(target_depth_range) &&
-          depth_stock_i > min(target_depth_range)) {
-
-        target_depth_range <- seq(40, depth_stock_i, by = 1)
+      # Update target depth range (vertical)
+      # target_depth_range <- seq(40, 100, by = 1)
+      if (unique(df_profile_i$depth_stock) == 100) {
+        depth_stock_vert_i <- round(unique(df_profile_i$depth_stock) / cos_i)
+      } else {
+        depth_stock_vert_i <- unique(df_profile_i$depth_stock)
       }
 
-      if (depth_stock_i <= min(target_depth_range)) {
+
+      if (depth_stock_vert_i != max(target_depth_range_i) &&
+          depth_stock_vert_i > min(target_depth_range_i)) {
+
+        target_depth_range_i <- seq(min(target_depth_range_i),
+                                    depth_stock_vert_i, by = 1)
+      }
+
+      if (depth_stock_vert_i <= min(target_depth_range_i)) {
         next
       }
 
       # Specify the depth range with missing density data
 
       depth_range_missing <-
-        target_depth_range[!target_depth_range %in% depth_range]
+        target_depth_range_i[!target_depth_range_i %in% depth_range]
 
       if (!identical(depth_range_missing, numeric(0))) {
 
@@ -1240,11 +1195,14 @@ get_stocks <- function(survey_form,
 
     close(progress_bar)
 
-    df_below_ground <-
+    if (!is.null(extra_rows)) {
+
+      df_below_ground <-
       bind_rows(df_below_ground %>%
                   mutate(gapfilled_post_layer1 = NA),
                 extra_rows %>%
                   mutate(gapfilled_post_layer1 = "rule: constant below 40 cm"))
+    }
 
   } # End of "if constant subsoil is true"
 
@@ -1295,7 +1253,7 @@ get_stocks <- function(survey_form,
   subsoil_bulk_density <- bd_ptf(subsoil_toc) # 1359 kg m-3
   subsoil_coarse_fragment_vol_frac  <- 0.1357 # mean based on LI; median: 0.0125
 
-    # Currently only for a few parameters
+    # Currently only implemented for a few parameters
 
 
 
@@ -1335,7 +1293,7 @@ get_stocks <- function(survey_form,
       extra_rows <- NULL
 
       # Assume the following depth range that can be considered constant:
-      target_depth_range <- seq(80, 100, by = 1)
+      target_depth_range <- seq(80, 100, by = 1) # orthogonal to slope gradient
 
       # Set progress bar
       progress_bar <-
@@ -1346,6 +1304,18 @@ get_stocks <- function(survey_form,
       for (i in seq_along(unique(df_below_ground$profile_id))) {
 
         prof_id_i <- as.character(unique(df_below_ground$profile_id)[i])
+
+        slope_i <- df_below_ground %>%
+          filter(profile_id == prof_id_i) %>%
+          distinct(slope) %>%
+          pull(slope)
+
+        cos_i <- cos(slope_i * pi / 180)
+
+        # Vertical
+        target_depth_range_i <- seq(round(min(target_depth_range) / cos_i),
+                                    round(max(target_depth_range) / cos_i),
+                                    by = 1)
 
         df_profile_i <- df_below_ground %>%
           filter(profile_id == prof_id_i) %>%
@@ -1377,23 +1347,30 @@ get_stocks <- function(survey_form,
                                          length(depth_range)))]
 
           # Update target depth range
-          target_depth_range <- seq(80, 100, by = 1)
-          depth_stock_i <- round(unique(df_profile_i$depth_stock))
-
-          if (depth_stock_i != max(target_depth_range) &&
-              depth_stock_i > min(target_depth_range)) {
-
-            target_depth_range <- seq(80, depth_stock_i, by = 1)
+          # target_depth_range <- seq(80, 100, by = 1)
+          if (unique(df_profile_i$depth_stock) == 100) {
+            depth_stock_vert_i <-
+              round(unique(df_profile_i$depth_stock) / cos_i)
+          } else {
+            depth_stock_vert_i <- unique(df_profile_i$depth_stock)
           }
 
-          if (depth_stock_i <= min(target_depth_range)) {
+          if (depth_stock_vert_i != max(target_depth_range_i) &&
+              depth_stock_vert_i > min(target_depth_range_i)) {
+
+            target_depth_range_i <- seq(min(target_depth_range_i),
+                                        depth_stock_vert_i,
+                                        by = 1)
+          }
+
+          if (depth_stock_vert_i <= min(target_depth_range_i)) {
             next
           }
 
           # Specify the depth range with missing density data
 
           depth_range_missing <-
-            target_depth_range[!target_depth_range %in% depth_range]
+            target_depth_range_i[!target_depth_range_i %in% depth_range]
 
           if (!identical(depth_range_missing, numeric(0))) {
 
@@ -1505,11 +1482,17 @@ get_stocks <- function(survey_form,
         df_below_ground$gapfilled_post_layer1 <- NA
       }
 
+      if (!is.null(extra_rows)) {
+
+        df_below_ground <-
+          bind_rows(df_below_ground,
+                    extra_rows %>%
+                      mutate(gapfilled_post_layer1 =
+                               "rule: fixed value below 80 cm"))
+      }
+
       df_below_ground <-
-        bind_rows(df_below_ground,
-                  extra_rows %>%
-                    mutate(gapfilled_post_layer1 =
-                             "rule: fixed value below 80 cm")) %>%
+        df_below_ground %>%
         arrange(partner_short,
                 code_plot,
                 survey_year,
@@ -1591,6 +1574,27 @@ get_stocks <- function(survey_form,
     assertthat::assert_that(length(unique(df_profile_i$depth_stock)) == 1)
     depth_stock_i <- unique(df_profile_i$depth_stock)
 
+    assertthat::assert_that(length(unique(df_profile_i$slope)) == 1)
+    slope_i <- unique(df_profile_i$slope)
+
+    cos_i <- cos(slope_i * pi / 180)
+
+    # If 100, assume that this is a default value (perpendicular),
+    # and convert to vertical dimension
+    # Else, we can assume that it was measured in some way,
+    # and we assume that measurements happen vertically.
+
+    if (depth_stock_i == 100) {
+      depth_stock_vert_i <- round(depth_stock_i / cos_i)
+    } else {
+      depth_stock_vert_i <- depth_stock_i
+    }
+
+    depth_topsoil_stock_vert_i <- min(c(depth_stock_i,
+                                        round(30 / cos_i)))
+
+
+
     # Prepare input for calculate_stocks function
 
     prof <- df_profile_i %>%
@@ -1605,14 +1609,16 @@ get_stocks <- function(survey_form,
              density_loq,
              bulk_density,
              coarse_fragment_vol_frac,
-             depth_stock,
              gapfilled_post_layer1) %>%
       # Only calculate carbon stocks based on layers
       # for which the carbon density is known
       filter(!is.na(.data$density)) %>%
       # and for which their layer limits are known
       filter(!is.na(.data$depth_top) &
-               !is.na(.data$depth_bottom))
+               !is.na(.data$depth_bottom)) %>%
+      mutate(depth_stock = depth_stock_vert_i,
+             depth_topsoil_stock = depth_topsoil_stock_vert_i,
+             slope = slope_i)
 
     if (nrow(prof) == 0) {
       next
@@ -1732,7 +1738,7 @@ get_stocks <- function(survey_form,
       # First, we need to add layers for missing depth ranges
 
       # Define the depth range to cover
-      target_depth_range <- seq(0, 100)
+      target_depth_range <- seq(0, depth_stock_vert_i)
 
       depth_range <- prof %>%
         mutate(depth_sequence =
@@ -1835,10 +1841,10 @@ get_stocks <- function(survey_form,
       } # End of "if extra layers are needed"
 
       prof <- prof %>%
-        filter(depth_top < depth_stock_i) %>%
+        filter(depth_top < depth_stock_vert_i) %>%
         mutate(depth_bottom = ifelse(
-          depth_bottom > depth_stock_i,
-          depth_stock_i,
+          depth_bottom > depth_stock_vert_i,
+          depth_stock_vert_i,
           depth_bottom))
 
       assertthat::assert_that(all(!is.na(prof$bulk_density)))
@@ -1859,10 +1865,11 @@ get_stocks <- function(survey_form,
       # mass_fine_earth_topsoil (tot 30 cm) in kg fine earth m-2
 
       prof <- prof %>%
-        filter(depth_top < min(c(30, depth_stock_i))) %>%
+        filter(depth_top <
+                 min(c(depth_topsoil_stock_vert_i, depth_stock_vert_i))) %>%
         mutate(depth_bottom = ifelse(
-          depth_bottom > min(c(30, depth_stock_i)),
-          min(c(30, depth_stock_i)),
+          depth_bottom > min(c(depth_topsoil_stock_vert_i, depth_stock_vert_i)),
+          min(c(depth_topsoil_stock_vert_i, depth_stock_vert_i)),
           depth_bottom)) %>%
         mutate(
           layer_thickness = (depth_bottom - depth_top),
@@ -1876,10 +1883,10 @@ get_stocks <- function(survey_form,
       # mass_fine_earth_1cm (tot 1 cm) in kg fine earth m-2
 
       prof <- prof %>%
-        filter(depth_top < min(c(1, depth_stock_i))) %>%
+        filter(depth_top < min(c(1, depth_stock_vert_i))) %>%
         mutate(depth_bottom = ifelse(
-          depth_bottom > min(c(1, depth_stock_i)),
-          min(c(1, depth_stock_i)),
+          depth_bottom > min(c(1, depth_stock_vert_i)),
+          min(c(1, depth_stock_vert_i)),
           depth_bottom)) %>%
         mutate(
           layer_thickness = (depth_bottom - depth_top),
@@ -1896,6 +1903,18 @@ get_stocks <- function(survey_form,
       #                               TRUE,
       #                               FALSE)
 
+      # Below-ground stocks are calculated per hectare as projected from above
+      # ("from the sky" - horizontal projection) and integrated to the
+      # orthogonal stock depth (perpendicular to slope).
+      # On sloping terrain, this accounts for two offsetting slope corrections:
+      # 1. Depth correction: cos(slope) - converts stocks with vertical
+      #    measurement depth to stocks with orthogonal depth
+      #    (e.g., 104 cm vertical → 100 cm orthogonal)
+      # 2. Area correction: 1/cos(slope) - converts ground surface area to
+      #    horizontal projected area (1 ha "from the sky")
+      # These corrections cancel out (cos(slope) × 1/cos(slope) = 1), so the
+      # below-ground stocks require no further slope adjustment.
+
       profile_stocks_i <-
         data.frame(survey_form = unique(df_profile_i$survey_form),
                    partner_short = unique(df_profile_i$partner_short),
@@ -1909,7 +1928,8 @@ get_stocks <- function(survey_form,
                    contains_peat = any(df_profile_i$layer_type == "peat"),
                    obs_depth = max_obs_depth,
                    # use_stock_topsoil = use_stock_topsoil_i,
-                   depth_stock = depth_stock_i,
+                   depth_stock = round(cos_i * depth_stock_vert_i),
+                   slope = slope_i,
                    mass_fine_earth = mass_fine_earth_i, # kg m-2
                    mass_fine_earth_topsoil = mass_fine_earth_topsoil_i, # kg m-2
                    mass_fine_earth_1cm = mass_fine_earth_1cm_i, # kg m-2
@@ -2002,8 +2022,10 @@ get_stocks <- function(survey_form,
             max(nlay_below_ground, na.rm = TRUE),
           obs_depth_avg =
             round(mean(obs_depth, na.rm = TRUE), 1),
-          depth_stock_avg =
-            round(mean(depth_stock, na.rm = TRUE), 2),
+          depth_stock =
+            round(mean(depth_stock, na.rm = TRUE), 1),
+          slope =
+            round(mean(slope, na.rm = TRUE), 1),
           mass_fine_earth =
             round(mean(mass_fine_earth, na.rm = TRUE), 2),
           mass_fine_earth_topsoil =
@@ -2124,6 +2146,7 @@ get_stocks <- function(survey_form,
            depth_avg,
            layer_thickness,
            depth_stock,
+           slope,
            bulk_density,
            bulk_density_min,
            bulk_density_max,
@@ -2197,7 +2220,6 @@ get_stocks <- function(survey_form,
   }
 
 
-
   df_forest_floor <- df_forest_floor %>%
     # Carbon stock per layer (t C ha-1 for each layer)
     # Units: g C/kg forest floor * kg forest floor/m2
@@ -2251,11 +2273,20 @@ get_stocks <- function(survey_form,
     df_profile_i <- df_forest_floor %>%
       filter(profile_id == profile_list[i])
 
+    cos_i <- cos(unique(df_profile_i$slope) * pi / 180)
+
     if (nrow(df_profile_i) > 0) {
 
       if (all(!is.na(df_profile_i$stock_layer))) {
 
       # Combine stocks in forest floor per profile
+
+      # Forest floor stocks do not require depth correction (for sloping
+      # terrains), since the forest floor sampling frame is already placed
+      # orthogonal to the local slope gradient.
+      # However, they do require area correction: multiply by 1/cos(slope)
+      # to convert from ground surface area to horizontal projection
+      # (1 ha "from the sky").
 
       profile_stocks_i <-
         data.frame(survey_form = unique(df_profile_i$survey_form),
@@ -2274,15 +2305,16 @@ get_stocks <- function(survey_form,
                    nlay_forest_floor = length(df_profile_i$layer_number),
                    forest_floor_layers = paste(c(df_profile_i$code_layer),
                                                collapse = "_"),
+                   slope = unique(df_profile_i$slope),
                    # Cumulative carbon stock in forest floor
                    stock_forest_floor =
-                     round(sum(df_profile_i$stock_layer), 2),
+                     round(sum(df_profile_i$stock_layer) / cos_i, 2),
                    stock_forest_floor_min =
-                     round(sum(df_profile_i$stock_layer_min), 2),
+                     round(sum(df_profile_i$stock_layer_min) / cos_i, 2),
                    stock_forest_floor_max =
-                     round(sum(df_profile_i$stock_layer_max), 2),
+                     round(sum(df_profile_i$stock_layer_max) / cos_i, 2),
                    mass_forest_floor =
-                     round(sum(df_profile_i$organic_layer_weight), 2))
+                     round(sum(df_profile_i$organic_layer_weight) / cos_i, 2))
 
       } else {
 
@@ -2307,6 +2339,7 @@ get_stocks <- function(survey_form,
                      nlay_forest_floor = length(df_profile_i$layer_number),
                      forest_floor_layers = paste(c(df_profile_i$code_layer),
                                                  collapse = "_"),
+                     slope = unique(df_profile_i$slope),
                      # Cumulative carbon stock in forest floor: NA
                      stock_forest_floor = NA_real_,
                      # We know that it is minimally what is reported
@@ -2435,6 +2468,11 @@ get_stocks <- function(survey_form,
                 relocate(parameter_for_stock_loq,
                          .after = parameter_for_stock_max) %>%
                 relocate(density_loq, .after = density_max)) %>%
+    mutate(
+      depth_stock = ifelse(
+        depth_stock != 100,
+        round(depth_stock * (cos(slope * pi / 180))),
+        depth_stock)) %>%
     mutate(profile_id_form = paste0(survey_form_i, "_",
                                     profile_id)) %>%
     relocate(profile_id_form, .after = profile_id) %>%
@@ -2461,7 +2499,8 @@ get_stocks <- function(survey_form,
 
   profile_stocks <-
     profile_stocks_below_ground %>%
-    left_join(profile_stocks_forest_floor,
+    left_join(profile_stocks_forest_floor %>%
+                select(-slope),
               join_by(survey_form, partner_short, plot_id, profile_id,
                       survey_year, partner_code, code_country, code_plot,
                       repetition)) %>%
@@ -2505,7 +2544,7 @@ get_stocks <- function(survey_form,
                           na.rm = TRUE)) %>%
     select(-contains("stock_below_ground_1cm"),
            -mass_fine_earth_1cm) %>%
-    relocate(obs_depth, depth_stock, forest_floor_thickness,
+    relocate(obs_depth, depth_stock, slope, forest_floor_thickness,
              mass_fine_earth, mass_fine_earth_topsoil, mass_forest_floor_proxy,
              mass_forest_floor,
              nlay, nlay_below_ground, nlay_forest_floor, forest_floor_layers,
@@ -2620,9 +2659,10 @@ get_stocks <- function(survey_form,
     relocate(contains("nlay"), .after = stock_forest_floor_proxy_max) %>%
     relocate(contains("nlay_below_ground"), .after = nlay_max) %>%
     relocate(contains("nlay_forest_floor"), .after = nlay_below_ground_max) %>%
-    relocate(depth_stock_avg, .after = stock_forest_floor_proxy_max) %>%
-    relocate(obs_depth_avg, .after = depth_stock_avg) %>%
-    relocate(rmse_mpspline_max, .after = forest_floor_layers_unique)
+    relocate(depth_stock, slope, .after = stock_forest_floor_proxy_max) %>%
+    relocate(obs_depth_avg, .before = depth_stock) %>%
+    relocate(rmse_mpspline_max, .after = forest_floor_layers_unique) %>%
+    relocate(mass_forest_floor_proxy, .after = mass_forest_floor)
 
 
 
@@ -2807,7 +2847,7 @@ if (length(survey_forms) == 2) {
 
     plot_stocks <- plot_stocks %>%
       left_join(df_strat %>%
-                  select(-contains("eff_soil_depth")),
+                  select(-contains("eff_soil_depth"), -slope),
                 by = "plot_id")
 
   }
@@ -2818,6 +2858,37 @@ if (length(survey_forms) == 2) {
                                             parameter = parameter,
                                             shorter_var_name = shorter_var_name,
                                             survey_form_orig = survey_form_orig)
+
+    # Plausible non-OL forest floor stocks can be gap-filled by 0
+
+    plot_stocks <- plot_stocks %>%
+      mutate(
+        stock_forest_floor_min = ifelse(
+          grepl("mull", humus_form, ignore.case = TRUE) &
+            is.na(stock_forest_floor) &
+            stock_forest_floor_plaus == TRUE,
+          0,
+          stock_forest_floor_min),
+        stock_forest_floor_max = ifelse(
+          grepl("mull", humus_form, ignore.case = TRUE) &
+            is.na(stock_forest_floor) &
+            stock_forest_floor_plaus == TRUE,
+          # Determined as:
+           # s1_plot_oc_stocks %>%
+           #  filter(grepl("mull", humus_form, ignore.case = TRUE)) %>%
+           #  filter(!is.na(stock_forest_floor)) %>%
+           #  filter(stock_forest_floor_plaus == TRUE) %>%
+           #  filter(grepl("som", survey_form)) %>%
+           #  pull(stock_forest_floor) %>%
+           #  quantile(c(0.8))
+          10,
+          stock_forest_floor_max),
+        stock_forest_floor = ifelse(
+          grepl("mull", humus_form, ignore.case = TRUE) &
+            is.na(stock_forest_floor) &
+            stock_forest_floor_plaus == TRUE,
+          0,
+          stock_forest_floor))
 
   }
 
@@ -3089,10 +3160,32 @@ if (length(survey_forms) == 2) {
     names_to = "depth",
     names_prefix = "density_",
     values_to = "density") %>%
-    mutate(depth = as.numeric(depth),
-           repetition = as.character(repetition)) %>%
+    # replace "bottom" by the vertical eff_soil_depth
+    left_join(
+      get_env(paste0(code_survey, "_strat")) %>%
+        mutate(
+          slope = case_when(
+            is.na(slope) ~ 0,
+            slope == 99 ~ 0,
+            slope > 30 ~ 30,
+            TRUE ~ slope)) %>%
+        mutate(
+          depth_stock_vert = ifelse(
+            !is.na(eff_soil_depth) & eff_soil_depth >= 100,
+            round(100 / (cos(slope * pi / 180))),
+            eff_soil_depth)) %>%
+        select(plot_id, depth_stock_vert),
+      by = "plot_id") %>%
+    mutate(
+      depth = case_when(
+        depth == "bottom" & !is.na(depth_stock_vert) ~
+          as.character(depth_stock_vert),
+        TRUE ~ (depth)),
+      depth = as.numeric(depth),
+      repetition = as.character(repetition)) %>%
     select(survey_form, code_country, code_plot, plot_id, survey_year,
            repetition, profile_id, profile_id_form, depth_stock,
+           depth_stock_vert,
            stock, stock_below_ground, stock_below_ground_topsoil,
            depth, density) %>%
     filter(!is.na(density)) %>%
@@ -3170,12 +3263,20 @@ if (length(survey_forms) == 2) {
 
     df_strat_i <- df_strat %>%
       filter(plot_id == plot_id_i) %>%
+      mutate(
+        slope = case_when(
+          is.na(slope) ~ 0,
+          slope == 99 ~ 0,
+          slope > 30 ~ 30,
+          TRUE ~ slope)) %>%
       as.data.frame
 
     depth_stock_i <- plot_stocks %>%
       filter(plot_id == plot_id_i) %>%
-      distinct(depth_stock_avg) %>%
-      pull(depth_stock_avg)
+      distinct(depth_stock, .keep_all = TRUE) %>%
+      mutate(
+        depth_stock_vert = round(depth_stock / (cos(slope * pi / 180)))) %>%
+      pull(depth_stock_vert)
 
 
     ## Plausible stocks ----
@@ -3216,11 +3317,13 @@ if (length(survey_forms) == 2) {
 
       plaus_stocks_min_i <- profile_stocks_long %>%
         filter(profile_id_form %in% plaus_stocks_i) %>%
-        filter(stock == min(.data$stock))
+        filter(stock == min(.data$stock)) %>%
+        distinct(depth, .keep_all = TRUE)
 
       plaus_stocks_max_i <- profile_stocks_long %>%
         filter(profile_id_form %in% plaus_stocks_i) %>%
-        filter(stock == max(.data$stock))
+        filter(stock == max(.data$stock)) %>%
+        distinct(depth, .keep_all = TRUE)
 
       plaus_stocks_i <-
         data.frame(depth = sort(unique(c(plaus_stocks_min_i$depth,
@@ -3240,7 +3343,8 @@ if (length(survey_forms) == 2) {
           filter(depth <= depth_stock_i)
 
         assertthat::assert_that(
-          abs(diff(c(max(plaus_stocks_i$depth), depth_stock_i))) <= 3)
+          abs(diff(c(max(plaus_stocks_i$depth), depth_stock_i))) <= 3 ||
+            depth_stock_i >= 100)
 
         plaus_stocks_i <- plaus_stocks_i %>%
           mutate(
@@ -3547,7 +3651,10 @@ if (length(survey_forms) == 2) {
                        gsub("\n", "*<br>*",
                        str_wrap(paste0("European forest type category: *",
                        df_strat_i$eftc, "*"))), "<br>",
-                       "Humus form: *", df_strat_i$humus_form, "*")) &
+                       "Humus form: *", df_strat_i$humus_form, "*<br>",
+                       "Soil depth (vertical): *", depth_stock_i,
+                       " cm*   ·   Slope: *",
+                       round(df_strat_i$slope), " °*")) &
       theme(legend.position = "bottom",
             legend.direction = "vertical",
             legend.justification = c("left", "top"),
@@ -3581,7 +3688,8 @@ if (length(survey_forms) == 2) {
   } # End of "for" loop along plot_ids
 
   close(progress_bar)
-}
+
+} # End of "if graph == TRUE"
 
 
 }
