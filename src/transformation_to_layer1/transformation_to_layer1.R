@@ -31,6 +31,7 @@
 stopifnot(require("sf"),
           require("tidyverse"),
           require("openxlsx"),
+          require("readxl"),
           require("parsedate"),
           require("googlesheets4"),
           require("googledrive"),
@@ -445,6 +446,50 @@ if (level == "LII") {
 
 }
 
+
+
+
+# Save version before internal gap-filling
+
+date <- as.character(format(Sys.Date(), format = "%Y%m%d"))
+
+if (level == "LI") {
+
+  write.table(s1_som,
+              file = paste0("./data/additional_data/preinternalgapfill/",
+                            "s1_som_preinternalgapfill_", date, ".csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
+
+  write.table(s1_pfh,
+              file = paste0("./data/additional_data/preinternalgapfill/",
+                            "s1_pfh_preinternalgapfill_", date, ".csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
+}
+
+if (level == "LII") {
+
+  write.table(so_som,
+              file = paste0("./data/additional_data/preinternalgapfill/",
+                            "so_som_preinternalgapfill_", date, ".csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
+
+  write.table(so_pfh,
+              file = paste0("./data/additional_data/preinternalgapfill/",
+                            "so_pfh_preinternalgapfill_", date, ".csv"),
+              row.names = FALSE,
+              na = "",
+              sep = ";",
+              dec = ".")
+}
 
 
 
