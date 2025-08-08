@@ -31,7 +31,9 @@ get_data_availability <- function(code_survey) {
                                                  code_country,
                                                  code_plot,
                                                  plot_id,
-                                                 survey_year))
+                                                 survey_year) %>%
+                                          mutate(
+                                            survey_form = survey_forms[i]))
   }
 
   # Add old plots "so"
@@ -81,7 +83,8 @@ get_data_availability <- function(code_survey) {
                                                  code_country,
                                                  code_plot,
                                                  plot_id,
-                                                 survey_year))
+                                                 survey_year) %>%
+                                          mutate(survey_form = "so_som"))
   }
 
   # Add old plots "s1"
@@ -129,7 +132,8 @@ get_data_availability <- function(code_survey) {
                                                  code_country,
                                                  code_plot,
                                                  plot_id,
-                                                 survey_year))
+                                                 survey_year) %>%
+                                          mutate(survey_form = "s1_som"))
   }
 
 
@@ -148,6 +152,12 @@ get_data_availability <- function(code_survey) {
   data_availability <- data_availability_long %>%
     group_by(plot_id, code_country, code_plot) %>%
     reframe(survey_years = paste(unique(sort(survey_year)), collapse = "_"),
+            survey_years_som = {
+              som_years <- survey_year[survey_form %>% grepl("_som$", .)]
+              if (length(som_years) > 0) paste(unique(sort(som_years)),
+                                               collapse = "_")
+              else NA_character_
+            },
             partner_codes_n_distinct = n_distinct(partner_code),
             partner_codes =
               paste(unique(sort(partner_code)), collapse = "_")) %>%
