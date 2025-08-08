@@ -75,7 +75,8 @@ stopifnot(require("sf"),
           require("assertthat"),
           require("aqp"),
           require("ggmap"),
-          require("leaflet"))
+          require("leaflet"),
+          require("htmlwidgets"))
 
 compare_ranks <- function(df, additional_info) {
 
@@ -133,7 +134,7 @@ compare_ranks <- function(df, additional_info) {
 
 # 1. Input level ----
 
-level <- "LI"
+level <- "LII"
 
 
 
@@ -319,6 +320,63 @@ if (level == "LI") {
     mutate(change_date = NA) %>%
     as_tibble
 
+  # Flanders Biosoil
+
+  coord_biosoil_fl <-
+    read_excel(paste0("./data/additional_data/coordinates_plots/s1/",
+                      "Biosoil_LI_coords.xlsx")) %>%
+    rename(
+      latitude = LAT,
+      longitude = LONG,
+      code_country = CODECOUNTRY) %>%
+    mutate(
+      # Remove spaces and leading plus signs
+      longitude = str_replace_all(longitude, " ", ""),
+      latitude = str_replace_all(latitude, " ", ""),
+      longitude = as.integer(str_replace(longitude, "^\\+", "")),
+      latitude = as.integer(str_replace(latitude, "^\\+", "")),
+      survey_year = as.numeric(format(DATEASSESS, "%Y")),
+      plot_id = paste(code_country, CODEPLOT, sep = "_")) %>%
+    select(code_country, plot_id, survey_year, longitude, latitude) %>%
+    mutate(
+      remark = NA,
+      change_date = NA)
+
+  # Flanders crown condition
+
+  coord_cc_fl <-
+    read_excel(paste0("data/additional_data/coordinates_plots/s1/",
+                      "Coordinaten_level_1_gecheckte coordinatenLB72.xlsx")) %>%
+    left_join(
+      data.frame(
+        plot_id_fl = c(201, 505, 602, 901, 207, 406, 703, 404, 801, 803),
+        code_plot = c(12, 17, 18, 32, 39, 44, 46, 55, 57, 58)),
+      by = join_by("PLOTID" == "plot_id_fl")) %>%
+    st_as_sf(coords = c("LBXcheck", "LBYcheck"),
+             # Lambert 72 (Belgium)
+             crs = 31370) %>%
+    # Transform to WGS84
+    st_transform(crs = 4326) %>%
+    mutate(
+      longitude_dec = round(st_coordinates(.)[, 1], 5),
+      latitude_dec = round(st_coordinates(.)[, 2], 5)) %>%
+    # EPSG 3035 (ETRS89 / LAEA Europe)
+    st_transform(crs = 3035) %>%
+    mutate(
+      x_etrs89 = st_coordinates(.)[, 1],
+      y_etrs89 = st_coordinates(.)[, 2]) %>%
+    st_drop_geometry() %>%
+    filter(!is.na(code_plot)) %>%
+    mutate(
+      code_country = 2,
+      plot_id = paste(code_country, code_plot, sep = "_"),
+      survey_year = 2019,
+      remark = NA,
+      change_date = NA) %>%
+    select(code_country, plot_id, survey_year, longitude_dec, latitude_dec,
+           remark, change_date, x_etrs89, y_etrs89)
+
+
 
  # Compile
 
@@ -406,11 +464,33 @@ if (level == "LI") {
         select(source,
                code_country, plot_id, survey_year, longitude, latitude,
                remark,
+               change_date),
+      # coord_biosoil_fl
+      coord_biosoil_fl %>%
+        mutate(source = "flanders_biosoil") %>%
+        filter(!plot_id %in% plots_to_ignore_li) %>%
+        select(source,
+               code_country, plot_id, survey_year, longitude, latitude,
+               remark,
                change_date)) %>%
     as_tibble %>%
     add_dec_coord_columns %>%
     mutate(longitude_dec = as.numeric(longitude_dec),
-           latitude_dec = as.numeric(latitude_dec))
+           latitude_dec = as.numeric(latitude_dec)) %>%
+    bind_rows(
+      # coord_cc_fl
+      coord_cc_fl %>%
+        mutate(source = "flanders_crown_cond") %>%
+        filter(!plot_id %in% plots_to_ignore_li) %>%
+        mutate(
+          longitude = NA,
+          latitude = NA,
+          ddmmss_error = NA) %>%
+        select(source,
+               code_country, plot_id, survey_year, longitude, latitude,
+               remark, change_date, latitude_dec, longitude_dec,
+               ddmmss_error, x_etrs89, y_etrs89))
+
 
 }
 
@@ -716,6 +796,9 @@ if (level == "LII") {
 
 # 3. Add countries and partners ----
 
+# Adds any inconsistencies related to coordinates reported under a certain
+# country, not lying within the boundaries of that country
+
 world_spat <-
   read_sf("./data/additional_data/partner_boundaries.gpkg",
           layer = "world_spat") %>%
@@ -878,6 +961,27 @@ for (i in seq_along(plot_ids)) {
   coord_sources_i <- coord_sources %>%
     filter(plot_id == plot_ids[i]) %>%
     arrange(desc(change_date))
+
+  # Artificially change the change_date of Flemish Level I plots from the
+  # '90s due to not being correct (in spite of having the most recent
+  # change_date)
+
+  if (plot_ids[i] %in%
+      paste0("2_", c(12, 17, 18, 32, 39, 44, 46, 55, 57, 58)) &&
+      any(grepl("s1", coord_sources_i$source)) &&
+      any(coord_sources_i$survey_year < 2000) &&
+      # if all change_dates for survey_years '90s are <= 2023
+      all(as.numeric(format(as.Date(na.omit(
+        coord_sources_i$change_date[which(
+          coord_sources_i$survey_year < 2000)])), "%Y")) <= 2023)) {
+
+    coord_sources_i <- coord_sources_i %>%
+      mutate(
+        change_date = case_when(
+          !is.na(survey_year) & survey_year < 2000 ~ "1900-01-01",
+          TRUE ~ change_date))
+
+  }
 
 
   # Manual corrections
@@ -1156,6 +1260,35 @@ for (i in seq_along(plot_ids)) {
                           composite_index)) %>%
           arrange(composite_index)
       }
+
+
+      # From experience from previous runs
+
+      if (plot_ids[i] %in% c("5_1052", "5_2044", "5_2045") &
+          any(grepl("s1", coord_summ_i$sources))) {
+
+        coord_summ_i <- coord_summ_i %>%
+          mutate(composite_index =
+                   ifelse(grepl("prf", sources),
+                          0.99,
+                          composite_index)) %>%
+          arrange(composite_index)
+
+      }
+
+      if (plot_ids[i] %in% c("6_715") &
+          any(grepl("so", coord_summ_i$sources))) {
+
+        coord_summ_i <- coord_summ_i %>%
+          mutate(composite_index =
+                   ifelse(grepl("2017", survey_years),
+                          0.99,
+                          composite_index)) %>%
+          arrange(composite_index)
+
+      }
+
+
 
 
       # Check if there is a clear "winner" with the lowest composite_index
