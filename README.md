@@ -30,46 +30,37 @@ Two surveys have been completed so far on both levels; a third survey (2020-2025
 A wide range of soil chemical (carbon, nitrogen, plant-available and semi-total elements, pH) and physical soil properties (soil texture, bulk density) have been analysed by national forest soil laboratories according to standardised protocols.
 All data are centralised in the database of the Programme Coordinating Centre of ICP Forests.
 
-In this project, we aim to preprocess the raw solid soil data of ICP Forests to validated, gap-filled and harmonised versions (Layer 1) and further to aggregated versions (Layer 2), and process these data for a range of purposes, including the calculation of carbon and macronutrient stocks (nitrogen, phosphorus, sulphur), exchangeable element pools (calcium, magnesium, potassium, sodium, aluminium, iron, manganese), and indicators for nutrient availability, heavy metal availability and acidification, in both forest floors and mineral forest soils across Europe. 
-Observed differences between the soil surveys before versus after the year 2000 are highlighted, and stratified by biogeographical region, forest and soil type, and their spatial autocorrelation with nitrogen deposition levels and link with data from other surveys (e.g. soil solution) is assessed.
+In this R project, we aim to preprocess the raw solid soil data of ICP Forests to validated, gap-filled and harmonised versions (Layer 1), and process these data for a range of purposes, including the calculation of organic carbon and macronutrient (nitrogen, phosphorus, sulphur) stocks, stoichiometric nutrient ratios, and indicators for nutrient availability, heavy metal availability and acidification, in forest soils across Europe. 
+Results are stratified by biogeographical region, European forest type and WRB Reference Soil Group.
 <!-- description: end -->
 
 ***
 
 ### Repository overview  
-This repository provides data-generating (i.e. preprocessing) and data-processing workflows, to support reproducible and transparent analyses on the solid soil data collected through the ICP Forests monitoring network. The aim of this R project is to convert, transform, and harmonise the raw data forms ("layer 0") into validated and gap-filled data forms ("layer 1"), and into aggregated data forms ("layer 2"). These "layer 1" and "layer 2" data forms are then used for a range of other purposes, including the calculation of soil carbon stocks in European forests. The data preprocessing addresses various aspects, including error correction, incorporation of additional data, harmonisation of "wrong" data to the correct parameter (units), validation, harmonisation to theoretical fixed-depth layers (for "som" files) and aggregation (e.g. across repetitions). The ultimate aim is to achieve open and reproducible data workflows, as a requirement for qualifiable science and for collaboration.
+This repository provides data-generating (i.e., preprocessing) and data-processing workflows, to support reproducible and transparent analyses on the solid soil data collected through the European ICP Forests monitoring network since the end of the 1980s. The aim of this R project is to correct and harmonise the raw data forms ("Layer 0") into validated data forms that are gap-filled with original measurements ("Layer 1"), and further gap-filled with additional estimates (in particular, pedotransfer function-estimated bulk densities; "Layer 1+"). These "layer 1+" data forms are then used for a range of other purposes, including the calculation of organic carbon stocks in European forest soils. The data preprocessing addresses various aspects, including error correction, incorporation of additional data, harmonisation of "wrong" data to the correct parameter (units), validation, harmonisation to theoretical fixed-depth layers (for "som" files), etc - all based on sound expert assumptions (in line with the ICP Forests manual). The ultimate aim is to achieve open and reproducible data workflows, as a requirement for qualifiable science and for collaboration.
 
 ### Project structure  
 The repository is structured as follows:
 
 * **src** folder: Contains all the R scripts for data processing and analysis. This includes subfolders:
   + **functions**: Custom-made R functions
-  + **transformation_to_layer1**: R scripts to transform the data from "Layer 0" to "Layer 1"
-  + **transformation_to_layer2**: R scripts to transform the data from "Layer 1" to "Layer 2"
+  + **transformation_to_layer1**: R scripts to transform the data from "Layer 0" to "Layer 1" and further to "Layer 1+"
   + **pir_generation**: R scripts used to generate Partner Inconsistency Reports
   + **stock_calculations**: R scripts to calculate and visualise different kinds of stocks
-  + **pathfinder**: R scripts specific to the HorizonEU PathFinder project
-  + **specific_esb_requests**: R scripts for specific data questions (e.g. plot-specific fertility indicators)
-  + Other `src/` subfolders organised per output type
+  + **nutrient_avail**: R scripts to calculate and visualise nutrient availability and acidification metrics
+  + **specific_esb_requests**: R scripts for specific data questions within the frame of the Ecological Studies book compilation
   + **sandbox**: R scripts for individual exploration and testing (ignored by Git) 
 * **data** folder: Contains all versions of the data forms and additional data:
-  + **raw_data**: Raw data forms ("layer 0") obtained from ICP Forests
-  + **intermediate_data**: Intermediate versions of the data forms (between "layer 0" and "layer 1" + between "layer 1" and "layer 2"), organised through so-called "breakpoints". This is no longer relevant since the current version of the preprocessed data is considered "layer 1".
-  + **layer1_data**: Processed, gap-filled, and harmonised data forms
-  + **layer2_data**: Aggregated data forms (e.g. "som" data forms harmonised to theoretical fixed depths + plot-wise aggregation of different plot repetitions)
-  + **additional_data**: Additional data forms, e.g. data collected through direct communication with partners (mainly in response to the so-called "Partner inconsistency reports" (PIRs) - stored in subfolder **pir_checked**); previous versions of the database (e.g. so-called "AFSCDB_LII_2_2"); harmonisation keys for plot codes; shapefiles...
+  + **raw_data**: Raw data forms ("layer 0") obtained from the central ICP Forests database
+  + **layer1_data**: Processed, gap-filled, and harmonised data forms (actually "Layer 1+")
+  + **additional_data**: Additional data forms needed for the transformation to Layer 1 and other purposes, e.g., data collected through direct communication with partners (mainly in response to the so-called "Partner inconsistency reports" (PIRs)); previous versions of the database (e.g. so-called "AFSCDB_LII_2_2"); harmonisation keys for plot codes; shapefiles...
   + **sensitive_metadata**: Sensitive information, e.g. the link to the private Google Drive folder where data are stored
 * **output** folder: Stores outputs of this repository which do not fall under data forms, organised per output type:
   + **stocks**: Output regarding stocks of total soil organic carbon, nitrogen, semi-total macro-element pools (P, K, Ca, Mg, S), exchangeable element pools (K, Ca, Mg, Al, Fe, Mn), heavy metal stocks...
-  + **indices**: Output regarding derived indices/metrics which are not a part of the "layer 1" or "layer 2" data, such as nutrient availability/soil fertility indices, acidification indices, pollution indices
-  + **physical_data**: Output regarding water availability and water budget modelling
-  + **links_other_surveys**: Output regarding the links of the solid soil data with other surveys, such as "soil solution"
-  + **links_n_deposition**: Output regarding the spatial autocorrelation with N deposition data"
   + **pirs**: Newly generated partner inconsistency reports  
-  + **pathfinder**: Output related to the HorizonEU PathFinder project
   + **gap_filling_details**: Details of the "decisions" made by the scripts during gap-filling, e.g. which of the "new" data in PIRs returned by countries needed to be inserted in the data forms
   + **spatial_plot_id_links**: Results of the spatial analysis of different surveys with coordinates - shows, for each partner, which plots across different surveys (survey form with coordinates x survey_year/last_year) are spatially co-located (based on the reported coordinates). This information was eventually used to solve plot_id/coordinate issues for Poland.
-  + **specific_esb_requests**: Output for specific data questions (e.g. soil fertility indices for given plots)
+  + **specific_esb_requests**: Output for specific data questions (e.g. soil physical data for water budget modelling)
 
 
 ```
@@ -82,21 +73,35 @@ The repository is structured as follows:
     ├── src
     │   ├── functions                            <- Git
     │   ├── transformation_to_layer1             <- Git
-    │   ├── transformation_to_layer2             <- Git
     │   ├── pir_generation                       <- Git
     │   ├── stock_calculations                   <- Git
-    │   ├── pathfinder                           <- Git
+    │   ├── nutrient_avail                       <- Git
     │   ├── specific_esb_requests                <- Git
     │   ├── [...]                                <- Git
     │   └── sandbox                              <- GITIGNORE
     ├── output                                   <- GITIGNORE
     │   ├── stocks
-    │   ├── indices
-    │   ├── physical_data
-    │   ├── links_other_surveys
-    │   ├── links_n_deposition
+    │   │   ├── oc
+    │   │   │   ├── s1_plot_oc_stocks.csv
+    │   │   │   ├── s1_profile_oc_stocks.csv
+    │   │   │   ├── s1_layers.csv
+    │   │   │   ├── so_plot_oc_stocks.csv
+    │   │   │   ├── so_profile_oc_stocks.csv
+    │   │   │   ├── so_layers.csv
+    │   │   │   ├── plot_oc_stocks_attribute_catalogue.txt
+    │   │   │   ├── so_oc_stock_potential_summary.csv
+    │   │   │   ├── graphs
+    │   │   │   ├── s1_som_splines_per_profile
+    │   │   │   ├── s1_pfh_splines_per_profile
+    │   │   │   ├── s1_splines_per_plot
+    │   │   │   ├── so_som_splines_per_profile
+    │   │   │   ├── so_pfh_splines_per_profile
+    │   │   │   └── so_splines_per_plot
+    │   │   └── […]
     │   ├── pirs
-    │   ├── pathfinder
+    │   ├── gap_filling_details
+    │   ├── spatial_plot_id_links
+    │   ├── specific_esb_requests
     │   └── [...] 
     └── data
         ├── sensitive_metadata                   <- GITIGNORE - Google Drive URL
@@ -104,40 +109,79 @@ The repository is structured as follows:
         │   ├── s1
         │   ├── so
         │   └── […]
-        ├── intermediate_data                    <- GITIGNORE
         ├── layer1_data                          <- GITIGNORE
         │   ├── s1
-        │   │   ├── s1_lqa.csv
-        │   │   ├── s1_pfh.csv
-        │   │   ├── s1_pls.csv
-        │   │   ├── s1_prf.csv
         │   │   ├── s1_som.csv
+        │   │   ├── s1_pfh.csv
+        │   │   ├── s1_prf.csv
+        │   │   ├── s1_pls.csv
+        │   │   ├── s1_lqa.csv
         │   │   ├── coordinates_s1.csv
-        │   │   └── data_availability_s1.csv
+        │   │   ├── data_availability_s1.csv
+        │   │   ├── s1_strat.csv
+        │   │   ├── s1_som_layer1_attribute_catalogue.txt
+        │   │   ├── s1_pfh_layer1_attribute_catalogue.txt
+        │   │   └── s1_strat_attribute_catalogue.txt
         │   ├── si
         │   ├── so
         │   ├── sw
         │   └── y1
-        ├── layer2_data                          <- GITIGNORE
         └── additional_data                      <- GITIGNORE (available upon request)
+            ├── fscdb_LI
+            │   └── original_access_versions
+            │       ├── s1_fscdb_access_harmonised.csv
+            │       └── [...]
+            ├── afscdb_LII_2_2
+            │   ├── repetitions
+            │   │   ├── so_afscdb_harmonised_r.csv
+            │   │   └── [...]
+            │   └── plot-aggregated
+            │       └── [...]
+            ├── partner_comm
+            │   ├── so_spain_correct
+            │   ├── texture_data_collection_dec2024
+            │   │   ├── so_som_texture.csv
+            │   │   └── original
+            │   │       └── [...]
+            │   └── [...]
+            ├── national_coauthor_carbon_stocks
+            │   └── national_carbon_stocks_harmonised.r
+            ├── shapefiles
+            │   ├── European Soil Database
+            │   ├── worldclim
+            │   └── BiogeoRegions2016.shp
+            ├── coordinates_plots
+            │   └── [...]
+            ├── plot_coord_harmonisation_keys
+            │   └── [...]
+            ├── preinternalgapfill
+            │   └── [...]
+            ├── 126_bd_20230405143047
+            │   └── [...]
+            ├── attribute_catalogue_dictionary.txt
+            ├── 20230302_checked_pirs.xlsx
+            ├── attribute_catalogue_pir.csv
+            ├── inconsistency_catalogue.csv
+            ├── parameters_mandatory.csv
+            ├── d_depth_level_soil.csv
+            ├── d_soil_coarse_fragments.csv
+            ├── d_forest_type.csv
+            ├── ranges_qaqc.csv
+            ├── S1_PRF_ADDS.csv
+            ├── SO_PRF_ADDS.xlsx
+            ├── additional_manual_corrections_fscc.csv
+            ├── s1_link_forest_floors.csv
+            ├── so_link_forest_floors.csv
+            ├── ICP-LII-plots_slope_aspec_COPDEM30.csv
+            ├── France_PRF_1994-1995.xlsx
+            ├── partner_boundaries.gpkg
+            └── ICP_LOGO_transparent_background.png
+
+
+
+
 ```
 
-
-### Project output
-The expected output of the code in this repository is:
-
-* "layer 1" versions of the data forms of the "s1" (Level I) and "so" (Level II) surveys
-  → preliminary Level II version available
-* "layer 2" versions of the data forms of the "s1" (Level I) and "so" (Level II) surveys
-* Derived parameters, including stocks of total soil organic carbon, nitrogen, semi-total macro-element pools (P, K, Ca, Mg, S), exchangeable element pools (K, Ca, Mg, Al, Fe, Mn), heavy metal stocks, acidification indices, pollution indices - evaluate whether this applies to layer 1 data (e.g. stocks) or layer 2.
-  → preliminary Level II C stock version available
-* Harmonised stratification data, including soil classifications (WRB 2014), humus forms, ecocluster classes and soil fertility indices
-* Assessments of water availability + compilation of data for water budget modelling (LWF-Brook90)
-* Link with other surveys (e.g. soil solution)
-* Link with N deposition data
-* Partner inconsistency reports (PIRs) with issues in the data (corrections/responses by the partners was requested in the period of March - May 2023)
-* Results of (geo)statistical analyses
-* Rmarkdown reports with results (graphs and interactive maps) per partner, to collect feedback on the plausibility of these results by the partners where needed (?)
 
 ### Workflow and collaboration  
 #### R code version control
