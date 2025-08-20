@@ -185,19 +185,10 @@ The repository is structured as follows:
 
 ### Workflow and collaboration  
 #### R code version control
-We use Git and GitHub to facilitate collaboration and version control. The main branch serves as the primary branch where versions of the R code - for step-wise transformation of data from "layer 0" to "layer 1" and subsequently to "layer 2" and to derived variables such as carbon stocks - are tracked through different commits. Only source code (in the `./src/` folder) is version-tracked, while data and output are stored in private Google Drive folders and the local project folder (ignored by Git). The latter includes additional data, which is however available upon request.
+We use Git and GitHub to facilitate collaboration and version control. The main branch serves as the primary branch where versions of the R code - for step-wise transformation of data from "layer 0" to "layer 1" and to derived variables such as carbon stocks - are tracked through different commits. Only source code (in the `./src/` folder) is version-tracked, while data and output are stored in private Google Drive folders and the local project folder (ignored by Git). The latter includes additional data, which is available upon request.
 
 #### Dataset management
-All individual steps of the data (pre)processing for a certain output type are compiled, documented and applied using one Rmarkdown document per output type, such as `./src/solid_soil_data_transformation_to_layer1.R` for the transformation of "layer 0" to "layer 1".
-
-(Note: the information below is crossed out because intermediate breakpoints are no longer used. The information is not deleted because these breakpoints are still implemented in some of the code, e.g. to identify the most recent version of the data when synchronising or reading processed data.)
-
-~~The two data preprocessing scripts for the transformation to "layer 1" and for the transformation to "layer 2" contain several so-called **breakpoints**: these are important intermediate points in the Rmarkdown script in which intermediate versions of the data forms (processed with the steps preceding this breakpoint) are stored (in the folder `./output/intermediate_data/`). As such, these breakpoints allow to divide the data transformation process into manageable steps and save the data at specific points to avoid re-running the entire script from the beginning (this way saving processing time). Each breakpoint and the related intermediate data form versions are named as follows: *"[X]_[YY]_intermediate_data"* (e.g. "0_01_intermediate_data"), with:~~
-~~* *[X]*: one number which refers to the preceding layer of the data, i.e. "0" for intermediate data between "layer 0" and "layer 1", and "1" for intermediate data between "layer 1" and "layer 2"~~
-~~* *[YY]*: two numbers which refer to the breakpoint, e.g. "01" for the first breakpoint. Per "layer" (i.e. per unique *[X]*), numbers always start from 01 and go up.~~
-
-~~If a collaborator wants to change the data transformation steps between breakpoints (x) and (x+1), please import the data forms from breakpoint (x), run the adjusted code starting from breakpoints (x), and (re)save the data forms at breakpoint (x+1) (and any further break points). Rule: only create a new breakpoint or update a breakpoint if it takes a considerable time to process data from the preceding breakpoint onwards, otherwise rerunning the code is preferable.
-(idea: last breakpoint in YAML params?)~~
+All individual steps of the data (pre)processing are compiled, documented and applied using R scripts in this repository, e.g., `./src/solid_soil_data_transformation_to_layer1.R` for the transformation of "layer 0" to "layer 1".
 
 In accordance with the ICP Forests policies, data are currently not open, and **storage** relies on a combination of:
 * A private Google Drive folder with all versions - advantages:
@@ -208,10 +199,10 @@ In accordance with the ICP Forests policies, data are currently not open, and **
   + Access control
 * Your local R project folder (ignored by Git) for the most recent versions - advantages:
   + Offline access and reduced dependency on internet
-  + Flexibility (e.g. using local file paths)
-  + Improved performance (e.g. faster read access)
+  + Flexibility (e.g., using local file paths)
+  + Improved performance (e.g., faster read access)
   
-Whenever you create a new version of the data that you want to save (e.g. update of an intermediate breakpoint, layer 1, layer 2...), you are expected to save the data on Google Drive
+Whenever you create a new version of the (layer 1) data that you want to save, you are expected to save the data on Google Drive
 using the `save_to_google_drive()` function. This ensures that all collaborators have access to the latest versions of the data. 
 
 Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive using the `sync_local_data()` function. The data on Google Drive serves as the central repository where all versions of the data are stored, while only the most recent versions of the data are stored locally in the R project folder. By synchronising, you ensure that you have the most up-to-date data available for your analysis or development in R.
@@ -224,7 +215,7 @@ Such Google Drive subfolders have specific naming conventions to indicate their 
 
 
 
-<img src="https://github.com/inbo/fscc/assets/125061803/3984ae32-ea02-4fc1-9ddf-3279d45033a8" width="80%">
+<img src="https://github.com/user-attachments/assets/332052f4-703f-4960-b170-5d8468f04b0a" width="80%">
 
 
 #### Specific project coding conventions
