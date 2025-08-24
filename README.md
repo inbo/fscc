@@ -188,40 +188,47 @@ The repository is structured as follows:
 We use Git and GitHub to facilitate collaboration and version control. The main branch serves as the primary branch where versions of the R code - for step-wise transformation of data from "layer 0" to "layer 1" and to derived variables such as carbon stocks - are tracked through different commits. Only source code (in the `./src/` folder) is version-tracked, while data and output are stored in private Google Drive folders and the local project folder (ignored by Git). The latter includes additional data, which is available upon request.
 
 #### Dataset management
-All individual steps of the data (pre)processing are compiled, documented and applied using R scripts in this repository, e.g., `./src/solid_soil_data_transformation_to_layer1.R` for the transformation of "layer 0" to "layer 1".
+All individual steps of the data (pre)processing are compiled, documented and applied using R scripts in this repository, e.g., `./src/transformation_to_layer1/transformation_to_layer1.R` for the transformation of "layer 0" to "layer 1".
 
 In accordance with the ICP Forests policies, data are currently not open, and **storage** relies on a combination of:
-* A private Google Drive folder with all versions - advantages:
-  + Sharing with collaborators, to ensure everyone is working with the same up-to-date data
-  + Backup and recovery
-  + Versioning: different versions of the datasets can be saved on Google Drive, including history
-  + Reduced local storage
-  + Access control
-* Your local R project folder (ignored by Git) for the most recent versions - advantages:
-  + Offline access and reduced dependency on internet
-  + Flexibility (e.g., using local file paths)
-  + Improved performance (e.g., faster read access)
-  
-Whenever you create a new version of the (layer 1) data that you want to save, you are expected to save the data on Google Drive
-using the `save_to_google_drive()` function. This ensures that all collaborators have access to the latest versions of the data. 
+* A private Google Drive folder with all versions
+* Your local R project folder (ignored by Git) for the most recent versions
 
-Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive using the `sync_local_data()` function. The data on Google Drive serves as the central repository where all versions of the data are stored, while only the most recent versions of the data are stored locally in the R project folder. By synchronising, you ensure that you have the most up-to-date data available for your analysis or development in R.
+
+##### Preprocessing
+
+R scripts:
+* `./src/transformation_to_layer1/transformation_to_layer1.R`
+* `./src/transformation_to_layer1/transformation_to_layer1+.R`
+
+Whenever you create a new version of the (layer 1) data that you want to save, you are expected to save the data on Google Drive
+using the `save_to_google_drive()` function. This way, all collaborators have access to the latest versions of the data. 
+
+Whenever you start working on the project, it is recommended to synchronise your local data with the data on Google Drive using the `sync_local_data()` function, to make sure that you have the most up-to-date data available for your analysis in R.
 
 Data folders in the local project folder have clean names (no version indication). On Google Drive, data are stored in subfolders of a specific folder, such as a subfolder of "layer1_data".
 Such Google Drive subfolders have specific naming conventions to indicate their version/modification status:
 * Raw data subfolders are named as "download_(download_date)", e.g., "download_20230605".
-* Other subfolders are named as "(download_date)(change_date)(name_folder)", e.g., "20230605_20230628_layer1_data".
-
-
+* Other subfolders are named as "(download_date)_(change_date)_(name_folder)", e.g., "20230605_20230628_layer1_data".
 
 
 <img src="https://github.com/user-attachments/assets/332052f4-703f-4960-b170-5d8468f04b0a" width="80%">
 
 
+##### Further processing (e.g., calculating SOC stocks)
+
+R scripts:
+* `./src/stock_calculations/stock_calculations.R`
+
+At the moment, results are saved both to Google Drive using the `save_to_google_drive()` function and locally using `write.table()`. All versions of these datasets are saved on both locations, within subfolders indicating the version, according to the same pattern "(download_date)_(change_date)_(name_folder)", e.g., "20241213_20250807_oc_stocks".
+The `sync_local_data()` function needs to be updated so that it can also synchronise locally saved versions of processed datasets (e.g., SOC stocks) with Google Drive, and rely on a single clean version (without version indication) in the local project folder (analogous to the layer 1 data).
+
+
+
 #### Specific project coding conventions
-* It is recommended to compile the code for larger manipulations and/or manipulations which are often repeated, into one function, which is placed in the `./src/functions/` folder. Such functions are sourced ad hoc in code chunks using the `source()` function. Custom-made functions should be applicable to all data forms in Level I and Level II, and clearly documented using comments and Roxygen documentation (Code > Insert Roxygen Skeleton).
-* In the global environment of R, all objects (data frames) referring to data forms between layer 0 and layer 2 are by convention named using lower case letters without any version number attached to it, and separated by an underscore (`_`).
-* Stick to a clear header style. Note that you can show the document outline of an R script in RStudio via Ctrl + Shift + O (or the button with horizontal lines). Level-one headings should start with one hashtag (`#`) and have four trailing dashes (`----`); level-two headings should have two hashtags and four trailing dashes; etc.
+* It is recommended to compile the code for larger manipulations and/or manipulations which are often repeated, into one function, which is placed in the `./src/functions/` folder. Such functions are sourced ad hoc using the `source()` function. Custom-made functions should be applicable to all data forms in Level I and Level II, and clearly documented using comments and Roxygen documentation (Code > Insert Roxygen Skeleton).
+* All objects and files are by convention named using snake_case (lowercase separated by underscores)
+* Use headers for long R scripts. You can show the document outline of an R script in RStudio via Ctrl + Shift + O (or the button with horizontal lines). Level-one headings should start with one hashtag (`#`) and have four trailing dashes (`----`); level-two headings should have two hashtags and four trailing dashes; etc.
 
 ### Contributing  
 Please follow this workflow:
@@ -230,44 +237,15 @@ Please follow this workflow:
 * Make sure you have Git and RStudio installed, and completed the [initial Git configuration in your RStudio](https://inbo.github.io/git-course/course_rstudio.html#22_Git_for_RStudio_configuration).
 * **Clone** the repository to your local computer to work on the project.
 * Review the README file for an overview of the project structure and collaboration instructions.
-* Create or paste an R script `./data/sensitive_metadata/google_drive_link.R`, which contains the URL of the private Google Drive folder which contains the data, as explained below.
-* Download the data from the Google Drive folder to your local project folder using the `sync_local_data()` function.
-* Import the data from your local folder in R using the `read_processed()` function.
+* Download the R script `./data/sensitive_metadata/google_drive_link.R`, which contains the URL of the private Google Drive folder which contains the data.
+* Download data in the folder `./data/additional_data/`
+* Download the raw and/or layer 1 data from the Google Drive folder to your local project folder using the `sync_local_data()` function.
+* Import the layer 1 data from your local folder in R using the `read_processed()` function.
 
-Follow these steps to derive and save the URL of the Google Drive root folder:
-
-* Go to the root folder on Google Drive, i.e. a folder with data which contains the following subfolders:
-
-```
-    .  
-    ├── data
-    │   ├── raw_data
-    │   ├── intermediate_data
-    │   ├── layer1_data
-    │   └── layer2_data
-    └── output
-        ├── stocks
-        └── [...]
-```
-
-* Right-click on the root folder and select "Copy link".
-* Paste the link somewhere. It should look like  "https://drive.google.com/drive/folders/1Txxxxxxxe7?usp=drive_link". Copy the part you need, i.e. everything starting from two characters before the first x until two characters after the last x (i.e. before any question mark). The two characters before and after the x string are a random example.
-* Create a new R script in the local folder "./data/sensitive_metadata/" and give it the following name: "google_drive_link.R".
-* Paste the code below in this script:
-
-```
-# This is the URL of the Google Drive root folder which contains data related to
-# the fscc project of ICP Forests. The data in this folder are sensitive and
-# are only available for collaborators with access to the Google Drive folder.
-root_drive <- "1Txxxxxxxe7"
-```
-
-* Replace the character string after `<-` with the actual code from the link as explained above.
 
 
 #### Getting started: next times
-* If relevant, open the correct .Rproj file in RStudio.
-* If relevant, make sure your working directory is not dirty (any previous changes should have been committed before).
+* Open the .Rproj file in RStudio. Ideally, your working directory is not dirty (any previous changes should have been committed before).
 * **Pull** changes from the repository before starting your work to ensure you have the latest code and datasets from other team members.
 * Synchronise your local data with the up-to-date Google Drive folder using the `sync_local_data()` function.
 * Import the data from your local folder in R using the `read_processed()` function.
@@ -284,25 +262,12 @@ root_drive <- "1Txxxxxxxe7"
 #### Adjust the data transformation code
 * Remove any local branches which were merged with the main branch on GitHub.
 * Checkout the correct branch or create a **new branch**. Every collaborator should have his/her own side branch.
-* Open the main R Markdown script for the given output type (e.g. `./src/solid_soil_data_transformation_to_layer1.R`) to access the data transformation workflow.
-* Review the code to understand the different stages of the data transformation process.
-* Adjust the data transformation code as needed in a clear way.
+* Open any R script and adjust the data transformation code as needed in a clear way.
 * Save the updated data forms on Google Drive when needed.
 * Regularly stage and **commit** changes to the correct branch, including the new or updated intermediate data forms, using clear and concise commit messages (to describe the modifications made to the code and datasets), and **push** them to the correct branch in the remote GitHub repository.
 * When edits on the branch are ready to move to the stable "reference" main branch: create a **pull request** on GitHub to merge the branch with the main branch
 * Communicate with collaborators to agree on the final stable version after any pull requests, and merge the adaptation into the main branch.
 
-
-#### Rules for collaboration (based on INBO)
-
-* Commit often, make small commits
-* Do not mix changes in one commit
-* Think about your commit messages (try to avoid "Update..." etc)
-* Always commit into a feature branch, never in the main branch.
-* Always start features branches from the main branch.
-* Only work in your own branches.
-* Never merge someone else's pull request without their consent.
-* Do not keep long-lived branches (form of technical debt)
 
 #### Refer to: 
 * [Git(Hub) tutorial by INBO](https://inbo.github.io/tutorials/tutorials/git_introduction/)
@@ -310,14 +275,13 @@ root_drive <- "1Txxxxxxxe7"
 
 
 ### Acknowledgments  
-This evaluation is based on data that was collected by partners of the official [UNECE ICP Forests Network](http://icp-forests.net/contributors). Part of the data was co-financed by the European Commission. The Intellectual Property and Publication Policy (IPPP) covers rules, rights and obligations to be applied for data supply, request, and use from the official ICP Forests PCC Collaborative Database (ICP Forests DB). 
+This evaluation is based on data that was collected by partners of the official [UNECE ICP Forests Network](https://www.icp-forests.net/). Part of the data was co-financed by the European Commission. The Intellectual Property and Publication Policy (IPPP) covers rules, rights and obligations to be applied for data supply, request, and use from the official ICP Forests PCC Collaborative Database. 
 
 ### Contact  
-For any questions, suggestions, or inquiries related to this project, please contact the Forest Soil Coordinating Centre (FSCC) (<fscc@inbo.be>) of [ICP Forests](http://icp-forests.net/) at the [Research Institute for Nature and Forest (INBO)](https://www.vlaanderen.be/inbo/en-gb/researchdomains/data-infrastructuur/international-cooperation-programmes/) in Flanders, Belgium:  
+For any questions or suggestions related to this project, please contact the Forest Soil Coordinating Centre (FSCC) (<fscc@inbo.be>) of [ICP Forests](http://icp-forests.net/) at the [Research Institute for Nature and Forest (INBO)](https://www.vlaanderen.be/inbo/en-gb/researchdomains/data-infrastructuur/international-cooperation-programmes/) in Flanders, Belgium:  
 
 * Bruno De Vos: <bruno.devos@inbo.be>
 * Nathalie Cools: <nathalie.cools@inbo.be>
-* Heleen Deroo: <heleen.deroo@inbo.be>  
 
 The Programme Co-ordinating Centre (PCC) (<PCC-ICPForests@thuenen.de>) of ICP Forests at Thünen Institute of Forest Ecosystems is entrusted with a broad range of tasks in the fields of programme management, data processing, evaluations, and reporting.
 
